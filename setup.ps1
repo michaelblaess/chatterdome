@@ -86,6 +86,26 @@ $shInhalt = "#!/usr/bin/env bash`nexec node `"$shMjs`" `"`$@`"`n"
 [System.IO.File]::WriteAllText($shPfad, $shInhalt, [System.Text.UTF8Encoding]::new($false))
 Write-Host "[OK]   sanctuary (Git Bash) -> $shPfad"
 
+# --- ~/.local/bin in den Benutzer-PATH, falls es fehlt ---
+#
+# Ohne diesen Eintrag findet nur die eigene Shell den Kurzbefehl. Entscheidend
+# ist er aber fuer "status --mesh": der sshd unter Windows reicht den
+# Benutzer-PATH an eingehende Verbindungen weiter, und ohne ihn scheitert die
+# Fernabfrage mit "Command failed" (auf DELL am 01.08.2026 genau so gesehen,
+# obwohl der Kurzbefehl mit vollem Pfad einwandfrei lief).
+#
+# Nur ANHAENGEN, niemals den PATH neu setzen - ein zerschossener Benutzer-PATH
+# ist teuer zu reparieren.
+$pfadJetzt = [Environment]::GetEnvironmentVariable('PATH', 'User')
+if ($pfadJetzt -notlike "*$binDir*") {
+    $neu = if ([string]::IsNullOrWhiteSpace($pfadJetzt)) { $binDir } else { "$pfadJetzt;$binDir" }
+    [Environment]::SetEnvironmentVariable('PATH', $neu, 'User')
+    Write-Host "[OK]   $binDir in den Benutzer-PATH aufgenommen"
+    Write-Host '       (wirkt in neuen Konsolen - die aktuelle kennt ihn noch nicht)'
+} else {
+    Write-Host "[OK]   $binDir liegt bereits im PATH"
+}
+
 Write-Host ''
 Write-Host 'Fertig. Probe:'
 Write-Host '  sanctuary status'
