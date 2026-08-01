@@ -39,19 +39,55 @@ real directory is **never deleted**, it is moved aside as `.vor-sanctuary`.
 
 ## Usage
 
+Setup installs a `sanctuary` shortcut into `~/.local/bin` covering both skills:
+
 ```bash
-OP=~/.claude/skills/operator
-BUS=~/.claude/skills/claude-bus
+sanctuary status              # table of all sessions
+sanctuary status --mesh       # include the other machines
+sanctuary status --json       # machine readable
+sanctuary watch 2 --json      # NDJSON stream for tooling
+sanctuary start [name]        # new session, named in the tab title
+sanctuary stop <name>         # end a session
 
-node $OP/operator.mjs status          # table of all sessions
-node $OP/operator.mjs status --mesh   # include the other machines
-node $OP/operator.mjs watch 2 --json  # NDJSON stream for tooling
-node $OP/starte.mjs                   # new session, named from the pool
-
-node $BUS/bus.mjs send Lino "Please run the tests" --erwartet-quittung
-node $BUS/bus.mjs auftraege           # what is waiting for me
-node $BUS/bus.mjs ack <id> 200 "done"
+sanctuary send Lino "Please run the tests" --erwartet-quittung
+sanctuary auftraege           # what is waiting for me
+sanctuary ack <id> 200 "done"
+sanctuary hilfe               # all commands
 ```
+
+The scripts can still be called directly
+(`node ~/.claude/skills/operator/operator.mjs status`), but that is only needed for debugging.
+
+## SSH: interactive versus one-shot
+
+A difference that catches everyone once:
+
+```bash
+ssh senza                          # interactive login shell - everything as usual
+sanctuary status                   # simply works there
+
+ssh senza "sanctuary status"       # NOT found
+ssh senza 'bash -lc "sanctuary status"'   # this works
+```
+
+Reason: `ssh host "command"` does **not** start a login shell. Ubuntu bails out in the first
+lines of `.bashrc` when the shell is not interactive, so `~/.local/bin` never reaches the PATH.
+On **Windows** it is the other way round: sshd hands over the PATH from the registry, so the
+direct call works - but `bash -lc` lands in **WSL** instead of Git Bash, where there is no node.
+
+**Daily work is unaffected** - grabbing a console with `ssh senza` never notices any of this.
+Only scripts issuing commands over SSH are, which is why `--mesh` tries both ways.
+
+## New skills
+
+`~/.claude/skills` holds one symlink **per skill**, not one for the whole directory. That is
+what allows skills from several repos, but it has a price: a newly added skill does not show up
+on its own after a `git pull`.
+
+The `session-sync-check.sh` SessionStart hook from `claude-config` takes care of that - it
+creates missing links at the next session start and reports them (`Neue Skills verlinkt: ...`).
+Anything already linked is never touched, so skills from this repo stay untouched. If you
+cannot wait, run `setup.sh` again - it is idempotent.
 
 ## Two classes of agents
 

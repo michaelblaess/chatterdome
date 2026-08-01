@@ -40,19 +40,24 @@ erwartet werden. Ein vorhandenes echtes Verzeichnis wird **nie gelöscht**, sond
 
 ## Benutzen
 
+Das Setup legt den Kurzbefehl `sanctuary` in `~/.local/bin` an - beide Skills hängen darunter:
+
 ```bash
-OP=~/.claude/skills/operator
-BUS=~/.claude/skills/claude-bus
+sanctuary status              # Tabelle aller Instanzen
+sanctuary status --mesh       # zusätzlich die anderen Rechner
+sanctuary status --json       # maschinenlesbar
+sanctuary watch 2 --json      # NDJSON-Strom für Werkzeuge
+sanctuary start [Name]        # neue Instanz mit Namen im Tab-Titel
+sanctuary stop <Name>         # Instanz beenden
 
-node $OP/operator.mjs status          # Tabelle aller Instanzen
-node $OP/operator.mjs status --mesh   # zusätzlich die anderen Rechner
-node $OP/operator.mjs watch 2 --json  # NDJSON-Strom für Werkzeuge
-node $OP/starte.mjs                   # neue Instanz mit Namen aus dem Pool
-
-node $BUS/bus.mjs send Lino "Bitte Tests laufen lassen" --erwartet-quittung
-node $BUS/bus.mjs auftraege           # was liegt für mich an
-node $BUS/bus.mjs ack <id> 200 "erledigt"
+sanctuary send Lino "Bitte Tests laufen lassen" --erwartet-quittung
+sanctuary auftraege           # was liegt für mich an
+sanctuary ack <id> 200 "erledigt"
+sanctuary hilfe               # alle Befehle
 ```
+
+Die Skripte lassen sich weiterhin direkt aufrufen
+(`node ~/.claude/skills/operator/operator.mjs status`), das braucht man aber nur zum Debuggen.
 
 ## Zwei Klassen von Agenten
 
@@ -71,16 +76,6 @@ Deshalb trennt dieses Projekt zwei Klassen:
   Sache und sind wieder weg. Sie sind fernsteuerbar, das ist ihr Zweck.
 
 Details in [`docs/architektur-http.md`](docs/architektur-http.md).
-
-## Woher der Code kommt
-
-Operator und Bus sind aus dem privaten Repo `claude-config` hierher gezogen, Stand `3a531c4`
-vom 01.08.2026. Die Entstehungsgeschichte steht dort in der Historie - hier beginnt sie neu,
-weil die alten Commits fast immer mehrere Skills gleichzeitig betrafen.
-
-## Lizenz
-
-Apache-2.0, siehe [LICENSE](LICENSE).
 
 ## SSH: interaktiv oder mit Befehl
 
@@ -114,3 +109,13 @@ Darum kümmert sich der SessionStart-Hook `session-sync-check.sh` aus `claude-co
 fehlende Verweise beim nächsten Sitzungsstart an und meldet das (`Neue Skills verlinkt: ...`).
 Was bereits verlinkt ist, wird nie angefasst, Skills aus diesem Repo bleiben also unberührt.
 Wer nicht warten will, ruft `setup.sh` erneut auf - es ist idempotent.
+
+## Woher der Code kommt
+
+Operator und Bus sind aus dem privaten Repo `claude-config` hierher gezogen, Stand `3a531c4`
+vom 01.08.2026. Die Entstehungsgeschichte steht dort in der Historie - hier beginnt sie neu,
+weil die alten Commits fast immer mehrere Skills gleichzeitig betrafen.
+
+## Lizenz
+
+Apache-2.0, siehe [LICENSE](LICENSE).
