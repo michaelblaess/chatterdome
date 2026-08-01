@@ -88,3 +88,15 @@ def terminal_vorhanden() -> bool:
             for name in ("gnome-terminal", "konsole", "xfce4-terminal", "xterm")
         )
     return False
+
+
+def oeffne_ordner(pfad: str) -> None:
+    """Zeigt ein Verzeichnis im Dateimanager des Systems."""
+    if not pfad or not Path(pfad).exists():
+        return
+    if sys.platform == "win32":
+        os.startfile(pfad)
+    elif sys.platform == "darwin":
+        subprocess.Popen(["open", pfad], close_fds=True)
+    else:
+        subprocess.Popen(["xdg-open", pfad], close_fds=True, start_new_session=True)

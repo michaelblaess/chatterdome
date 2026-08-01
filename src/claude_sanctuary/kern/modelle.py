@@ -57,6 +57,9 @@ class Agent:
     """Betriebssystem des Rechners, auf dem die Sitzung laeuft."""
 
     letztes_tool: str | None = None
+    letzte_zeit: str = ""
+    """ISO-Zeitstempel des letzten Transkript-Eintrags."""
+
     aufgabe: str | None = None
     cwd: str = ""
     nach_compact: bool = False
@@ -119,6 +122,20 @@ class Auftrag:
     geaendert: str = ""
     quittung_erwartet: bool = False
     verlauf: list[Ereignis] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class Namenspool:
+    """Das aktive Namensmotiv und was davon noch frei ist."""
+
+    motiv: str = ""
+    namen: list[str] = field(default_factory=list)
+    """Namen des Motivs, ohne die reservierten."""
+
+    frei: list[str] = field(default_factory=list)
+    reserviert: list[str] = field(default_factory=list)
+    vergeben: dict[str, str] = field(default_factory=dict)
+    """Sitzungs-ID auf Name."""
 
 
 @dataclass(slots=True)

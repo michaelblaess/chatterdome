@@ -6,6 +6,7 @@ from collections.abc import Callable
 from typing import Any, ClassVar
 
 from rich.text import Text
+from textual import events
 from textual.app import ComposeResult
 from textual.containers import Vertical
 from textual.message import Message
@@ -42,6 +43,56 @@ def _ordner(pfad: str, breite: int = 28) -> str:
     return "..." + pfad[-(breite - 3) :]
 
 
+class AgentenDaten(DataTable[Any]):
+    """DataTable, die Doppel- und Rechtsklick als eigene Nachricht meldet.
+
+    Der Rechtsklick MUSS hier abgefangen werden: Textuals ``_on_click``
+    prueft die Maustaste nicht, verschiebt den Cursor und postet unter
+    Umstaenden ``RowSelected``. ``event.stop()`` genuegt dafuer nicht - es
+    unterbindet nur das Bubbling, nicht die Aufrufkette entlang der MRO.
+    Dafuer ist ``prevent_default()`` da, und ein ``super()``-Aufruf darf
+    NICHT dazu, weil Textual die Basis ohnehin selbst aufruft.
+    """
+
+    class RechtsKlick(Message):
+        def __init__(self, tabelle: AgentenDaten, zeile: int, bei: tuple[int, int]) -> None:
+            super().__init__()
+            self.tabelle = tabelle
+            self.zeile = zeile
+            self.bei = bei
+
+        @property
+        def control(self) -> AgentenDaten:
+            return self.tabelle
+
+    class DoppelKlick(Message):
+        def __init__(self, tabelle: AgentenDaten, zeile: int) -> None:
+            super().__init__()
+            self.tabelle = tabelle
+            self.zeile = zeile
+
+        @property
+        def control(self) -> AgentenDaten:
+            return self.tabelle
+
+    async def _on_click(self, event: events.Click) -> None:
+        zeile = event.style.meta.get("row", -1)
+        if not isinstance(zeile, int) or zeile < 0:
+            return  # Spaltenkopf traegt kein "row"
+
+        if event.button == 3:
+            event.prevent_default()
+            event.stop()
+            self.move_cursor(row=zeile)
+            self.post_message(self.RechtsKlick(self, zeile, (event.screen_x, event.screen_y)))
+            return
+
+        # Linksklick: den Cursor setzt Textuals Basis-Handler selbst, hier
+        # kommt nur der zweite Klick als eigene Nachricht dazu.
+        if event.button == 1 and event.chain >= 2:
+            self.post_message(self.DoppelKlick(self, zeile))
+
+
 class AgentenTabelle(Vertical):
     """Filterzeile plus Tabelle. Meldet die Auswahl als Message."""
 
@@ -51,6 +102,21 @@ class AgentenTabelle(Vertical):
         def __init__(self, agent: Agent | None) -> None:
             super().__init__()
             self.agent = agent
+
+    class Aufgerufen(Message):
+        """Doppelklick auf einen Agenten - Detailansicht gewuenscht."""
+
+        def __init__(self, agent: Agent) -> None:
+            super().__init__()
+            self.agent = agent
+
+    class MenueGewuenscht(Message):
+        """Rechtsklick auf einen Agenten."""
+
+        def __init__(self, agent: Agent, bei: tuple[int, int]) -> None:
+            super().__init__()
+            self.agent = agent
+            self.bei = bei
 
     # Nur Spalten in diesem Verzeichnis sind sortierbar.
     _SORTIER: ClassVar[dict[int, Callable[[Agent], Any]]] = {
@@ -83,7 +149,7 @@ class AgentenTabelle(Vertical):
             dropdown_id="agenten-filter-verlauf",
             id="agenten-suche",
         )
-        yield DataTable(id="agenten-daten", cursor_type="row", zebra_stripes=True)
+        yield AgentenDaten(id="agenten-daten", cursor_type="row", zebra_stripes=True)
 
     def on_mount(self) -> None:
         tabelle = self.query_one("#agenten-daten", DataTable)
@@ -209,6 +275,19 @@ class AgentenTabelle(Vertical):
 
     def on_data_table_row_highlighted(self, _ereignis: DataTable.RowHighlighted) -> None:
         self.post_message(self.Ausgewaehlt(self.markierter))
+
+    def on_agenten_daten_doppel_klick(self, ereignis: AgentenDaten.DoppelKlick) -> None:
+        agent = self._bei_zeile(ereignis.zeile)
+        if agent is not None:
+            self.post_message(self.Aufgerufen(agent))
+
+    def on_agenten_daten_rechts_klick(self, ereignis: AgentenDaten.RechtsKlick) -> None:
+        agent = self._bei_zeile(ereignis.zeile)
+        if agent is not None:
+            self.post_message(self.MenueGewuenscht(agent, ereignis.bei))
+
+    def _bei_zeile(self, zeile: int) -> Agent | None:
+        return self._sichtbar[zeile] if 0 <= zeile < len(self._sichtbar) else None
 
     def on_search_input_with_history_changed(self, ereignis: Message) -> None:
         wert = getattr(ereignis, "value", None)

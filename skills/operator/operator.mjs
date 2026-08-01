@@ -504,9 +504,25 @@ async function stoppe(suchName, { ohneRueckfrage = false } = {}) {
   }
 }
 
-function zeigeNamen() {
+function zeigeNamen(argv = []) {
   const namen = ladeNamen();
   const { motiv, namen: pool, reserviert } = aktivesMotiv();
+
+  if (argv.includes('--json')) {
+    const vergeben = Object.values(namen);
+    console.log(JSON.stringify({
+      rechner: rechner(),
+      motiv,
+      reserviert,
+      // Reservierte Namen zaehlen nicht zum Motiv - sonst haette "Comicmotiv"
+      // ploetzlich 20 statt 19 Namen.
+      namen: pool.filter((n) => !reserviert.includes(n)),
+      frei: pool.filter((n) => !vergeben.includes(n)),
+      vergeben: namen,
+    }, null, 1));
+    return;
+  }
+
   console.log('');
   const eintraege = Object.entries(namen);
   if (!eintraege.length) {
@@ -916,7 +932,7 @@ switch (befehl) {
     if (!rest[0]) { console.log('\n  Nutzung: operator.mjs stop <Name>\n'); process.exitCode = 1; }
     else await stoppe(rest[0], { ohneRueckfrage: argv.includes('--force') });
     break;
-  case 'names': zeigeNamen(); break;
+  case 'names': zeigeNamen(argv); break;
   case 'motiv': case 'motive': zeigeMotive(rest[0]); break;
   case 'reset-names': raeumeNamen(); break;
   case 'werde-operator': werdeOperator(); break;

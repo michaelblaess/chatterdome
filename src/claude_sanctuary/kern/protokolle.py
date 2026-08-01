@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from claude_sanctuary.kern.modelle import Auftrag, Bestand
+from claude_sanctuary.kern.modelle import Auftrag, Bestand, Namenspool
 
 
 class Quelle(Protocol):
@@ -20,6 +20,10 @@ class Quelle(Protocol):
 
         :param mesh: auch die anderen Rechner im Tailnet abfragen.
         """
+        ...
+
+    def namen(self) -> Namenspool:
+        """Aktives Namensmotiv und freie Namen."""
         ...
 
     def verlauf(self, name: str) -> list[Auftrag]:

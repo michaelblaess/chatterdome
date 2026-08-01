@@ -20,7 +20,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from claude_sanctuary.kern.modelle import Agent, Auftrag, Bestand, Ereignis
+from claude_sanctuary.kern.modelle import Agent, Auftrag, Bestand, Ereignis, Namenspool
 
 ZEITGRENZE = 25.0
 """Sekunden. Eine Mesh-Abfrage ueber SSH braucht spuerbar laenger als eine lokale."""
@@ -125,6 +125,18 @@ class LokaleQuelle:
             systeme={name: system} if system else {},
         )
 
+    def namen(self) -> Namenspool:
+        roh, _fehler = self._json(["names", "--json"])
+        if roh is None:
+            return Namenspool()
+        return Namenspool(
+            motiv=str(roh.get("motiv", "")),
+            namen=[str(n) for n in roh.get("namen", [])],
+            frei=[str(n) for n in roh.get("frei", [])],
+            reserviert=[str(n) for n in roh.get("reserviert", [])],
+            vergeben={str(k): str(v) for k, v in (roh.get("vergeben") or {}).items()},
+        )
+
     def verlauf(self, name: str) -> list[Auftrag]:
         roh, _fehler = self._json(["verlauf", name, "--json"])
         if roh is None:
@@ -211,6 +223,7 @@ class LokaleQuelle:
             version=e.get("version"),
             system=system or None,
             letztes_tool=e.get("letztesTool"),
+            letzte_zeit=str(e.get("letzteZeit") or ""),
             aufgabe=e.get("aufgabe"),
             cwd=str(e.get("cwd") or ""),
             nach_compact=bool(e.get("nachCompact", False)),

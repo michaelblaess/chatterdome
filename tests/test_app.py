@@ -10,7 +10,7 @@ from __future__ import annotations
 import pytest
 from textual.widgets import Button, DataTable, Input
 
-from claude_sanctuary.kern.modelle import Agent, Auftrag, Bestand, Ereignis
+from claude_sanctuary.kern.modelle import Agent, Auftrag, Bestand, Ereignis, Namenspool
 from claude_sanctuary.tui.app import SanctuaryApp
 from claude_sanctuary.tui.widgets.agenten_tabelle import AgentenTabelle
 from claude_sanctuary.tui.widgets.verlauf_panel import VerlaufPanel
@@ -44,6 +44,9 @@ class FakeQuelle:
                 ),
             ],
         )
+
+    def namen(self) -> Namenspool:
+        return Namenspool(motiv="Comicmotiv", namen=["Lino", "Luzie"], frei=["Luzie"])
 
     def verlauf(self, name: str) -> list[Auftrag]:
         return [
@@ -172,7 +175,10 @@ class TestOberflaeche:
             tabelle = await _gefuellt(app, pilot)
             # Nach Post absteigend steht Klara oben, die eigene Sitzung darunter.
             tabelle.move_cursor(row=1)
-            await pilot.pause()
+            for _ in range(20):
+                await pilot.pause()
+                if app._gewaehlt is not None and app._gewaehlt.selbst:
+                    break
             assert app._gewaehlt is not None
             assert app._gewaehlt.selbst
             assert app.query_one("#senden", Button).disabled
@@ -191,5 +197,78 @@ class TestOberflaeche:
         async with app.run_test(size=(160, 50)) as pilot:
             tabelle = await _gefuellt(app, pilot)
             tabelle.move_cursor(row=0)
-            await pilot.pause()
+            for _ in range(20):
+                await pilot.pause()
+                if app._gewaehlt is not None and not app._gewaehlt.selbst:
+                    break
             assert not app.query_one("#senden", Button).disabled
+
+
+class TestBedienung:
+    """Doppelklick, Kontextmenue und Schnellbefehle."""
+
+    async def test_doppelklick_oeffnet_die_detailansicht(self, quelle: FakeQuelle) -> None:
+        app = SanctuaryApp(quelle=quelle)
+        app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
+        async with app.run_test(size=(160, 50)) as pilot:
+            tabelle = await _gefuellt(app, pilot)
+            tabelle.post_message(tabelle.DoppelKlick(tabelle, 0))
+            for _ in range(30):
+                await pilot.pause()
+                if type(app.screen).__name__ == "DetailScreen":
+                    break
+            assert type(app.screen).__name__ == "DetailScreen"
+            await pilot.press("escape")
+            await pilot.pause()
+            assert type(app.screen).__name__ != "DetailScreen"
+
+    async def test_rechtsklick_oeffnet_das_kontextmenue(self, quelle: FakeQuelle) -> None:
+        app = SanctuaryApp(quelle=quelle)
+        app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
+        async with app.run_test(size=(160, 50)) as pilot:
+            tabelle = await _gefuellt(app, pilot)
+            tabelle.post_message(tabelle.RechtsKlick(tabelle, 0, (10, 10)))
+            for _ in range(30):
+                await pilot.pause()
+                if type(app.screen).__name__ == "ContextMenuScreen":
+                    break
+            assert type(app.screen).__name__ == "ContextMenuScreen"
+
+    async def test_schnellbefehl_fuellt_nur_das_feld(self, quelle: FakeQuelle) -> None:
+        """Der Text landet im Eingabefeld - gesendet wird bewusst separat."""
+        app = SanctuaryApp(quelle=quelle)
+        app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
+        async with app.run_test(size=(160, 50)) as pilot:
+            await _gefuellt(app, pilot)
+            app._schnellbefehl("compact")
+            await pilot.pause()
+            assert "compact" in app.query_one("#eingabe", Input).value
+            assert quelle.gesendet == []
+
+    async def test_statusleiste_zeigt_kennzahlen(self, quelle: FakeQuelle) -> None:
+        from textual_widgets import StatusBar
+
+        app = SanctuaryApp(quelle=quelle)
+        app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
+        async with app.run_test(size=(160, 50)) as pilot:
+            await _gefuellt(app, pilot)
+            leiste = app.query_one("#status", StatusBar)
+            text = leiste._build().plain
+            assert "|" in text          # Trenner
+            assert "2" in text          # zwei Agenten
+            assert leiste.styles.border.top[0] == "solid"
+
+    async def test_namenspool_erscheint_im_kopf(self, quelle: FakeQuelle) -> None:
+        from claude_sanctuary.tui.widgets.kopf_panel import KopfPanel
+
+        app = SanctuaryApp(quelle=quelle)
+        app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
+        async with app.run_test(size=(160, 50)) as pilot:
+            await _gefuellt(app, pilot)
+            for _ in range(40):
+                await pilot.pause()
+            kopf = app.query_one("#kopf", KopfPanel)
+            # _items ist ein dict key -> InfoItem (info_header.py:279).
+            werte = {k: i.value for k, i in kopf._items.items()}
+            assert werte["pool"] == "Comicmotiv"
+            assert werte["free"] == "1"

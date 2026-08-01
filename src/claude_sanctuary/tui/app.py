@@ -31,12 +31,21 @@ from claude_sanctuary import __author__, __version__, __year__
 from claude_sanctuary.i18n import current_language, t
 from claude_sanctuary.kern.einstellungen import ZUSTIMMUNG, Einstellungen
 from claude_sanctuary.kern.lokale_quelle import LokaleQuelle
-from claude_sanctuary.kern.modelle import Agent, Bestand
+from claude_sanctuary.kern.modelle import Agent, Bestand, Namenspool
 from claude_sanctuary.kern.protokolle import Quelle
+from claude_sanctuary.tui.starter import oeffne_ordner
 from claude_sanctuary.tui.widgets.agenten_tabelle import AgentenTabelle
 from claude_sanctuary.tui.widgets.kopf_panel import KopfPanel
 from claude_sanctuary.tui.widgets.status_zeile import StatusZeile
 from claude_sanctuary.tui.widgets.verlauf_panel import VerlaufPanel
+
+SCHNELLBEFEHLE = ("compact", "status", "pause", "done")
+"""Vorformulierte Auftragstexte.
+
+Sie fuellen NUR das Eingabefeld - abgeschickt wird weiter bewusst. Und sie
+sind Text, keine Fernsteuerung: ein "/compact" kann der Agent nur selbst
+ausloesen, der Auftrag bittet ihn darum.
+"""
 
 
 def _bus_datei() -> Path:
@@ -95,6 +104,7 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         self._bestand = Bestand(rechner="", zeit="")
         self._gewaehlt: Agent | None = None
         self._stop_kandidat = ""
+        self._menue_ziel: Agent | None = None
         self._letzte_fehler: list[str] = []
         self._gemeldete_systeme: dict[str, str] = {}
         self._start = time.monotonic()
@@ -118,7 +128,15 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
                     )
                     with Vertical(id="eingabe-raum"):
                         yield Input(placeholder=t("chat.placeholder_none"), id="eingabe")
-                        yield Button(t("chat.send"), variant="primary", id="senden")
+                        with Horizontal(id="schnellbefehle"):
+                            yield Button(t("chat.send"), variant="primary", id="senden")
+                            for schluessel in SCHNELLBEFEHLE:
+                                yield Button(
+                                    t(f"quick.{schluessel}"),
+                                    variant="default",
+                                    id=f"quick-{schluessel}",
+                                    classes="schnell",
+                                )
             with TabPane(t("tab.bus"), id="tab-bus"):
                 yield Static(t("tab.empty"), classes="platzhalter")
             with TabPane(t("tab.stats"), id="tab-statistik"):
@@ -133,6 +151,7 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         self._schreibe_log(t("log.started", version=__version__))
         self.set_interval(self._takt, self._takt_abfrage)
         self.aktualisieren()
+        self.namen_laden()
         self._frage_disclaimer()
 
     def _binding_texte(self) -> None:
@@ -214,6 +233,20 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
                 self._schreibe_log(t("log.refresh_failed", fehler=meldung), "warning")
             self._letzte_fehler = list(bestand.fehler)
 
+    @work(thread=True, group="namen")
+    def namen_laden(self) -> None:
+        """Holt den Namenspool.
+
+        Bewusst NICHT im Sekundentakt: der Pool aendert sich nur, wenn ein
+        Agent startet oder endet - ein Unterprozess je Aktualisierung waere
+        reine Verschwendung.
+        """
+        pool = self._quelle.namen()
+        self.call_from_thread(self._namen_uebernehmen, pool)
+
+    def _namen_uebernehmen(self, pool: Namenspool) -> None:
+        self.query_one("#kopf", KopfPanel).namen_setzen(pool.motiv, len(pool.frei))
+
     @work(thread=True, exclusive=True, group="verlauf")
     def verlauf_laden(self, name: str) -> None:
         auftraege = self._quelle.verlauf(name)
@@ -251,8 +284,126 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         self.refresh_bindings()
 
     def on_button_pressed(self, ereignis: Button.Pressed) -> None:
-        if ereignis.button.id == "senden":
+        kennung = ereignis.button.id or ""
+        if kennung == "senden":
             self._senden()
+            return
+        if kennung.startswith("quick-"):
+            self._schnellbefehl(kennung.removeprefix("quick-"))
+
+    def _schnellbefehl(self, schluessel: str) -> None:
+        """Legt einen vorformulierten Text ins Eingabefeld."""
+        eingabe = self.query_one("#eingabe", Input)
+        if eingabe.disabled:
+            self.notify(t("notify.select_agent"), severity="warning")
+            return
+        eingabe.value = t(f"quick.{schluessel}_text")
+        self.set_focus(eingabe)
+
+    # -- Tabelle: Doppelklick und Kontextmenue --------------------------
+
+    def on_agenten_tabelle_aufgerufen(self, ereignis: AgentenTabelle.Aufgerufen) -> None:
+        self._detail_zeigen(ereignis.agent)
+
+    def _detail_zeigen(self, agent: Agent) -> None:
+        from claude_sanctuary.tui.screens.detail_screen import DetailScreen
+
+        self._menue_ziel = agent
+        self.push_screen(DetailScreen(agent), callback=self._detail_geschlossen)
+
+    def _detail_geschlossen(self, aktion: str | None) -> None:
+        agent = self._menue_ziel
+        if aktion is None or agent is None:
+            return
+        if aktion == "senden":
+            self.set_focus(self.query_one("#eingabe", Input))
+        elif aktion == "kopieren":
+            self._angaben_kopieren(agent)
+
+    def on_agenten_tabelle_menue_gewuenscht(
+        self, ereignis: AgentenTabelle.MenueGewuenscht
+    ) -> None:
+        from textual_widgets import ContextMenuItem, ContextMenuScreen
+
+        agent = ereignis.agent
+        self._menue_ziel = agent
+        hier = agent.rechner.upper() == self._bestand.rechner.upper()
+        eintraege = [
+            ContextMenuItem("details", t("menu.details")),
+            ContextMenuItem("senden", t("menu.send"), enabled=not agent.selbst),
+            ContextMenuItem("compact", t("menu.compact"), enabled=not agent.selbst),
+            ContextMenuItem("report", t("menu.report"), enabled=not agent.selbst),
+            ContextMenuItem.separator(),
+            ContextMenuItem("kopiere_name", t("menu.copy_name")),
+            ContextMenuItem("kopiere_id", t("menu.copy_id"), enabled=bool(agent.session_id)),
+            ContextMenuItem("ordner", t("menu.open_dir"), enabled=hier and bool(agent.cwd)),
+            ContextMenuItem("neu_laden", t("menu.reload")),
+            ContextMenuItem.separator(),
+            ContextMenuItem("nur_host", t("menu.filter_host")),
+            ContextMenuItem("stop", t("menu.stop"), enabled=hier),
+        ]
+        self.push_screen(
+            ContextMenuScreen(eintraege, at=ereignis.bei),
+            callback=self._menue_gewaehlt,
+        )
+
+    def _menue_gewaehlt(self, auswahl: str | None) -> None:
+        agent = self._menue_ziel
+        if auswahl is None or agent is None:
+            return
+        if auswahl == "details":
+            self._detail_zeigen(agent)
+        elif auswahl == "senden":
+            self.set_focus(self.query_one("#eingabe", Input))
+        elif auswahl == "compact":
+            self._schnellbefehl("compact")
+        elif auswahl == "report":
+            self._schnellbefehl("status")
+        elif auswahl == "kopiere_name":
+            self._in_zwischenablage(agent.name)
+        elif auswahl == "kopiere_id":
+            self._in_zwischenablage(agent.session_id)
+        elif auswahl == "ordner":
+            self._ordner_oeffnen(agent)
+        elif auswahl == "neu_laden":
+            self.verlauf_laden(agent.name)
+        elif auswahl == "nur_host":
+            self.query_one("#agenten", AgentenTabelle).setze_filter(agent.rechner)
+        elif auswahl == "stop":
+            self.action_stop_agent()
+
+    def _in_zwischenablage(self, text: str) -> None:
+        if not text:
+            return
+        self.copy_to_clipboard(text)
+        self.notify(t("notify.copied"))
+
+    def _angaben_kopieren(self, agent: Agent) -> None:
+        zeilen = [
+            f"{agent.name} ({agent.rechner})",
+            f"Status: {agent.status}",
+            f"Modell: {agent.modell or '-'}   Claude: {agent.version or '-'}",
+            f"System: {agent.system or '-'}",
+            f"Ordner: {agent.cwd or '-'}",
+            f"Kontext: {agent.kontext}   Tokens: {agent.tokens}",
+            f"Sitzung: {agent.session_id or '-'}",
+        ]
+        self._in_zwischenablage("\n".join(zeilen))
+
+    def _ordner_oeffnen(self, agent: Agent) -> None:
+        if not agent.cwd:
+            self.notify(t("notify.no_dir"), severity="warning")
+            return
+        if agent.rechner.upper() != self._bestand.rechner.upper():
+            self.notify(
+                t("notify.remote_dir", name=agent.name, rechner=agent.rechner),
+                severity="warning",
+            )
+            return
+        # Nicht ueber den Link-Mixin: der kennt nur bereits registrierte
+        # Ziele. Hier ist der Pfad direkt bekannt.
+        with contextlib.suppress(Exception):
+            oeffne_ordner(agent.cwd)
 
     def on_input_submitted(self, ereignis: Input.Submitted) -> None:
         if ereignis.input.id == "eingabe":
@@ -365,6 +516,7 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         self._nur_lokal = bool(werte.get("nur_lokal", self._nur_lokal))
         self.notify(t("notify.settings_saved"))
         self.aktualisieren()
+        self.namen_laden()
 
     def action_stop_agent(self) -> None:
         agent = self._gewaehlt
@@ -406,6 +558,7 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         else:
             self._schreibe_log(t("log.stopped", name=name), "success")
         self.aktualisieren()
+        self.namen_laden()
 
     def action_start_agent(self) -> None:
         from claude_sanctuary.tui.starter import starte_lokal
@@ -417,6 +570,7 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
             return
         self._schreibe_log(t("log.started_agent", name="-"), "success")
         self.set_timer(3.0, self.aktualisieren)
+        self.set_timer(3.5, self.namen_laden)
 
     def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
         # Modale Dialoge sollen die App-Tasten nicht durchreichen.

@@ -59,9 +59,19 @@ Screen {
     width: 1fr;
 }
 
-#senden {
-    width: auto;
+#schnellbefehle {
+    height: auto;
     margin: 1 0 0 0;
+}
+
+#schnellbefehle Button {
+    width: auto;
+    margin: 0 1 0 0;
+}
+
+/* Die vorformulierten Texte treten hinter den Senden-Knopf zurueck. */
+#schnellbefehle .schnell {
+    color: $text-muted;
 }
 
 /* -- Verlaufsblasen -- */
@@ -98,14 +108,7 @@ Screen {
     text-style: italic;
 }
 
-/* -- Statuszeile: eine Zeile Inhalt, also height 1 -- */
-
-#status {
-    height: 1;
-    padding: 0 1;
-    background: $panel;
-    color: $text;
-}
+/* Die Statuszeile bringt Rahmen und Trenner selbst mit (StatusBar). */
 
 /* -- Log-Panel: standardmaessig sichtbar -- */
 
