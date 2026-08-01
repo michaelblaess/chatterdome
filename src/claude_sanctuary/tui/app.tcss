@@ -55,19 +55,7 @@ Screen {
     min-height: 6;
 }
 
-#eingabe-zeile {
-    height: auto;
-}
-
-#eingabe {
-    width: 1fr;
-}
-
-/* Schmaler Knopf direkt am Feld - nur das Zeichen, kein Beschriftungstext. */
-#leeren {
-    width: 5;
-    min-width: 5;
-}
+/* Breite und Knopfgroesse bringt ClearableInput selbst mit. */
 
 #schnellbefehle {
     height: auto;

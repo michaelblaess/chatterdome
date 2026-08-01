@@ -135,7 +135,6 @@
   "status.busy": "busy",
   "status.open": "open tasks",
   "status.machines": "machines",
-  "status.tokens": "Tokens",
   "state.free": "available",
   "state.busy": "working",
   "state.gone": "unreachable",
@@ -191,5 +190,6 @@
   "notify.copied": "Copied to clipboard",
   "notify.no_dir": "No working directory known",
   "notify.remote_dir": "{name} runs on {rechner} - that folder is not here",
-  "chat.clear": "Clear input"
+  "chat.clear": "Clear input",
+  "status.context": "Context"
 }

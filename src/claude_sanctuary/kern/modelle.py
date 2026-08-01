@@ -170,4 +170,10 @@ class Bestand:
 
     @property
     def tokens(self) -> int:
+        """Verbrauch - nur belegt, wenn mit --tokens abgefragt wurde."""
         return sum(a.tokens for a in self.agenten)
+
+    @property
+    def kontext(self) -> int:
+        """Summe der belegten Kontexte. Steht in jeder Abfrage."""
+        return sum(a.kontext for a in self.agenten)

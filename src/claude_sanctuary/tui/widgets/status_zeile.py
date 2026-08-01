@@ -42,6 +42,10 @@ class StatusZeile(StatusBar):  # type: ignore[misc]
                     value_style="bold" if bestand.offene_auftraege else "dim",
                 ),
                 StatusItem(t("status.machines"), str(rechner)),
-                StatusItem(t("status.tokens"), _tokens(bestand.tokens)),
+                # Kontext, NICHT Verbrauch: die Token-Summe liefert der Operator
+                # nur mit --tokens (voller Transkript-Read), sonst ist sie 0 -
+                # eine Null anzuzeigen, die nichts bedeutet, ist schlechter
+                # als die Zahl wegzulassen.
+                StatusItem(t("status.context"), _tokens(bestand.kontext)),
             ]
         )

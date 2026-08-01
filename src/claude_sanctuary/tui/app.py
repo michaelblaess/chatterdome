@@ -17,6 +17,7 @@ from textual_themes import THEME_DISPLAY_NAMES, register_all
 from textual_widgets import (
     DISCLAIMER_VERSION,
     AboutScreen,
+    ClearableInput,
     ClickableLinksMixin,
     CrashGuard,
     DisclaimerScreen,
@@ -127,13 +128,14 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
                         target_id="verlauf", min_size=5, id="eingabe-splitter"
                     )
                     with Vertical(id="eingabe-raum"):
-                        # Textual bringt keinen Leeren-Knopf am Input mit, und
-                        # textual-widgets auch nicht - deshalb hier daneben.
-                        with Horizontal(id="eingabe-zeile"):
-                            yield Input(placeholder=t("chat.placeholder_none"), id="eingabe")
-                            leeren = Button("X", id="leeren", tooltip=t("chat.clear"))
-                            leeren.can_focus = False
-                            yield leeren
+                        # input_id="eingabe": das innere Feld behaelt die ID,
+                        # damit query_one("#eingabe", Input) ueberall gilt.
+                        yield ClearableInput(
+                            placeholder=t("chat.placeholder_none"),
+                            tooltip=t("chat.clear"),
+                            input_id="eingabe",
+                            id="eingabe-zeile",
+                        )
                         with Horizontal(id="schnellbefehle"):
                             yield Button(t("chat.send"), variant="primary", id="senden")
                             for schluessel in SCHNELLBEFEHLE:
@@ -275,7 +277,7 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         # Eingang genau der Sitzung, die ihn gerade abschickt. Der Verlauf
         # bleibt trotzdem sichtbar, er ist ja der eigene.
         gesperrt = agent is None or agent.selbst
-        eingabe.disabled = gesperrt
+        self.query_one("#eingabe-zeile", ClearableInput).set_disabled(gesperrt)
         knopf.disabled = gesperrt
 
         if agent is None:
@@ -293,11 +295,6 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         kennung = ereignis.button.id or ""
         if kennung == "senden":
             self._senden()
-            return
-        if kennung == "leeren":
-            feld = self.query_one("#eingabe", Input)
-            feld.value = ""
-            self.set_focus(feld)
             return
         if kennung.startswith("quick-"):
             self._schnellbefehl(kennung.removeprefix("quick-"))

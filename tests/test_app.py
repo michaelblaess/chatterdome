@@ -256,6 +256,7 @@ class TestBedienung:
             text = leiste._build().plain
             assert "|" in text          # Trenner
             assert "2" in text          # zwei Agenten
+            assert "Kontext" in text    # Verbrauch waere ohne --tokens immer 0
             assert leiste.styles.border.top[0] == "solid"
 
     async def test_namenspool_erscheint_im_kopf(self, quelle: FakeQuelle) -> None:

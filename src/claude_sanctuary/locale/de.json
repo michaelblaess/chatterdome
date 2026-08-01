@@ -135,7 +135,6 @@
   "status.busy": "beschäftigt",
   "status.open": "offene Aufträge",
   "status.machines": "Rechner",
-  "status.tokens": "Tokens",
   "state.free": "verfügbar",
   "state.busy": "arbeitet",
   "state.gone": "nicht erreichbar",
@@ -191,5 +190,6 @@
   "notify.copied": "In die Zwischenablage kopiert",
   "notify.no_dir": "Kein Arbeitsverzeichnis bekannt",
   "notify.remote_dir": "{name} läuft auf {rechner} - der Ordner liegt nicht hier",
-  "chat.clear": "Eingabe leeren"
+  "chat.clear": "Eingabe leeren",
+  "status.context": "Kontext"
 }
