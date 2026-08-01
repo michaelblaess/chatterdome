@@ -86,7 +86,7 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         register_all(self)
         self._einstellungen = Einstellungen()
         werte = self._einstellungen.laden()
-        self._nur_lokal = bool(werte.get("nur_lokal", True))
+        self._nur_lokal = bool(werte.get("nur_lokal", False))
         self._takt = max(2, int(werte.get("aktualisierung_sekunden", 5)))
         # Composition Root: hier wird verdrahtet. Der Parameter erlaubt es,
         # im Test eine Quelle ohne laufenden Bus einzusetzen.
@@ -96,6 +96,7 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         self._gewaehlt: Agent | None = None
         self._stop_kandidat = ""
         self._letzte_fehler: list[str] = []
+        self._gemeldete_systeme: dict[str, str] = {}
         self._start = time.monotonic()
         self._laeuft = False
         with contextlib.suppress(Exception):
@@ -197,6 +198,13 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         )
         self.query_one("#agenten", AgentenTabelle).uebernehmen(bestand.agenten)
         self.query_one("#status", StatusZeile).uebernehmen(bestand)
+
+        # Betriebssystem je Rechner einmalig ins Protokoll - dauerhaft in
+        # der Tabelle waere es eine Spalte, die in jeder Zeile dasselbe sagt.
+        neu = {r: s for r, s in bestand.systeme.items() if self._gemeldete_systeme.get(r) != s}
+        for rechner, system in neu.items():
+            self._schreibe_log(t("log.systems", rechner=rechner, system=system))
+        self._gemeldete_systeme.update(neu)
 
         # Nur bei Aenderung melden. Ein dauerhaft offline stehender Rechner
         # wuerde sonst im Sekundentakt dieselbe Zeile schreiben und das

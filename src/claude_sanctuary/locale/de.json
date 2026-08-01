@@ -1,6 +1,5 @@
 {
   "app.subtitle": "Zentrale für laufende Claude-Code-Instanzen",
-
   "binding.quit": "Beenden",
   "binding.refresh": "Aktualisieren",
   "binding.settings": "Einstellungen",
@@ -13,7 +12,6 @@
   "binding.local": "nur lokal",
   "binding.filter": "Filter",
   "binding.send": "Senden",
-
   "tooltip.quit": "Beendet die Zentrale. Die überwachten Agenten laufen weiter.",
   "tooltip.refresh": "Fragt den Zustand aller Agenten sofort neu ab.",
   "tooltip.settings": "Sprache, Netzwerk, Namenspool, Datenbank und Speicherorte.",
@@ -25,12 +23,10 @@
   "tooltip.stop": "Beendet den ausgewählten Agenten nach Rückfrage.",
   "tooltip.local": "Blendet die Agenten der anderen Rechner im Tailnet aus oder ein.",
   "tooltip.filter": "Springt in die Suchzeile über der Agententabelle.",
-
   "tab.agents": "Agenten",
   "tab.bus": "Message-Bus",
   "tab.stats": "Statistik",
   "tab.empty": "Dieser Bereich wird noch gebaut.",
-
   "head.operation": "Betrieb",
   "head.uptime": "Laufzeit",
   "head.agents": "Agenten",
@@ -51,7 +47,6 @@
   "head.free": "Namen frei",
   "head.tokens": "Tokens",
   "head.cache": "Cache gelesen",
-
   "col.state": "●",
   "col.name": "Agent",
   "col.host": "Rechner",
@@ -62,14 +57,11 @@
   "col.post": "Post",
   "col.tokens": "Tokens",
   "col.tool": "Werkzeug",
-
   "tip.state": "Grün: wartet auf Eingabe. Gelb: arbeitet gerade. Rot: nicht erreichbar.",
   "tip.post": "Aufträge, die für diesen Agenten offen sind und noch auf Bearbeitung warten.",
   "tip.context": "Belegter Kontext. Ab 600k wird es eng, ab 800k lohnt sich /compact - auslösen muss der Agent das selbst.",
   "tip.tokens": "Verbrauchte Tokens dieser Sitzung. Aus dem Cache gelesene zählen nicht als Verbrauch.",
-
   "filter.placeholder": "Agenten filtern - Name, Ordner oder Modell",
-
   "chat.empty": "Kein Verlauf mit diesem Agenten.",
   "chat.none_selected": "Wähle links einen Agenten aus.",
   "chat.placeholder": "Auftrag an {name} - Eingabe zum Senden",
@@ -77,16 +69,13 @@
   "chat.placeholder_self": "Das ist diese Sitzung - an sich selbst wird nichts gesendet",
   "chat.send": "Senden",
   "chat.receipt": "Quittung",
-
   "state.submitted": "abgelegt",
   "state.working": "in Arbeit",
   "state.input_required": "Rückfrage",
   "state.completed": "erledigt",
   "state.failed": "gescheitert",
   "state.cancelled": "abgebrochen",
-
   "status.summary": "{agenten} Agenten · {beschaeftigt} beschäftigt · {offen} offene Aufträge · {tokens} Tokens",
-
   "log.started": "Sanctuary v{version} gestartet",
   "log.refreshed": "{anzahl} Agenten auf {rechner}",
   "log.refresh_failed": "Abfrage fehlgeschlagen: {fehler}",
@@ -99,23 +88,18 @@
   "log.start_failed": "Start fehlgeschlagen: {fehler}",
   "log.local_on": "Nur lokale Agenten",
   "log.local_off": "Auch die anderen Rechner im Tailnet",
-
   "notify.select_agent": "Erst einen Agenten in der Tabelle auswählen",
   "notify.no_text": "Kein Text eingegeben",
   "notify.remote_stop": "{name} läuft auf {rechner} - von hier aus nicht zu beenden",
   "notify.theme": "Theme: {name}",
   "notify.settings_saved": "Einstellungen gespeichert",
-
   "confirm.stop_title": "Agent beenden",
   "confirm.stop_text": "{name} auf {rechner} wirklich beenden? Nicht gesicherte Arbeit geht verloren.",
-
   "start.title": "Agent starten",
   "start.name": "Name (leer für den nächsten freien):",
   "start.dir": "Arbeitsverzeichnis:",
-
   "help.title": "Kommandozeile",
   "help.intro": "Alles, was die Oberfläche kann, geht auch direkt im Terminal:",
-
   "settings.tab_mesh": "Mesh",
   "settings.tab_network": "Netzwerk",
   "settings.tab_pool": "Namenspool",
@@ -133,12 +117,18 @@
   "settings.storage.config": "Einstellungen:",
   "settings.storage.bus": "Message-Bus-Datenbank:",
   "settings.storage.disclaimer": "Zustimmung zum Haftungshinweis:",
-
   "about.description": "Zentrale für mehrere gleichzeitig\nlaufende Claude-Code-Instanzen",
-
   "disclaimer.title": "Haftungshinweis",
   "disclaimer.intro": "Dieses Programm beobachtet Claude-Code-Sitzungen auf Ihren Rechnern, verteilt Aufträge an sie und kann Sitzungen beenden. Es führt damit Aktionen aus, die Daten verändern können.",
   "disclaimer.duty_authorisation": "Sie sind berechtigt, die beteiligten Rechner und Sitzungen zu steuern.",
   "disclaimer.duty_actions": "Sie verantworten, was die beauftragten Agenten ausführen - das Programm prüft Aufträge inhaltlich nicht.",
-  "disclaimer.duty_data": "Sie geben über den Message-Bus keine Daten weiter, die auf dem Zielrechner nichts zu suchen haben."
+  "disclaimer.duty_data": "Sie geben über den Message-Bus keine Daten weiter, die auf dem Zielrechner nichts zu suchen haben.",
+  "head.claude": "Claude",
+  "head.system": "System",
+  "head.account": "Konto",
+  "head.login": "Anmeldung bis",
+  "head.login_days": "{tage} Tage",
+  "log.systems": "{rechner}: {system}",
+  "tip.version": "Claude-Code-Version dieser Sitzung. Weicht sie zwischen Rechnern ab, lohnt dort ein Update.",
+  "col.version": "Claude"
 }

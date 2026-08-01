@@ -57,11 +57,12 @@ class AgentenTabelle(Vertical):
         1: lambda a: a.name.casefold(),
         2: lambda a: a.rechner.casefold(),
         3: lambda a: (a.modell or "").casefold(),
-        4: lambda a: a.cwd.casefold(),
-        5: lambda a: a.laufzeit_ms,
-        6: lambda a: a.kontext,
-        7: lambda a: a.post,
-        8: lambda a: a.tokens,
+        4: lambda a: (a.version or "").casefold(),
+        5: lambda a: a.cwd.casefold(),
+        6: lambda a: a.laufzeit_ms,
+        7: lambda a: a.kontext,
+        8: lambda a: a.post,
+        9: lambda a: a.tokens,
     }
 
     def __init__(self, **kwargs: Any) -> None:
@@ -69,7 +70,7 @@ class AgentenTabelle(Vertical):
         self._agenten: list[Agent] = []
         self._sichtbar: list[Agent] = []
         self._filter = ""
-        self._sortiert_nach: int | None = 7  # Post - dort steht der Handlungsbedarf
+        self._sortiert_nach: int | None = 8  # Post - dort steht der Handlungsbedarf
         self._absteigend = True
         self._kopf: list[str] = []
         self._spalten: list[Any] = []
@@ -88,8 +89,8 @@ class AgentenTabelle(Vertical):
         tabelle = self.query_one("#agenten-daten", DataTable)
         self._kopf = [
             t("col.state"), t("col.name"), t("col.host"), t("col.model"),
-            t("col.dir"), t("col.uptime"), t("col.context"), t("col.post"),
-            t("col.tokens"), t("col.tool"),
+            t("col.version"), t("col.dir"), t("col.uptime"), t("col.context"),
+            t("col.post"), t("col.tokens"), t("col.tool"),
         ]
         self._spalten = list(tabelle.add_columns(*self._kopf))
         tabelle.fixed_columns = 1
@@ -167,6 +168,7 @@ class AgentenTabelle(Vertical):
             name,
             Text(a.rechner, style="dim"),
             Text(a.modell or "-", style="" if a.modell else "dim"),
+            Text(a.version or "-", style="dim"),
             Text(_ordner(a.cwd), style="dim"),
             laufzeit,
             kontext,

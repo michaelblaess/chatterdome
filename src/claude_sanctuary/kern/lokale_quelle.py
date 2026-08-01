@@ -82,21 +82,43 @@ class LokaleQuelle:
         if isinstance(zweige, list):
             agenten: list[Agent] = []
             probleme: list[str] = []
+            systeme: dict[str, str] = {}
+            hier = _rechnername().upper()
+            eigenes_system = ""
+            anmeldung = ""
             for zweig in zweige:
                 name = str(zweig.get("rechner") or zweig.get("host") or "?")
+                system = str(zweig.get("system") or "")
+                if system:
+                    systeme[name] = system
+                if name.upper() == hier:
+                    eigenes_system = system
+                    anmeldung = str(zweig.get("anmeldung") or "")
                 agenten.extend(
-                    LokaleQuelle._agent(e, name) for e in zweig.get("instanzen", [])
+                    LokaleQuelle._agent(e, name, system) for e in zweig.get("instanzen", [])
                 )
                 if zweig.get("fehler"):
                     probleme.append(f"{zweig.get('host', name)}: {zweig['fehler']}")
-            return Bestand(rechner=_rechnername(), zeit=zeit, agenten=agenten, fehler=probleme)
+            return Bestand(
+                rechner=_rechnername(),
+                zeit=zeit,
+                agenten=agenten,
+                fehler=probleme,
+                system=eigenes_system,
+                anmeldung=anmeldung,
+                systeme=systeme,
+            )
 
-        hier = str(zweige or _rechnername())
+        name = str(zweige or _rechnername())
+        system = str(roh.get("system") or "")
         return Bestand(
-            rechner=hier,
+            rechner=name,
             zeit=zeit,
-            agenten=[LokaleQuelle._agent(e, hier) for e in roh.get("instanzen", [])],
+            agenten=[LokaleQuelle._agent(e, name, system) for e in roh.get("instanzen", [])],
             fehler=[str(p) for p in roh.get("fehler", []) if p],
+            system=system,
+            anmeldung=str(roh.get("anmeldung") or ""),
+            systeme={name: system} if system else {},
         )
 
     def verlauf(self, name: str) -> list[Auftrag]:
@@ -166,7 +188,7 @@ class LokaleQuelle:
         return ""
 
     @staticmethod
-    def _agent(e: dict[str, Any], hier: str) -> Agent:
+    def _agent(e: dict[str, Any], hier: str, system: str = "") -> Agent:
         return Agent(
             name=str(e.get("name", "?")),
             status=str(e.get("status", "")),
@@ -182,6 +204,8 @@ class LokaleQuelle:
             tokens=int(e.get("tokens") or 0),
             cache_gelesen=int(e.get("cacheGelesen") or 0),
             modell=e.get("modell"),
+            version=e.get("version"),
+            system=system or None,
             letztes_tool=e.get("letztesTool"),
             aufgabe=e.get("aufgabe"),
             cwd=str(e.get("cwd") or ""),

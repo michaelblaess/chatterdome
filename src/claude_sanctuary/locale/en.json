@@ -1,6 +1,5 @@
 {
   "app.subtitle": "Control room for running Claude Code sessions",
-
   "binding.quit": "Quit",
   "binding.refresh": "Refresh",
   "binding.settings": "Settings",
@@ -13,7 +12,6 @@
   "binding.local": "local only",
   "binding.filter": "Filter",
   "binding.send": "Send",
-
   "tooltip.quit": "Closes the control room. The monitored agents keep running.",
   "tooltip.refresh": "Queries the state of all agents right away.",
   "tooltip.settings": "Language, network, name pool, database and storage paths.",
@@ -25,12 +23,10 @@
   "tooltip.stop": "Ends the selected agent after confirmation.",
   "tooltip.local": "Hides or shows agents on the other machines in the tailnet.",
   "tooltip.filter": "Jumps to the search bar above the agent table.",
-
   "tab.agents": "Agents",
   "tab.bus": "Message bus",
   "tab.stats": "Statistics",
   "tab.empty": "This section is still being built.",
-
   "head.operation": "Operation",
   "head.uptime": "Uptime",
   "head.agents": "Agents",
@@ -51,7 +47,6 @@
   "head.free": "names free",
   "head.tokens": "Tokens",
   "head.cache": "cache reads",
-
   "col.state": "●",
   "col.name": "Agent",
   "col.host": "Machine",
@@ -62,14 +57,11 @@
   "col.post": "Post",
   "col.tokens": "Tokens",
   "col.tool": "Tool",
-
   "tip.state": "Green: waiting for input. Yellow: working. Red: unreachable.",
   "tip.post": "Tasks queued for this agent that are still waiting to be picked up.",
   "tip.context": "Context in use. Above 600k it gets tight, above 800k /compact pays off - only the agent itself can trigger it.",
   "tip.tokens": "Tokens spent in this session. Cache reads do not count as consumption.",
-
   "filter.placeholder": "Filter agents - name, folder or model",
-
   "chat.empty": "No history with this agent.",
   "chat.none_selected": "Select an agent on the left.",
   "chat.placeholder": "Task for {name} - press Enter to send",
@@ -77,16 +69,13 @@
   "chat.placeholder_self": "This is the current session - nothing is sent to yourself",
   "chat.send": "Send",
   "chat.receipt": "Receipt",
-
   "state.submitted": "submitted",
   "state.working": "working",
   "state.input_required": "input required",
   "state.completed": "completed",
   "state.failed": "failed",
   "state.cancelled": "cancelled",
-
   "status.summary": "{agenten} agents · {beschaeftigt} busy · {offen} open tasks · {tokens} tokens",
-
   "log.started": "Sanctuary v{version} started",
   "log.refreshed": "{anzahl} agents on {rechner}",
   "log.refresh_failed": "Query failed: {fehler}",
@@ -99,23 +88,18 @@
   "log.start_failed": "Start failed: {fehler}",
   "log.local_on": "Local agents only",
   "log.local_off": "Including the other machines in the tailnet",
-
   "notify.select_agent": "Select an agent in the table first",
   "notify.no_text": "No text entered",
   "notify.remote_stop": "{name} runs on {rechner} - cannot be stopped from here",
   "notify.theme": "Theme: {name}",
   "notify.settings_saved": "Settings saved",
-
   "confirm.stop_title": "Stop agent",
   "confirm.stop_text": "Really stop {name} on {rechner}? Unsaved work will be lost.",
-
   "start.title": "Start agent",
   "start.name": "Name (empty for the next free one):",
   "start.dir": "Working directory:",
-
   "help.title": "Command line",
   "help.intro": "Everything the interface does also works straight from the terminal:",
-
   "settings.tab_mesh": "Mesh",
   "settings.tab_network": "Network",
   "settings.tab_pool": "Name pool",
@@ -133,12 +117,18 @@
   "settings.storage.config": "Settings:",
   "settings.storage.bus": "Message bus database:",
   "settings.storage.disclaimer": "Disclaimer acceptance:",
-
   "about.description": "Control room for several Claude Code\nsessions running side by side",
-
   "disclaimer.title": "Disclaimer",
   "disclaimer.intro": "This application observes Claude Code sessions on your machines, hands tasks to them and can end sessions. It therefore performs actions that may change data.",
   "disclaimer.duty_authorisation": "You are authorised to control the machines and sessions involved.",
   "disclaimer.duty_actions": "You are responsible for what the commissioned agents do - the program does not review tasks for content.",
-  "disclaimer.duty_data": "You will not pass data over the message bus that has no business being on the target machine."
+  "disclaimer.duty_data": "You will not pass data over the message bus that has no business being on the target machine.",
+  "head.claude": "Claude",
+  "head.system": "System",
+  "head.account": "Account",
+  "head.login": "Login until",
+  "head.login_days": "{tage} days",
+  "log.systems": "{rechner}: {system}",
+  "tip.version": "Claude Code version of this session. If it differs between machines, an update is due there.",
+  "col.version": "Claude"
 }

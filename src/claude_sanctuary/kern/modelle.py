@@ -50,6 +50,12 @@ class Agent:
     tokens: int = 0
     cache_gelesen: int = 0
     modell: str | None = None
+    version: str | None = None
+    """Claude-Code-Version dieser Sitzung, aus dem Transkript."""
+
+    system: str | None = None
+    """Betriebssystem des Rechners, auf dem die Sitzung laeuft."""
+
     letztes_tool: str | None = None
     aufgabe: str | None = None
     cwd: str = ""
@@ -124,6 +130,15 @@ class Bestand:
     agenten: list[Agent] = field(default_factory=list)
     fehler: list[str] = field(default_factory=list)
     """Hosts, die nicht geantwortet haben - je Eintrag eine Meldung."""
+
+    system: str = ""
+    """Betriebssystem dieses Rechners."""
+
+    anmeldung: str = ""
+    """ISO-Zeitstempel, bis wann die Anmeldung gilt (Refresh-Token)."""
+
+    systeme: dict[str, str] = field(default_factory=dict)
+    """Rechnername auf Betriebssystem - bei Mesh mehrere Eintraege."""
 
     @property
     def beschaeftigt(self) -> int:

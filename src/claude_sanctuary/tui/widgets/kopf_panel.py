@@ -5,6 +5,8 @@ from __future__ import annotations
 import platform
 import sqlite3
 import sys
+from collections import Counter
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -53,20 +55,20 @@ class KopfPanel(InfoHeader):  # type: ignore[misc]
             InfoItem("busy", t("head.busy"), "-"),
             InfoItem("open", t("head.open"), "-"),
             # Spalte 2 - Technik
+            InfoItem("claude", t("head.claude"), "-"),
+            InfoItem("system", t("head.system"), "-"),
             InfoItem("node", t("head.node"), "-"),
             InfoItem("sqlite", t("head.sqlite"), sqlite3.sqlite_version),
-            InfoItem("db", t("head.db"), str(bus_datei)),
-            InfoItem("dbsize", t("head.dbsize"), _groesse(bus_datei)),
             # Spalte 3 - Netz
             InfoItem("host", t("head.host"), platform.node()),
             InfoItem("mesh", t("head.mesh"), "-"),
             InfoItem("reachable", t("head.reachable"), "-"),
             InfoItem("updated", t("head.updated"), "-"),
-            # Spalte 4 - Namen
+            # Spalte 4 - Konto und Namen
+            InfoItem("login", t("head.login"), "-"),
             InfoItem("pool", t("head.pool"), "-"),
             InfoItem("free", t("head.free"), "-"),
-            InfoItem("tokens", t("head.tokens"), "-"),
-            InfoItem("cache", t("head.cache"), "-"),
+            InfoItem("db", t("head.db"), str(bus_datei)),
         ]
         super().__init__(items, columns=4, fill="column", label_width=16, **kwargs)
 
@@ -96,11 +98,47 @@ class KopfPanel(InfoHeader):  # type: ignore[misc]
             value_style="bold red" if fehlend else "",
         )
         self.set_value("updated", format_datetime(bestand.zeit))
-        self.set_value("tokens", _tokens(bestand.tokens))
-        self.set_value("cache", _tokens(sum(a.cache_gelesen for a in bestand.agenten)))
-        self.set_value("dbsize", _groesse(self._bus_datei))
+        self.set_value("system", bestand.system or "-")
+        self.set_value("claude", _claude_version(bestand))
+        self._anmeldung_setzen(bestand.anmeldung)
+
+    def _anmeldung_setzen(self, iso: str) -> None:
+        """Traegt ein, wann eine neue Anmeldung faellig wird.
+
+        Gemeint ist der Refresh-Token. Der Zugriffstoken laeuft nach Stunden
+        ab und wird still erneuert - ihn anzuzeigen waere ein Fehlalarm.
+        """
+        if not iso:
+            self.set_value("login", "-")
+            return
+        try:
+            frist = datetime.fromisoformat(iso.replace("Z", "+00:00")).astimezone()
+        except (ValueError, TypeError):
+            self.set_value("login", "-")
+            return
+        tage = (frist - datetime.now(frist.tzinfo)).days
+        stil = "bold red" if tage <= 2 else ("yellow" if tage <= 7 else "")
+        self.set_value(
+            "login",
+            f"{frist.strftime('%d.%m.%Y')}  ({t('head.login_days', tage=max(tage, 0))})",
+            value_style=stil,
+        )
 
     def namen_setzen(self, pool: str, frei: int) -> None:
         """Traegt den Namenspool ein - kommt aus einer eigenen Abfrage."""
         self.set_value("pool", pool or "-")
         self.set_value("free", str(frei))
+
+
+def _claude_version(bestand: Bestand) -> str:
+    """Haeufigste Claude-Version im Bestand, mit Hinweis auf Abweichungen.
+
+    Frisch gestartete Sitzungen haben noch keinen Transkript-Eintrag und
+    damit keine Version - die zaehlen hier nicht mit, statt eine Luecke zu
+    erfinden.
+    """
+    versionen = Counter(a.version for a in bestand.agenten if a.version)
+    if not versionen:
+        return "-"
+    (haeufigste, _), *rest = versionen.most_common()
+    return f"{haeufigste} (+{len(rest)})" if rest else str(haeufigste)

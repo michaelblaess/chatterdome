@@ -17,7 +17,7 @@
 //   node operator.mjs stop <name>         Instanz beenden (fragt nach)
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, statSync, openSync, readSync, closeSync } from 'node:fs';
-import { homedir, hostname } from 'node:os';
+import { homedir, hostname, platform, release } from 'node:os';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { execFile } from 'node:child_process';
@@ -164,7 +164,7 @@ function leseTranskript(pfad, { voll = false } = {}) {
   const ergebnis = {
     kontext: 0, tokens: 0, modell: null, letztesTool: null,
     letzteZeit: null, aufgabe: null, aufrufe: 0, nachCompact: false,
-    cwd: null, cacheGelesen: 0,
+    cwd: null, cacheGelesen: 0, version: null,
   };
   if (!pfad || !existsSync(pfad)) return ergebnis;
 
@@ -186,6 +186,11 @@ function leseTranskript(pfad, { voll = false } = {}) {
     // Jeder Transkript-Eintrag traegt das cwd, das zu diesem Zeitpunkt galt.
     // Rueckwaerts gelesen ist der erste Treffer der aktuelle Stand.
     if (e.cwd && !ergebnis.cwd) ergebnis.cwd = e.cwd;
+
+    // Die Claude-Code-Version steht je Eintrag im Transkript. Damit ist sie
+    // auch ueber das Mesh je Instanz bekannt - ein Aufruf von "claude
+    // --version" auf dem fernen Rechner ist dafuer nicht noetig.
+    if (e.version && !ergebnis.version) ergebnis.version = e.version;
 
     // Ein Compact erzeugt keinen Modellaufruf. Ohne diesen Zweig bliebe der
     // Wert von vor dem Compact stehen, bis die Sitzung wieder antwortet.
@@ -640,7 +645,14 @@ async function holeVonFerne(host) {
 
   try {
     const daten = JSON.parse(stdout);
-    return { host, rechner: daten.rechner, instanzen: daten.instanzen, fehler: null };
+    return {
+      host,
+      rechner: daten.rechner,
+      system: daten.system || null,
+      anmeldung: daten.anmeldung || null,
+      instanzen: daten.instanzen,
+      fehler: null,
+    };
   } catch {
     // Faellt eine gefaerbte Tabelle statt JSON zurueck, kennt die Gegenseite
     // --json noch nicht. Der rohe Parserfehler ("Unexpected token") sagt das
@@ -697,7 +709,15 @@ async function sammleMesh({ voll = false } = {}) {
     }
     return holeVonFerne(h);
   }));
-  return [{ host: selbst.toLowerCase(), rechner: selbst, instanzen: sammle({ voll }), fehler: null }, ...antworten];
+  const eigen = {
+    host: selbst.toLowerCase(),
+    rechner: selbst,
+    system: systemName(),
+    anmeldung: anmeldungBis(),
+    instanzen: sammle({ voll }),
+    fehler: null,
+  };
+  return [eigen, ...antworten];
 }
 
 function zeigeMesh(bloecke) {
@@ -741,9 +761,58 @@ function zeigeMesh(bloecke) {
  * einzeilig steuert NDJSON: im Stream MUSS ein Datensatz genau eine Zeile
  * belegen, sonst kann die Gegenseite nicht zeilenweise lesen.
  */
+/**
+ * Betriebssystem in lesbarer Kurzform.
+ *
+ * Auf Linux steht der brauchbare Name in /etc/os-release ("Ubuntu 24.04.4
+ * LTS"); die Kernel-Version allein sagt niemandem etwas. Windows und macOS
+ * melden ihre Version ueber release() ausreichend genau.
+ *
+ * @returns {string}
+ */
+function systemName() {
+  const p = platform();
+  if (p === 'linux') {
+    try {
+      const treffer = readFileSync('/etc/os-release', 'utf8').match(/^PRETTY_NAME="?([^"\n]+)"?/m);
+      if (treffer) return treffer[1];
+    } catch { /* ohne os-release bleibt die Kernel-Angabe */ }
+    return `Linux ${release()}`;
+  }
+  if (p === 'win32') return `Windows ${release()}`;
+  if (p === 'darwin') return `macOS ${release()}`;
+  return `${p} ${release()}`;
+}
+
+/**
+ * Wann eine neue Anmeldung faellig wird.
+ *
+ * Entscheidend ist der REFRESH-Token, nicht der Zugriffstoken: letzterer
+ * laeuft nach wenigen Stunden ab und wird still erneuert. Erst wenn der
+ * Refresh-Token abgelaufen ist, muss sich der Benutzer neu anmelden.
+ *
+ * Gelesen wird ausschliesslich dieser Zeitstempel - die Token selbst werden
+ * nicht angefasst und tauchen nirgends in der Ausgabe auf.
+ *
+ * @returns {string|null}
+ * ISO-Zeitstempel, oder null wenn die Datei fehlt (etwa wenn die Anmeldung
+ * im Schluesselbund liegt).
+ */
+function anmeldungBis() {
+  try {
+    const datei = join(homedir(), '.claude', '.credentials.json');
+    const ms = JSON.parse(readFileSync(datei, 'utf8'))?.claudeAiOauth?.refreshTokenExpiresAt;
+    return typeof ms === 'number' ? new Date(ms).toISOString() : null;
+  } catch {
+    return null;
+  }
+}
+
 function alsJson(zeilen, { einzeilig = false } = {}) {
   const daten = {
     rechner: rechner(),
+    system: systemName(),
+    anmeldung: anmeldungBis(),
     zeit: new Date().toISOString(),
     anzahl: zeilen.length,
     instanzen: zeilen,
