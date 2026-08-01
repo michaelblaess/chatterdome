@@ -30,9 +30,19 @@ def main() -> None:
     if args.lang != gespeicherte_sprache:
         einstellungen.speichern({"language": args.lang})
 
-    from textual_widgets import reset_terminal_title, set_terminal_title
+    from textual_widgets import (
+        reset_terminal_title,
+        set_terminal_title,
+        vorab_initialisieren,
+    )
 
     from claude_sanctuary.tui.app import SanctuaryApp
+
+    # MUSS vor App.run() stehen: textual-image fragt beim ersten Import die
+    # Zellgroesse am Terminal ab. Passiert das erst waehrend der App, landet
+    # die Antwort des Terminals als Zeichenmuell im Eingabefeld.
+    if str(werte.get("bild_modus", "auto")) != "halfblock":
+        vorab_initialisieren()
 
     set_terminal_title(f"claude-sanctuary v{__version__}")
     try:

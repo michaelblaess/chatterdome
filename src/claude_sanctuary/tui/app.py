@@ -119,6 +119,9 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         self._verbrauch: int | None = None
         """Zuletzt ermittelter Verbrauch. None, solange nie abgefragt."""
 
+        self._bild_rechner = ""
+        self._bild_pfad = ""
+
         self._gemeldete_systeme: dict[str, str] = {}
         self._start = time.monotonic()
         self._laeuft = False
@@ -364,6 +367,7 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
             ContextMenuItem("ordner", t("menu.open_dir"), enabled=hier and bool(agent.cwd)),
             ContextMenuItem("neu_laden", t("menu.reload")),
             ContextMenuItem.separator(),
+            ContextMenuItem("bild", t("menu.screenshot")),
             ContextMenuItem("nur_host", t("menu.filter_host")),
             ContextMenuItem("stop", t("menu.stop"), enabled=hier),
         ]
@@ -392,6 +396,8 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
             self._ordner_oeffnen(agent)
         elif auswahl == "neu_laden":
             self.verlauf_laden(agent.name)
+        elif auswahl == "bild":
+            self._bild_holen(agent.rechner)
         elif auswahl == "nur_host":
             self.query_one("#agenten", AgentenTabelle).setze_filter(agent.rechner)
         elif auswahl == "stop":
@@ -469,6 +475,37 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         self._schreibe_log(t("log.sent", name=name), "success")
         self.verlauf_laden(name)
         self.aktualisieren()
+
+    # -- Bildschirmfoto -------------------------------------------------
+
+    def _bild_holen(self, rechner: str) -> None:
+        """Stoesst die Aufnahme an. Der eigene Rechner braucht kein Ziel."""
+        eigener = rechner.upper() == self._bestand.rechner.upper()
+        self.notify(t("notify.shot_running", rechner=rechner))
+        self._bild_aufnehmen("" if eigener else rechner, rechner)
+
+    @work(thread=True, exclusive=True, group="bild")
+    def _bild_aufnehmen(self, ziel: str, anzeige: str) -> None:
+        pfad, fehler = self._quelle.bildschirmfoto(ziel)
+        self.call_from_thread(self._bild_fertig, pfad, fehler, anzeige)
+
+    def _bild_fertig(self, pfad: str, fehler: str, rechner: str) -> None:
+        if fehler or not pfad:
+            self._schreibe_log(t("log.shot_failed", rechner=rechner, fehler=fehler), "error")
+            self.notify(fehler or t("log.shot_failed", rechner=rechner, fehler="-"),
+                        severity="error")
+            return
+        from claude_sanctuary.tui.screens.bild_screen import BildScreen
+
+        self._bild_rechner = rechner
+        self._bild_pfad = pfad
+        self.push_screen(BildScreen(pfad, rechner), callback=self._bild_geschlossen)
+
+    def _bild_geschlossen(self, aktion: str | None) -> None:
+        if aktion == "neu":
+            self._bild_holen(self._bild_rechner)
+        elif aktion == "kopieren":
+            self._in_zwischenablage(self._bild_pfad)
 
     def action_refresh_now(self) -> None:
         self.aktualisieren()

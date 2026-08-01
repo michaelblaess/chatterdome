@@ -66,7 +66,10 @@ function windowsAufnahme(ziel) {
     return execFileSync(
       'powershell',
       ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', skript, '-Ziel', ziel],
-      { encoding: 'utf8', timeout: 30000 },
+      // stderr abfangen: in einer Dienst-Sitzung scheitert dieser Versuch
+      // planmaessig, und der Rueckfall ueber die Aufgabe greift. Die
+      // Win32Exception ist dann kein Befund, sondern erwartetes Verhalten.
+      { encoding: 'utf8', timeout: 30000, stdio: ['pipe', 'pipe', 'pipe'] },
     ).trim();
   } catch (fehler) {
     // Kein Desktop in dieser Sitzung: ueber die geplante Aufgabe versuchen,
@@ -213,7 +216,9 @@ export function holeVonFerne(host, ziel = join(shotOrdner(), `shot-${String(host
       const roh = execFileSync(
         'ssh',
         ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=5', String(host).toLowerCase(), befehl],
-        { encoding: 'utf8', timeout: 60000, maxBuffer: 64 * 1024 * 1024 },
+        // stderr abfangen: der erste Anlauf scheitert planmaessig mit
+        // "Befehl nicht gefunden", das ist keine Meldung fuer den Anwender.
+        { encoding: 'utf8', timeout: 60000, maxBuffer: 64 * 1024 * 1024, stdio: ['pipe', 'pipe', 'pipe'] },
       );
       const daten = Buffer.from(roh.trim(), 'base64');
       if (daten.length < 100) throw new Error('leere Antwort');

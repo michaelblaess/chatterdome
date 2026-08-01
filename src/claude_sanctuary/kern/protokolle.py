@@ -55,3 +55,10 @@ class Quelle(Protocol):
         :returns: leere Zeichenkette bei Erfolg, sonst die Fehlermeldung.
         """
         ...
+
+    def bildschirmfoto(self, rechner: str = "") -> tuple[str, str]:
+        """Nimmt den Bildschirm eines Rechners auf.
+
+        :returns: (Pfad, Fehlermeldung) - genau eines von beiden ist gefuellt.
+        """
+        ...

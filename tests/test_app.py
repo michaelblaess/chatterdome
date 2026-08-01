@@ -25,6 +25,10 @@ class FakeQuelle:
         self.mit_tokens: list[bool] = []
         """Je Abfrage, ob der Verbrauch mit angefordert wurde."""
 
+        self.fotos: list[str] = []
+        self.foto_pfad = ""
+        self.foto_fehler = "kein Desktop"
+
     def bestand(self, *, mesh: bool = False, tokens: bool = False) -> Bestand:
         self.mit_tokens.append(tokens)
         return Bestand(
@@ -82,6 +86,10 @@ class FakeQuelle:
     def stoppen(self, name: str) -> str:
         self.gestoppt.append(name)
         return ""
+
+    def bildschirmfoto(self, rechner: str = "") -> tuple[str, str]:
+        self.fotos.append(rechner)
+        return self.foto_pfad, self.foto_fehler
 
 
 async def _gefuellt(app: SanctuaryApp, pilot: object) -> DataTable[object]:
@@ -192,6 +200,35 @@ class TestOberflaeche:
                 if any(quelle.mit_tokens):
                     break
             assert any(quelle.mit_tokens), "v hat den Verbrauch nicht angefordert"
+
+    async def test_eigener_rechner_ohne_ziel_aufgenommen(self, quelle: FakeQuelle) -> None:
+        """Fuer den eigenen Rechner darf KEIN Ziel mitgehen.
+
+        Mit Ziel ginge der Aufruf ueber ssh auf den eigenen Rechner - also
+        durch den Dienstkontext, der unter Windows keinen Desktop sieht.
+        """
+        app = SanctuaryApp(quelle=quelle)
+        app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
+        async with app.run_test(size=(160, 50)) as pilot:
+            await _gefuellt(app, pilot)
+            app._bild_holen("TESTHOST")  # derselbe Rechner wie im Bestand
+            for _ in range(60):
+                await pilot.pause()
+                if quelle.fotos:
+                    break
+            assert quelle.fotos == [""], f"Ziel wurde mitgegeben: {quelle.fotos}"
+
+    async def test_fremder_rechner_wird_benannt(self, quelle: FakeQuelle) -> None:
+        app = SanctuaryApp(quelle=quelle)
+        app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
+        async with app.run_test(size=(160, 50)) as pilot:
+            await _gefuellt(app, pilot)
+            app._bild_holen("SENZA")
+            for _ in range(60):
+                await pilot.pause()
+                if quelle.fotos:
+                    break
+            assert quelle.fotos == ["SENZA"]
 
     async def test_hilfe_oeffnet_und_schliesst(self, quelle: FakeQuelle) -> None:
         app = SanctuaryApp(quelle=quelle)

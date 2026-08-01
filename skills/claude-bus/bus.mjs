@@ -294,7 +294,9 @@ export function zustellenAn(host, ereignis) {
       execFileSync(
         'ssh',
         ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=5', String(host).toLowerCase(), befehl],
-        { input: nutzlast, encoding: 'utf8', timeout: SSH_ZEIT },
+        // stderr abfangen: der erste Anlauf scheitert planmaessig mit
+        // "Befehl nicht gefunden", das ist keine Meldung fuer den Anwender.
+        { input: nutzlast, encoding: 'utf8', timeout: SSH_ZEIT, stdio: ['pipe', 'pipe', 'pipe'] },
       );
       return '';
     } catch (e) {

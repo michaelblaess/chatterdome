@@ -198,5 +198,11 @@
   "binding.usage": "Verbrauch",
   "tooltip.usage": "Token-Verbrauch ermitteln (liest alle Transkripte, dauert)",
   "notify.usage_running": "Verbrauch wird ermittelt...",
-  "status.tokens": "Verbrauch"
+  "status.tokens": "Verbrauch",
+  "menu.screenshot": "Bildschirmfoto",
+  "shot.title": "Bildschirm von {rechner}   ({groesse})",
+  "shot.again": "Neu aufnehmen",
+  "shot.save": "Pfad kopieren",
+  "notify.shot_running": "Bildschirmfoto von {rechner} wird geholt...",
+  "log.shot_failed": "Bildschirmfoto von {rechner} fehlgeschlagen: {fehler}"
 }

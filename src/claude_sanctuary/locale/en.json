@@ -198,5 +198,11 @@
   "binding.usage": "usage",
   "tooltip.usage": "Determine token usage (reads all transcripts, slow)",
   "notify.usage_running": "Determining usage...",
-  "status.tokens": "Usage"
+  "status.tokens": "Usage",
+  "menu.screenshot": "Screenshot",
+  "shot.title": "Screen of {rechner}   ({groesse})",
+  "shot.again": "Retake",
+  "shot.save": "Copy path",
+  "notify.shot_running": "Fetching screenshot from {rechner}...",
+  "log.shot_failed": "Screenshot from {rechner} failed: {fehler}"
 }

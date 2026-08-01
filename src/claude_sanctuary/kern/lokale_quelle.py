@@ -188,6 +188,25 @@ class LokaleQuelle:
         # --ja unterdrueckt die Rueckfrage; die Oberflaeche hat vorher gefragt.
         return self._still(["stop", name, "--ja"])
 
+    def bildschirmfoto(self, rechner: str = "") -> tuple[str, str]:
+        """Nimmt den Bildschirm eines Rechners auf.
+
+        Ohne Rechnernamen den eigenen. Der Aufruf dauert - lokal unter einer
+        Sekunde, ueber das Tailnet rund zweieinhalb (gemessen gegen senza) -
+        und gehoert deshalb in einen Thread.
+
+        :returns: (Pfad, Fehlermeldung). Genau eines von beiden ist gefuellt.
+        """
+        args = ["shot", "--json"]
+        if rechner:
+            args.insert(1, rechner)
+        roh, fehler = self._json(args)
+        if roh is None:
+            return "", fehler
+        if roh.get("fehler"):
+            return "", str(roh["fehler"])
+        return str(roh.get("pfad", "")), ""
+
     # -- intern ---------------------------------------------------------
 
     def _json(self, args: list[str]) -> tuple[dict[str, Any] | None, str]:
