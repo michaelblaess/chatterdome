@@ -74,6 +74,7 @@
   "chat.none_selected": "Wähle links einen Agenten aus.",
   "chat.placeholder": "Auftrag an {name} - Eingabe zum Senden",
   "chat.placeholder_none": "Erst einen Agenten auswählen",
+  "chat.placeholder_self": "Das ist diese Sitzung - an sich selbst wird nichts gesendet",
   "chat.send": "Senden",
   "chat.receipt": "Quittung",
 
@@ -128,16 +129,16 @@
   "settings.pool_names": "Namen:",
   "settings.pool_active": "Aktiver Pool:",
   "settings.show_ids": "Auftrags-IDs in Tabellen anzeigen",
-  "settings.db_hint": "Der Bus liegt als SQLite-Datenbank im WAL-Modus. Geschrieben wird ausschließlich über den Kurzbefehl sanctuary, damit es genau einen Schreiber gibt.",
+  "settings.db_hint": "Der Message-Bus liegt als SQLite-Datenbank im WAL-Modus. Geschrieben wird ausschließlich über den Kurzbefehl sanctuary, damit es genau einen Schreiber gibt.",
   "settings.storage.config": "Einstellungen:",
-  "settings.storage.bus": "Bus-Datenbank:",
+  "settings.storage.bus": "Message-Bus-Datenbank:",
   "settings.storage.disclaimer": "Zustimmung zum Haftungshinweis:",
 
   "about.description": "Zentrale für mehrere gleichzeitig\nlaufende Claude-Code-Instanzen",
 
   "disclaimer.title": "Haftungshinweis",
-  "disclaimer.intro": "Diese Anwendung beobachtet Claude-Code-Sitzungen auf deinen Rechnern, verteilt Aufträge an sie und kann Sitzungen beenden. Sie führt damit Aktionen aus, die Daten verändern können.",
-  "disclaimer.duty_authorisation": "Ich bin berechtigt, die beteiligten Rechner und Sitzungen zu steuern.",
-  "disclaimer.duty_actions": "Ich verantworte, was die beauftragten Agenten ausführen - die Anwendung prüft Aufträge inhaltlich nicht.",
-  "disclaimer.duty_data": "Ich gebe über den Bus keine Daten weiter, die auf dem Zielrechner nichts zu suchen haben."
+  "disclaimer.intro": "Dieses Programm beobachtet Claude-Code-Sitzungen auf Ihren Rechnern, verteilt Aufträge an sie und kann Sitzungen beenden. Es führt damit Aktionen aus, die Daten verändern können.",
+  "disclaimer.duty_authorisation": "Sie sind berechtigt, die beteiligten Rechner und Sitzungen zu steuern.",
+  "disclaimer.duty_actions": "Sie verantworten, was die beauftragten Agenten ausführen - das Programm prüft Aufträge inhaltlich nicht.",
+  "disclaimer.duty_data": "Sie geben über den Message-Bus keine Daten weiter, die auf dem Zielrechner nichts zu suchen haben."
 }

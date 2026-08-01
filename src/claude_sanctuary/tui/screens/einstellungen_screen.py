@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from textual.app import ComposeResult
-from textual.containers import Horizontal, VerticalScroll
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import Checkbox, Input, Label, Select, Static, TabPane
 from textual_widgets import BaseSettingsScreen
 
@@ -134,12 +134,18 @@ class EinstellungenScreen(BaseSettingsScreen):  # type: ignore[misc]
                         id="set-pool-aktiv",
                     )
             for i, schluessel in enumerate(sorted(self._pools)):
-                with Horizontal(classes="pool-block"):
-                    yield Label(t("settings.pool_name"))
-                    yield Input(value=schluessel, id=f"pool-name-{i}", disabled=True)
-                with Horizontal(classes="pool-block"):
-                    yield Label(t("settings.pool_names"))
-                    yield Input(value=", ".join(self._pools[schluessel]), id=f"pool-liste-{i}")
+                # Der Rahmen umschliesst die Gruppe, nicht die einzelne Zeile -
+                # sonst steht jedes Feld fuer sich und die Zusammengehoerigkeit
+                # ist nicht erkennbar (wie in death-proof).
+                with Vertical(classes="pool-block"):
+                    with Horizontal(classes="settings-row"):
+                        yield Label(t("settings.pool_name"))
+                        yield Input(value=schluessel, id=f"pool-name-{i}", disabled=True)
+                    with Horizontal(classes="settings-row"):
+                        yield Label(t("settings.pool_names"))
+                        yield Input(
+                            value=", ".join(self._pools[schluessel]), id=f"pool-liste-{i}"
+                        )
 
         with TabPane(t("settings.tab_database"), id="tab-datenbank"), VerticalScroll():
             yield Checkbox(

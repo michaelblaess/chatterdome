@@ -74,6 +74,7 @@
   "chat.none_selected": "Select an agent on the left.",
   "chat.placeholder": "Task for {name} - press Enter to send",
   "chat.placeholder_none": "Select an agent first",
+  "chat.placeholder_self": "This is the current session - nothing is sent to yourself",
   "chat.send": "Send",
   "chat.receipt": "Receipt",
 
@@ -128,16 +129,16 @@
   "settings.pool_names": "Names:",
   "settings.pool_active": "Active pool:",
   "settings.show_ids": "Show task IDs in tables",
-  "settings.db_hint": "The bus is a SQLite database in WAL mode. Writing goes exclusively through the sanctuary command so that there is exactly one writer.",
+  "settings.db_hint": "The message bus is a SQLite database in WAL mode. Writing goes exclusively through the sanctuary command so that there is exactly one writer.",
   "settings.storage.config": "Settings:",
-  "settings.storage.bus": "Bus database:",
+  "settings.storage.bus": "Message bus database:",
   "settings.storage.disclaimer": "Disclaimer acceptance:",
 
   "about.description": "Control room for several Claude Code\nsessions running side by side",
 
   "disclaimer.title": "Disclaimer",
   "disclaimer.intro": "This application observes Claude Code sessions on your machines, hands tasks to them and can end sessions. It therefore performs actions that may change data.",
-  "disclaimer.duty_authorisation": "I am authorised to control the machines and sessions involved.",
-  "disclaimer.duty_actions": "I am responsible for what the commissioned agents do - the application does not review tasks for content.",
-  "disclaimer.duty_data": "I will not pass data over the bus that has no business being on the target machine."
+  "disclaimer.duty_authorisation": "You are authorised to control the machines and sessions involved.",
+  "disclaimer.duty_actions": "You are responsible for what the commissioned agents do - the program does not review tasks for content.",
+  "disclaimer.duty_data": "You will not pass data over the message bus that has no business being on the target machine."
 }

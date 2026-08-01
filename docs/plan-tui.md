@@ -81,7 +81,7 @@ bleibt damit unabhängig davon, ob der Agent gerade arbeitet.
 ## Verlauf statt Chat
 
 Ein echter Chat ist es nicht - eine laufende interaktive Sitzung hat keinen
-Eingang. Was es gibt, ist der Auftragsverlauf aus dem Bus: gesendeter Auftrag
+Eingang. Was es gibt, ist der Auftragsverlauf aus dem Message-Bus: gesendeter Auftrag
 (rechts), Quittungen des Empfängers (links), jeweils mit Zustand und Zeit.
 Genau das rendert das Panel im WhatsApp-Muster.
 
@@ -90,7 +90,7 @@ Zustandsfarben aus dem A2A-Vokabular: `submitted` grau, `working` gelb,
 
 ## Datenanbindung
 
-**Python liest und schreibt nicht selbst in die Datenbank.** Der Bus schreibt
+**Python liest und schreibt nicht selbst in die Datenbank.** Der Message-Bus schreibt
 aus genau einem Prozess (Node) - der Kommentar in `speicher.mjs` ist
 unmissverständlich: Python-Schreiben in die alten JSONL-Dateien hat in der
 Messung 7,5 Prozent der Zeilen verloren, und die Übergangsphase läuft noch.
@@ -148,7 +148,7 @@ Buchstaben-Bindings jeweils in beiden Schreibweisen (`q,Q`), jedes mit Tooltip.
 
 Pflicht, aber der Standardtext des Widgets beschreibt Scanner. Eigene
 Zusicherungen: Berechtigung an den beteiligten Rechnern, Verantwortung für die
-ausgelösten Aktionen, keine fremden Daten über den Bus.
+ausgelösten Aktionen, keine fremden Daten über den Message-Bus.
 
 ## Reihenfolge
 

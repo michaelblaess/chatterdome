@@ -117,7 +117,7 @@ Eintrag wird nur angehängt, nie neu gesetzt.
 
 ## Woher der Code kommt
 
-Operator und Bus sind aus dem privaten Repo `claude-config` hierher gezogen, Stand `3a531c4`
+Operator und Message-Bus sind aus dem privaten Repo `claude-config` hierher gezogen, Stand `3a531c4`
 vom 01.08.2026. Die Entstehungsgeschichte steht dort in der Historie - hier beginnt sie neu,
 weil die alten Commits fast immer mehrere Skills gleichzeitig betrafen.
 

@@ -8,7 +8,7 @@ Statuszeile und Verlauf an, und reagieren die Tasten.
 from __future__ import annotations
 
 import pytest
-from textual.widgets import DataTable, Input
+from textual.widgets import Button, DataTable, Input
 
 from claude_sanctuary.kern.modelle import Agent, Auftrag, Bestand, Ereignis
 from claude_sanctuary.tui.app import SanctuaryApp
@@ -38,7 +38,10 @@ class FakeQuelle:
                     modell="claude-opus-5",
                     cwd="C:\\Repos\\test",
                 ),
-                Agent(name="Lino", status="busy", rechner="TESTHOST", tokens=500),
+                # selbst=True: die Sitzung, die die Oberflaeche bedient.
+                Agent(
+                    name="Lino", status="busy", rechner="TESTHOST", tokens=500, selbst=True
+                ),
             ],
         )
 
@@ -160,3 +163,33 @@ class TestOberflaeche:
             await pilot.press("escape")
             await pilot.pause()
             assert type(app.screen).__name__ != "HilfeScreen"
+
+    async def test_eigene_sitzung_bekommt_keinen_auftrag(self, quelle: FakeQuelle) -> None:
+        """An sich selbst wird nichts gesendet - Feld und Knopf sind gesperrt."""
+        app = SanctuaryApp(quelle=quelle)
+        app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
+        async with app.run_test(size=(160, 50)) as pilot:
+            tabelle = await _gefuellt(app, pilot)
+            # Nach Post absteigend steht Klara oben, die eigene Sitzung darunter.
+            tabelle.move_cursor(row=1)
+            await pilot.pause()
+            assert app._gewaehlt is not None
+            assert app._gewaehlt.selbst
+            assert app.query_one("#senden", Button).disabled
+            assert app.query_one("#eingabe", Input).disabled
+
+            # Auch der Weg ueber die Eingabetaste fuehrt zu nichts.
+            app.query_one("#eingabe", Input).value = "Hallo an mich"
+            app._senden()
+            for _ in range(20):
+                await pilot.pause()
+            assert quelle.gesendet == []
+
+    async def test_fremder_agent_bleibt_sendbar(self, quelle: FakeQuelle) -> None:
+        app = SanctuaryApp(quelle=quelle)
+        app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
+        async with app.run_test(size=(160, 50)) as pilot:
+            tabelle = await _gefuellt(app, pilot)
+            tabelle.move_cursor(row=0)
+            await pilot.pause()
+            assert not app.query_one("#senden", Button).disabled

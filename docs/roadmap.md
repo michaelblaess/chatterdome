@@ -11,7 +11,7 @@ in `settings.json` aktiv.
 **Warnt nur, blockiert nie** - Michaels ausdrückliche Vorgabe. Immer Exit 0.
 
 Erkennung: Jeder git-Schreibbefehl auf claude-config hinterlässt einen Marker mit
-Instanznamen und Zeitstempel in `~/.claude/bus/<RECHNER>/config-schreiber.json`. Ist beim
+Instanznamen und Zeitstempel in `~/.claude/message bus/<RECHNER>/config-schreiber.json`. Ist beim
 nächsten Schreibversuch ein **fremder** Marker jünger als 10 Minuten, kommt die Meldung:
 
 ```
@@ -37,7 +37,7 @@ Also praktisch derselbe Aufwand wie der Hook, der ohnehin schon lief.
 Geprüft: schweigt bei `ls`, bei `git status`, bei Commits in fremden Repos und beim ersten
 Schreiber. Meldet beim zweiten.
 
-## 2. Consumer: Nachrichten aus dem Bus verarbeiten - ERLEDIGT
+## 2. Consumer: Nachrichten aus dem Message-Bus verarbeiten - ERLEDIGT
 
 Gebaut am 31.07.2026, Einzelheiten im Skill [[claude-bus]]:
 
@@ -88,7 +88,7 @@ Zu klären, bevor gebaut wird:
   Vokabular erfinden, sondern eine kleine Teilmenge eines etablierten Satzes benutzen. Die
   Semantik passt erstaunlich genau auf den Agentenfall:
 
-  | Code | Bedeutung im Bus |
+  | Code | Bedeutung im Message-Bus |
   |---|---|
   | `202` | angenommen, wird bearbeitet (der Regelfall bei asynchroner Zustellung) |
   | `200` | erledigt, Ergebnis liegt bei |
@@ -106,8 +106,8 @@ Zu klären, bevor gebaut wird:
   sonst lässt sie sich nicht zuordnen.
 - **Vertrauensgrenze.** Eine Busnachricht ist Fremdeingabe, keine Anweisung von Michael.
   Claude Code selbst behandelt Nachrichten zwischen Agenten ausdrücklich so: ein Teammate
-  kann keine Berechtigung im Namen des Nutzers erteilen. Der Bus darf keine
-  Rechteerweiterung werden - was Michael nicht selbst erlaubt hat, darf auch über den Bus
+  kann keine Berechtigung im Namen des Nutzers erteilen. Der Message-Bus darf keine
+  Rechteerweiterung werden - was Michael nicht selbst erlaubt hat, darf auch über den Message-Bus
   nicht laufen.
 - **Was ist ein Befehl?** Der Empfänger ist ein Sprachmodell, kein Shell-Interpreter.
   "Räum mal auf" wird verstanden, aber nicht deterministisch ausgeführt. Für verlässliche
@@ -178,11 +178,11 @@ bei jedem weiteren Stop erneut.
   Thema - Markenrecht greift im geschaeftlichen Verkehr. Vor dem Oeffentlichmachen neu
   entscheiden, `gh repo rename` legt automatisch eine Weiterleitung an. Der Name steckt in
   keiner Zeile Code, `setup.sh` arbeitet mit `$REPO_DIR`.
-- **Uebergangsphase Bus beenden**: `send`/`ack` schreiben noch zusaetzlich JSONL. Erst wenn
+- **Uebergangsphase Message-Bus beenden**: `send`/`ack` schreiben noch zusaetzlich JSONL. Erst wenn
   das auf allen Rechnern laeuft, das Schreiben abschalten und die Altdateien nach `archiv/`
   verschieben - nicht loeschen. Erst danach darf Python mitschreiben.
 - **halma-duel ins halma-Repo** verschieben. Achtung: der Spielstand liegt unter
-  `~/.claude/bus/<RECHNER>/halma-duel/`, der Pfad muss mit umziehen, sonst gehen die
+  `~/.claude/message bus/<RECHNER>/halma-duel/`, der Pfad muss mit umziehen, sonst gehen die
   archivierten Partien des PoC verloren.
 - **Kern, TUI, Web** - siehe README.
 

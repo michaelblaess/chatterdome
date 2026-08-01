@@ -214,12 +214,25 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
     def on_agenten_tabelle_ausgewaehlt(self, ereignis: AgentenTabelle.Ausgewaehlt) -> None:
         self._gewaehlt = ereignis.agent
         eingabe = self.query_one("#eingabe", Input)
-        if ereignis.agent is None:
+        knopf = self.query_one("#senden", Button)
+        agent = ereignis.agent
+
+        # An die eigene Sitzung wird nichts gesendet: der Auftrag laege im
+        # Eingang genau der Sitzung, die ihn gerade abschickt. Der Verlauf
+        # bleibt trotzdem sichtbar, er ist ja der eigene.
+        gesperrt = agent is None or agent.selbst
+        eingabe.disabled = gesperrt
+        knopf.disabled = gesperrt
+
+        if agent is None:
             eingabe.placeholder = t("chat.placeholder_none")
             self.query_one("#verlauf", VerlaufPanel).leeren(t("chat.none_selected"))
         else:
-            eingabe.placeholder = t("chat.placeholder", name=ereignis.agent.name)
-            self.verlauf_laden(ereignis.agent.name)
+            eingabe.placeholder = (
+                t("chat.placeholder_self") if agent.selbst
+                else t("chat.placeholder", name=agent.name)
+            )
+            self.verlauf_laden(agent.name)
         self.refresh_bindings()
 
     def on_button_pressed(self, ereignis: Button.Pressed) -> None:
@@ -235,6 +248,11 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
     def _senden(self) -> None:
         if self._gewaehlt is None:
             self.notify(t("notify.select_agent"), severity="warning")
+            return
+        if self._gewaehlt.selbst:
+            # Zweiter Riegel neben dem gesperrten Feld - erreichbar bliebe
+            # der Weg sonst ueber die Eingabetaste.
+            self.notify(t("chat.placeholder_self"), severity="warning")
             return
         eingabe = self.query_one("#eingabe", Input)
         text = eingabe.value.strip()

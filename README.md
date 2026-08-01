@@ -113,7 +113,7 @@ Details in [`docs/architektur-http.md`](docs/architektur-http.md) (German).
 
 ## Where the code came from
 
-Operator and bus moved here from the private `claude-config` repo, state `3a531c4` of
+Operator and message bus moved here from the private `claude-config` repo, state `3a531c4` of
 2026-08-01. Their history stays there - it starts fresh here, because the old commits almost
 always touched several skills at once.
 

@@ -148,7 +148,7 @@ stand sie dreifach da - genau so fängt Auseinanderdriften an. Aus demselben Gru
 Instanzabfrage in `instanzen.mjs`: der Hook braucht sie für Stufe 2, könnte sie aber nicht
 aus `operator.mjs` holen, ohne dessen CLI-Teil mitzuladen.
 
-Die Zuordnung Session-ID zu Name liegt in `~/.claude/bus/<RECHNER>/namen.json`.
+Die Zuordnung Session-ID zu Name liegt in `~/.claude/message bus/<RECHNER>/namen.json`.
 
 **Geht der Pool zur Neige, sucht der Hook in drei Stufen weiter** - Michaels Vorgabe: erst
 den Pool zu Ende abarbeiten, erst dann aufräumen.
@@ -355,7 +355,7 @@ Phase 1 ist bis auf `stop` rein lesend. Offen:
   `claude-config` und überholen sich (belegt durch Merge-Commit `91a8d48` und mehrfaches
   Rebasen am 31.07.2026). Michael will ausdrücklich eine Warnung, **keine Sperre**.
 - Nachrichten an Instanzen über [[claude-bus]].
-- Bus-Nachrichten überwachen: es gibt `read` (eigene neue) und `offen` (eigener Stand), aber
+- Message-Bus-Nachrichten überwachen: es gibt `read` (eigene neue) und `offen` (eigener Stand), aber
   keine Sicht auf **alle** Nachrichten und kein Löschen oder Bearbeiten. `messages.jsonl` und
   `receipts.jsonl` sind bewusst append-only, ein Widerruf müsste deshalb als eigener Eintrag
   modelliert werden statt als Löschung.
