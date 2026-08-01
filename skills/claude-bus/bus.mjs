@@ -417,6 +417,14 @@ function cmdAuftraege(argv) {
   const meine = liste.filter((a) => fuerMich(alsNachricht(a), selbstId(), selbstName()));
   const vergeben = liste.filter((a) => a.von_session === selbstId());
 
+  if (argv.includes('--json')) {
+    console.log(JSON.stringify({
+      rechner: rechner(), ich: selbstName(), zeit: new Date().toISOString(),
+      meine, vergeben,
+    }, null, 1));
+    return;
+  }
+
   const farbeZustand = (z) => (z === 'completed' ? GRUEN : z === 'failed' || z === 'cancelled' ? ROT : GELB);
   const zeigen = (titel, eintraege) => {
     if (!eintraege.length) return;
@@ -434,6 +442,56 @@ function cmdAuftraege(argv) {
     return;
   }
   console.log(`\n${GRAU}Annehmen: bus.mjs ack <id> 202   Erledigt: bus.mjs ack <id> 200 "Notiz"${R}\n`);
+}
+
+/**
+ * Zeigt den Auftragsverlauf mit einem bestimmten Agenten.
+ *
+ * Gedacht als Datenquelle fuer die Verlaufsansicht der Oberflaeche: je Auftrag
+ * die Anweisung plus alle Quittungen, aufsteigend nach Zeit. Beruecksichtigt
+ * beide Richtungen - was ich geschickt habe und was von dort kam.
+ *
+ * @param {string[]} argv
+ * Name des Agenten, dazu optional --json.
+ */
+function cmdVerlauf(argv) {
+  sicherstellen();
+  const alsJson = argv.includes('--json');
+  const name = argv.find((a) => !a.startsWith('--'));
+  if (!name) {
+    console.error('Aufruf: bus.mjs verlauf <Name> [--json]');
+    process.exitCode = 1;
+    return;
+  }
+
+  const d = db();
+  const liste = auftraege(d, {})
+    .filter((a) => a.an === name || a.von === name)
+    .sort((x, y) => String(x.erstellt).localeCompare(String(y.erstellt)))
+    .map((a) => ({ ...a, quittungen: quittungenZu(d, a.auftrag_id) }));
+
+  if (alsJson) {
+    console.log(JSON.stringify({
+      rechner: rechner(), ich: selbstName(), partner: name,
+      zeit: new Date().toISOString(), auftraege: liste,
+    }, null, 1));
+    return;
+  }
+
+  if (!liste.length) {
+    console.log(`${GRAU}Kein Verlauf mit ${name}.${R}`);
+    return;
+  }
+  const farbeZustand = (z) => (z === 'completed' ? GRUEN : z === 'failed' || z === 'cancelled' ? ROT : GELB);
+  console.log(`\n${CYAN}Verlauf mit ${name}${R}\n`);
+  for (const a of liste) {
+    console.log(`  ${GRAU}${zeit(a.erstellt)}  ${a.von} -> ${a.an}${R}  ${farbeZustand(a.zustand)}${a.zustand}${R}`);
+    console.log(`  ${String(a.text || '')}`);
+    for (const q of a.quittungen) {
+      console.log(`    ${GRAU}${zeit(q.ts)}${R}  ${q.status ?? ''} ${q.notiz || ''}`);
+    }
+    console.log('');
+  }
 }
 
 function cmdDoctor() {
@@ -493,7 +551,8 @@ function hilfe() {
 
     send <Name|alle> "Text" [--topic t] [--erwartet-quittung]
     read [--alle]                 neue Nachrichten holen (schiebt den Lesezeiger)
-    auftraege [--alle]            Warteschlange - was liegt an, unabhaengig vom Lesezeiger
+    auftraege [--alle] [--json]   Warteschlange - was liegt an, unabhaengig vom Lesezeiger
+    verlauf <Name> [--json]       Auftraege und Quittungen mit einem Agenten
     ack <msgId> <Code> ["Notiz"]  quittieren, setzt zugleich den Auftragszustand
     offen                         Stand der eigenen Nachrichten
     doctor                        Pfad-Isolation und Datenbank pruefen
@@ -532,6 +591,7 @@ if (direktAufgerufen) {
     case 'read': cmdRead(argv.slice(1)); break;
     case 'ack': cmdAck(argv.slice(1)); break;
     case 'auftraege': case 'auftrag': cmdAuftraege(argv.slice(1)); break;
+    case 'verlauf': cmdVerlauf(argv.slice(1)); break;
     case 'offen': cmdOffen(); break;
     case 'doctor': cmdDoctor(); break;
     case 'pending': cmdPending(); break;

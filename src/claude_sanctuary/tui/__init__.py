@@ -1,0 +1,1 @@
+"""Teil der Textual-Oberflaeche."""

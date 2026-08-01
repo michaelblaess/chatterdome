@@ -1,0 +1,64 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "claude-sanctuary"
+version = "0.0.1"
+description = "Zentrale fuer mehrere gleichzeitig laufende Claude-Code-Instanzen"
+requires-python = ">=3.12"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Michael Blaess" }]
+dependencies = [
+    "textual>=1.0",
+    "rich>=13.0",
+    "textual-themes @ git+https://github.com/michaelblaess/textual-themes.git",
+    "textual-widgets @ git+https://github.com/michaelblaess/textual-widgets.git",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "mypy>=1.8",
+    "ruff>=0.6",
+    "poethepoet>=0.29",
+]
+
+[project.scripts]
+sanctuary-tui = "claude_sanctuary.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+claude_sanctuary = ["locale/*.json", "tui/*.tcss"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = ["textual_themes.*", "textual_widgets.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-q --tb=short"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.poe.tasks]
+lint = "ruff check src tests"
+format = "ruff format src tests"
+typecheck = "mypy src"
+test = "pytest"

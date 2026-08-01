@@ -26,7 +26,7 @@ const ZIELE = {
   motiv: OPERATOR, motive: OPERATOR, 'reset-names': OPERATOR, 'werde-operator': OPERATOR,
   start: STARTE, starte: STARTE,
   send: BUS, read: BUS, ack: BUS, offen: BUS, doctor: BUS, pending: BUS,
-  auftraege: BUS, auftrag: BUS,
+  auftraege: BUS, auftrag: BUS, verlauf: BUS,
   kosten: KOSTEN,
 };
 
@@ -49,7 +49,8 @@ function hilfe() {
 
   Auftraege
     sanctuary send <Name|alle> "Text" [--topic t] [--erwartet-quittung]
-    sanctuary auftraege [--alle]   Warteschlange
+    sanctuary auftraege [--alle]   Warteschlange (mit --json maschinenlesbar)
+    sanctuary verlauf <Name>       Auftraege und Quittungen mit einem Agenten
     sanctuary read [--alle]        neue Nachrichten holen
     sanctuary ack <id> <Code> ["Notiz"]
     sanctuary offen                Stand der eigenen Auftraege
