@@ -20,7 +20,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, statSy
 import { homedir, hostname, platform, release } from 'node:os';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
-import { execFile } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
@@ -649,6 +649,7 @@ async function holeVonFerne(host) {
       host,
       rechner: daten.rechner,
       system: daten.system || null,
+      claudeVersion: daten.claudeVersion || null,
       anmeldung: daten.anmeldung || null,
       instanzen: daten.instanzen,
       fehler: null,
@@ -709,12 +710,14 @@ async function sammleMesh({ voll = false } = {}) {
     }
     return holeVonFerne(h);
   }));
+  const eigeneInstanzen = sammle({ voll });
   const eigen = {
     host: selbst.toLowerCase(),
     rechner: selbst,
     system: systemName(),
+    claudeVersion: claudeVersion(eigeneInstanzen),
     anmeldung: anmeldungBis(),
-    instanzen: sammle({ voll }),
+    instanzen: eigeneInstanzen,
     fehler: null,
   };
   return [eigen, ...antworten];
@@ -808,10 +811,38 @@ function anmeldungBis() {
   }
 }
 
+/**
+ * Installierte Claude-Code-Version dieses Rechners.
+ *
+ * Erste Wahl ist das Transkript einer laufenden Instanz - dort steht die
+ * Version in jedem Eintrag und kostet nichts. Nur wenn KEINE Instanz eine
+ * hat (alle frisch gestartet, noch kein Zug), wird "claude --version"
+ * aufgerufen. Der Aufruf kostet rund 100 ms und wuerde die Statusabfrage
+ * sonst bei jedem Takt verdoppeln.
+ *
+ * @param {object[]} zeilen
+ * Die bereits gesammelten Instanzen.
+ * @returns {string|null}
+ */
+function claudeVersion(zeilen) {
+  const ausTranskript = zeilen.find((z) => z.version)?.version;
+  if (ausTranskript) return ausTranskript;
+  try {
+    const exe = process.env.CLAUDE_CODE_EXECPATH;
+    const roh = exe
+      ? execFileSync(exe, ['--version'], { encoding: 'utf8', timeout: 8000 })
+      : execFileSync('claude --version', { encoding: 'utf8', timeout: 8000, shell: true });
+    return (String(roh).match(/\d+\.\d+\.\d+/) || [null])[0];
+  } catch {
+    return null;
+  }
+}
+
 function alsJson(zeilen, { einzeilig = false } = {}) {
   const daten = {
     rechner: rechner(),
     system: systemName(),
+    claudeVersion: claudeVersion(zeilen),
     anmeldung: anmeldungBis(),
     zeit: new Date().toISOString(),
     anzahl: zeilen.length,

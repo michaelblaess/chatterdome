@@ -86,6 +86,7 @@ class LokaleQuelle:
             hier = _rechnername().upper()
             eigenes_system = ""
             anmeldung = ""
+            claude = ""
             for zweig in zweige:
                 name = str(zweig.get("rechner") or zweig.get("host") or "?")
                 system = str(zweig.get("system") or "")
@@ -94,6 +95,7 @@ class LokaleQuelle:
                 if name.upper() == hier:
                     eigenes_system = system
                     anmeldung = str(zweig.get("anmeldung") or "")
+                    claude = str(zweig.get("claudeVersion") or "")
                 agenten.extend(
                     LokaleQuelle._agent(e, name, system) for e in zweig.get("instanzen", [])
                 )
@@ -106,6 +108,7 @@ class LokaleQuelle:
                 fehler=probleme,
                 system=eigenes_system,
                 anmeldung=anmeldung,
+                claude_version=claude,
                 systeme=systeme,
             )
 
@@ -118,6 +121,7 @@ class LokaleQuelle:
             fehler=[str(p) for p in roh.get("fehler", []) if p],
             system=system,
             anmeldung=str(roh.get("anmeldung") or ""),
+            claude_version=str(roh.get("claudeVersion") or ""),
             systeme={name: system} if system else {},
         )
 

@@ -137,6 +137,9 @@ class Bestand:
     anmeldung: str = ""
     """ISO-Zeitstempel, bis wann die Anmeldung gilt (Refresh-Token)."""
 
+    claude_version: str = ""
+    """Installierte Claude-Code-Version dieses Rechners."""
+
     systeme: dict[str, str] = field(default_factory=dict)
     """Rechnername auf Betriebssystem - bei Mesh mehrere Eintraege."""
 

@@ -139,6 +139,8 @@ def _claude_version(bestand: Bestand) -> str:
     """
     versionen = Counter(a.version for a in bestand.agenten if a.version)
     if not versionen:
-        return "-"
+        # Keine Sitzung hat bisher geantwortet - dann gilt die installierte
+        # Fassung des Rechners, die der Operator dafuer nachschlaegt.
+        return bestand.claude_version or "-"
     (haeufigste, _), *rest = versionen.most_common()
     return f"{haeufigste} (+{len(rest)})" if rest else str(haeufigste)
