@@ -1,0 +1,90 @@
+{
+  "aktiv": "comicmotiv",
+  "reserviert": [
+    "Operator"
+  ],
+  "pools": {
+    "heilige": {
+      "motiv": "Katholische Heilige",
+      "namen": [
+        "Therese",
+        "Agatha",
+        "Jeanne",
+        "Lucia",
+        "Franziskus",
+        "Lourdes",
+        "Patrick",
+        "Agnes",
+        "Maria",
+        "Klara",
+        "Benedikt",
+        "Hildegard",
+        "Antonius",
+        "Barbara",
+        "Christophorus",
+        "Katharina",
+        "Sebastian",
+        "Elisabeth",
+        "Nikolaus",
+        "Veronika",
+        "Ambrosius",
+        "Cecilia",
+        "Dominikus",
+        "Monika",
+        "Bonifatius",
+        "Walburga"
+      ]
+    },
+    "schauspieler": {
+      "motiv": "Schauspieler",
+      "namen": [
+        "Marlon",
+        "Marilyn",
+        "Audrey",
+        "Humphrey",
+        "Clint",
+        "Buster",
+        "Harrison",
+        "Keanu",
+        "Heath",
+        "Sigourney",
+        "Uma",
+        "Denzel",
+        "Whoopi",
+        "Ingrid",
+        "Cary",
+        "Jodie",
+        "Charlize",
+        "Sidney",
+        "Toshiro",
+        "Claudia",
+        "Romy",
+        "Sophia"
+      ]
+    },
+    "comicmotiv": {
+      "motiv": "Comicmotiv",
+      "namen": [
+        "Snorre",
+        "Charlene",
+        "Lino",
+        "Luzie",
+        "Patsy",
+        "Salma",
+        "Schmid",
+        "Marga",
+        "Wolfram",
+        "Franko",
+        "Piet",
+        "Remo",
+        "Viola",
+        "Fritzi",
+        "Sherin",
+        "Spiro",
+        "Berit",
+        "Elvira",
+        "Petra"
+      ]
+    }
+  }
+}
