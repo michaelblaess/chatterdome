@@ -185,3 +185,28 @@ bei jedem weiteren Stop erneut.
   `~/.claude/bus/<RECHNER>/halma-duel/`, der Pfad muss mit umziehen, sonst gehen die
   archivierten Partien des PoC verloren.
 - **Kern, TUI, Web** - siehe README.
+
+## Fallen beim Umzug (01.08.2026) - nicht wiederholen
+
+**Git folgt Junctions unter Windows.** `~/.claude/skills` zeigte als GANZES auf
+`claude-config/skills`. Ein einzelner Skill aus einem anderen Repo braucht dann eine Junction
+INNERHALB von claude-config - und beim naechsten `git pull --rebase` hat Git die Dateien im
+ZIELREPO geloescht, weil Junctions fuer die Datei-APIs transparent sind. Gerettet nur, weil
+sie dort schon committet waren. Konsequenz: ein Symlink JE SKILL, nie ein Sammelverzeichnis.
+
+**Ein Setup-Skript darf nicht in seinen eigenen alten Sammel-Link hineinschreiben.** Auf senza
+lief `setup.sh` gegen ein `~/.claude/skills`, das noch ein Symlink war - die Schleife legte
+ihre Links dadurch IM Repo an, jeder Skill zeigte auf sich selbst, und die
+create_symlink-Sicherung schob die echten Verzeichnisse nach `.backup`. Ergebnis: 86 Eintraege,
+42 leere Huellen. Beide setup-Skripte haengen den Sammel-Link jetzt zuerst ab.
+
+**Es gibt keinen ssh-Aufruf, der auf Windows und Linux gleich funktioniert.**
+`sanctuary status --json` greift auf Windows (der sshd bringt den Benutzer-PATH mit), auf Linux
+nicht (nicht-interaktive Shell liest die .bashrc nicht). `bash -lc "..."` greift auf Linux, auf
+RAINBOW fuehrt es dagegen in die WSL, wo kein node liegt. Ein Pfad mit `~` scheidet ganz aus,
+weil cmd und PowerShell die Tilde nicht aufloesen. Deshalb probiert `holeVonFerne` beide Wege
+nacheinander und bricht ab, sobald der Fehler nach "Rechner nicht da" aussieht.
+
+**Das x-Bit fehlt bei Dateien, die unter Windows entstehen.** `setup.sh` und `bin/sanctuary.mjs`
+brauchten `git update-index --chmod=+x`, sonst erzeugt jedes `chmod` auf einem Linux-Rechner
+eine Modus-Aenderung, die den naechsten `git pull --rebase` blockiert.
