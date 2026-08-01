@@ -110,6 +110,12 @@ fehlende Verweise beim nächsten Sitzungsstart an und meldet das (`Neue Skills v
 Was bereits verlinkt ist, wird nie angefasst, Skills aus diesem Repo bleiben also unberührt.
 Wer nicht warten will, ruft `setup.sh` erneut auf - es ist idempotent.
 
+**Auf Windows-Zielen setzt das Setup ausserdem einen PATH-Eintrag.** Ohne  im
+**Benutzer**-PATH findet zwar die eigene Shell den Kurzbefehl, aber  scheitert -
+der Windows-sshd reicht genau diesen Benutzer-PATH an eingehende Verbindungen weiter. Der
+Eintrag wird nur angehaengt, nie neu gesetzt.
+
+
 ## Woher der Code kommt
 
 Operator und Bus sind aus dem privaten Repo `claude-config` hierher gezogen, Stand `3a531c4`
