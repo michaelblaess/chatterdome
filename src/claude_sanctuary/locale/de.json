@@ -56,7 +56,7 @@
   "col.context": "Kontext",
   "col.post": "Post",
   "col.tokens": "Tokens",
-  "col.tool": "Werkzeug",
+  "col.tool": "Letztes Tool",
   "tip.state": "Grün: wartet auf Eingabe. Gelb: arbeitet gerade. Rot: nicht erreichbar.",
   "tip.post": "Aufträge, die für diesen Agenten offen sind und noch auf Bearbeitung warten.",
   "tip.context": "Belegter Kontext. Ab 600k wird es eng, ab 800k lohnt sich /compact - auslösen muss der Agent das selbst.",
@@ -191,5 +191,8 @@
   "notify.no_dir": "Kein Arbeitsverzeichnis bekannt",
   "notify.remote_dir": "{name} läuft auf {rechner} - der Ordner liegt nicht hier",
   "chat.clear": "Eingabe leeren",
-  "status.context": "Kontext"
+  "status.context": "Kontext",
+  "mesh.on": "an",
+  "mesh.off": "aus",
+  "head.gone": "{n} weg"
 }

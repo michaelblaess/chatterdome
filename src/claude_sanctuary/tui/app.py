@@ -40,6 +40,13 @@ from claude_sanctuary.tui.widgets.kopf_panel import KopfPanel
 from claude_sanctuary.tui.widgets.status_zeile import StatusZeile
 from claude_sanctuary.tui.widgets.verlauf_panel import VerlaufPanel
 
+ABSENDER = "Sanctuary"
+"""Absendername der Auftraege aus dieser Oberflaeche.
+
+Sie ist keine Claude-Sitzung und hat deshalb keine Session-ID, aus der der
+Bus sonst den Namen zieht. Ohne die Angabe stand in jedem Auftrag "unbekannt".
+"""
+
 SCHNELLBEFEHLE = ("compact", "status", "pause", "done")
 """Vorformulierte Auftragstexte.
 
@@ -433,12 +440,15 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         if not text:
             self.notify(t("notify.no_text"), severity="warning")
             return
-        self._auftrag_ablegen(self._gewaehlt.name, text)
+        self._auftrag_ablegen(self._gewaehlt.name, text, self._gewaehlt.rechner)
         eingabe.value = ""
 
     @work(thread=True, group="senden")
-    def _auftrag_ablegen(self, name: str, text: str) -> None:
-        fehler = self._quelle.senden(name, text, quittung=True)
+    def _auftrag_ablegen(self, name: str, text: str, host: str) -> None:
+        # Rechner UND Absender mitgeben: der Rechner spart dem Bus die
+        # Mesh-Suche, der Absender ist noetig, weil diese Oberflaeche keine
+        # Claude-Sitzung ist - ohne ihn stand in jedem Auftrag "unbekannt".
+        fehler = self._quelle.senden(name, text, quittung=True, host=host, von=ABSENDER)
         self.call_from_thread(self._senden_fertig, name, fehler)
 
     def _senden_fertig(self, name: str, fehler: str) -> None:

@@ -1,4 +1,9 @@
-// Nachrichtenbus zwischen Claude-Instanzen auf DEMSELBEN Rechner.
+// Nachrichtenbus zwischen Claude-Instanzen, auch ueber Rechnergrenzen.
+//
+// Jeder Rechner fuehrt seinen eigenen Bestand. Ein Auftrag an einen Agenten
+// auf einem anderen Rechner wird dort per ssh abgelegt (siehe zustellenAn),
+// die Quittung nimmt denselben Weg zurueck. Der Absender behaelt eine lokale
+// Kopie, damit sein Verlauf vollstaendig bleibt.
 //
 // Node statt PowerShell, damit derselbe Code auf allen Rechnern laeuft und der
 // Stop-Hook (bash) ihn direkt aufrufen kann. Loest bus.ps1 ab.
@@ -20,8 +25,9 @@ import {
   auftraege, auftrag, quittungenZu, zahlen, zustandAusCode, importiereJsonl,
 } from './speicher.mjs';
 import { homedir, hostname } from 'node:os';
+import { execFileSync } from 'node:child_process';
 import { join, dirname } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { pathToFileURL, fileURLToPath } from 'node:url';
 import { randomBytes } from 'node:crypto';
 
 const R = '\x1b[0m', GRAU = '\x1b[38;5;244m', GELB = '\x1b[38;5;221m';
@@ -256,8 +262,127 @@ function zeit(iso) {
 }
 
 // ---------------------------------------------------------------------------
+// Zustellung ueber Rechnergrenzen
+// ---------------------------------------------------------------------------
+
+const SSH_ZEIT = 20000;
+
+/**
+ * Legt ein fertiges Ereignis auf einem anderen Rechner ab.
+ *
+ * DIE NUTZLAST GEHT UEBER STDIN, nicht als Argument. Ein Auftragstext darf
+ * Anfuehrungszeichen, Klammern und Zeilenumbrueche enthalten, und ssh reicht
+ * die Argumente als EINEN String an die entfernte Shell weiter - dort zerlegt
+ * sie jedes Sonderzeichen neu. Ueber stdin gibt es diese Ebene nicht.
+ *
+ * Zwei Anlaeufe aus demselben Grund wie in operator.mjs: der blosse Aufruf
+ * greift auf Windows, weil der sshd dort den Benutzer-PATH mitbringt. Auf
+ * Linux liest eine nicht-interaktive Shell die .bashrc nicht - dort ist
+ * "sanctuary" nicht im PATH (am 02.08.2026 auf senza geprueft), erst die
+ * Login-Shell findet es.
+ *
+ * @param {string} host      Zielrechner, wie er in ~/.ssh/config steht.
+ * @param {object} ereignis  Fertiges Ereignis fuer schreibe().
+ * @returns {string} leer bei Erfolg, sonst die Fehlermeldung.
+ */
+export function zustellenAn(host, ereignis) {
+  const nutzlast = JSON.stringify(ereignis);
+  const versuche = ['sanctuary uebernehmen', 'bash -lc "sanctuary uebernehmen"'];
+  let letzterFehler = '';
+  for (const befehl of versuche) {
+    try {
+      execFileSync(
+        'ssh',
+        ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=5', String(host).toLowerCase(), befehl],
+        { input: nutzlast, encoding: 'utf8', timeout: SSH_ZEIT },
+      );
+      return '';
+    } catch (e) {
+      letzterFehler = String(e.stderr || e.message || '').split('\n')[0].trim();
+      // Ist der Rechner gar nicht da, bringt der zweite Anlauf nichts.
+      if (/connect|timed out|refused|resolve|Host key/i.test(letzterFehler)) break;
+    }
+  }
+  return letzterFehler || 'nicht erreichbar';
+}
+
+/**
+ * Auf welchem Rechner laeuft dieser Agent?
+ *
+ * Erst die lokale Namenstabelle - das ist der haeufige Fall und kostet keinen
+ * Prozess. Erst wenn der Name hier unbekannt ist, wird das Mesh befragt, und
+ * das dauert (ssh an jeden Rechner). Wer den Rechner schon kennt, gibt ihn
+ * mit --host mit und spart die Suche ganz.
+ *
+ * @returns {string|null} Rechnername in Grossbuchstaben, oder null.
+ */
+export function findeRechner(name) {
+  const ziel = String(name).toLowerCase();
+  try {
+    const t = JSON.parse(readFileSync(join(hostDir(), 'namen.json'), 'utf8'));
+    if (Object.values(t).some((n) => String(n).toLowerCase() === ziel)) return rechner();
+  } catch { /* keine Namenstabelle, dann eben ueber das Mesh */ }
+
+  try {
+    // fileURLToPath statt URL.pathname: unter Windows liefert pathname
+    // "/C:/Users/..." mit fuehrendem Schraegstrich, den node nicht oeffnet.
+    const operator = join(dirname(fileURLToPath(import.meta.url)), '..', 'operator', 'operator.mjs');
+    const roh = execFileSync(
+      process.execPath,
+      [operator, 'status', '--mesh', '--json'],
+      { encoding: 'utf8', timeout: 40000, maxBuffer: 8 * 1024 * 1024 },
+    );
+    for (const zweig of JSON.parse(roh).rechner || []) {
+      for (const i of zweig.instanzen || []) {
+        if (String(i.name).toLowerCase() === ziel) {
+          return String(zweig.rechner || zweig.host).toUpperCase();
+        }
+      }
+    }
+  } catch { /* Mesh nicht verfuegbar - der Aufrufer entscheidet */ }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
 // Befehle
 // ---------------------------------------------------------------------------
+
+/**
+ * Nimmt ein von einem anderen Rechner zugestelltes Ereignis entgegen.
+ *
+ * Gegenstueck zu zustellenAn(). Liest genau ein JSON-Ereignis von stdin und
+ * legt es unveraendert ab - Absender, Zeitstempel und Auftrags-ID bleiben also
+ * die des Ursprungsrechners, sonst liessen sich die beiden Kopien nicht mehr
+ * als derselbe Auftrag erkennen.
+ */
+function cmdUebernehmen() {
+  sicherstellen();
+  let ereignis;
+  try {
+    ereignis = JSON.parse(readFileSync(0, 'utf8'));
+  } catch (fehler) {
+    console.error(`${ROT}Keine lesbare Nutzlast auf stdin: ${fehler.message}${R}`);
+    process.exit(1);
+  }
+  if (!ereignis || !ereignis.auftrag_id || !ereignis.art) {
+    console.error(`${ROT}Nutzlast ohne auftrag_id oder art.${R}`);
+    process.exit(1);
+  }
+
+  // Doppelt zugestellt wird nichts abgelegt. Ohne die Pruefung erzeugte jede
+  // Wiederholung ein zweites Ereignis zur selben Auftrags-ID.
+  const d = db();
+  const schon = ereignis.art === 'auftrag'
+    ? Boolean(auftrag(d, ereignis.auftrag_id))
+    : quittungenZu(d, ereignis.auftrag_id).some((q) => q.ts === ereignis.ts);
+  if (schon) {
+    console.log(JSON.stringify({ ok: true, auftrag_id: ereignis.auftrag_id, doppelt: true }));
+    return;
+  }
+
+  schreibe(d, ereignis);
+  console.log(JSON.stringify({ ok: true, auftrag_id: ereignis.auftrag_id, host: rechner() }));
+}
 
 function cmdSend(argv) {
   sicherstellen();
@@ -265,7 +390,7 @@ function cmdSend(argv) {
 
   // Flags MIT Wert muessen samt Wert uebersprungen werden, sonst landet der
   // Wert im Nachrichtentext (genau so beim ersten Test passiert).
-  const mitWert = new Set(['--topic']);
+  const mitWert = new Set(['--topic', '--host', '--von']);
   const worte = [];
   for (let i = 1; i < argv.length; i++) {
     if (mitWert.has(argv[i])) { i++; continue; }
@@ -275,15 +400,34 @@ function cmdSend(argv) {
   const text = worte.join(' ');
 
   if (!to || !text) {
-    console.error('Nutzung: bus.mjs send <Name|alle> "Text" [--topic thema] [--erwartet-quittung]');
+    console.error('Nutzung: bus.mjs send <Name|alle> "Text" [--topic thema] [--host RECHNER] [--von Name] [--erwartet-quittung]');
     process.exit(1);
   }
+  const wert = (name) => {
+    const i = argv.indexOf(name);
+    return i >= 0 && argv[i + 1] ? argv[i + 1] : null;
+  };
+
+  // Wer sendet: --von schlaegt die Sitzungserkennung. Noetig fuer Aufrufer
+  // ohne eigene Claude-Sitzung - die TUI etwa lief bisher als "unbekannt",
+  // weil CLAUDE_CODE_SESSION_ID dort nicht gesetzt ist.
+  const vonName = wert('--von') || selbstName();
+  const rundruf = ['alle', 'all'].includes(String(to).toLowerCase());
+
+  // Wohin: --host spart die Suche. Der Rundruf bleibt bewusst lokal - "alle"
+  // ueber alle Rechner waere ein anderer Vorgang und braucht eine eigene
+  // Entscheidung, keine stille Ausweitung.
+  const zielHost = rundruf
+    ? rechner()
+    : String(wert('--host') || findeRechner(to) || rechner()).toUpperCase();
+
   const topicIdx = argv.indexOf('--topic');
   const nachricht = {
     id: randomBytes(5).toString('hex'),
     ts: new Date().toISOString(),
-    host: rechner(),
-    from: selbstName(),
+    host: zielHost,
+    vonHost: rechner(),
+    from: vonName,
     fromSession: selbstId(),
     cwd: process.cwd(),
     to,
@@ -291,16 +435,33 @@ function cmdSend(argv) {
     text,
     quittung: argv.includes('--erwartet-quittung'),
   };
-  schreibe(db(), {
-    auftrag_id: nachricht.id, ts: nachricht.ts, art: 'auftrag', host: nachricht.host,
+  const ereignis = {
+    auftrag_id: nachricht.id, ts: nachricht.ts, art: 'auftrag',
+    host: zielHost, von_host: nachricht.vonHost,
     von: nachricht.from, von_session: nachricht.fromSession, an: to,
     zustand: 'submitted', topic: nachricht.topic, text,
     quittung_erwartet: nachricht.quittung, cwd: nachricht.cwd,
-  });
+  };
+
+  // Immer auch lokal ablegen, selbst wenn der Empfaenger woanders sitzt: nur
+  // so sieht der Absender seinen eigenen Verlauf und spaeter die Quittung.
+  // Zugestellt wird die Kopie hier NICHT - dafuer sorgt host = Zielrechner.
+  schreibe(db(), ereignis);
   // Uebergangsphase: JSONL laeuft parallel weiter, bis die Umstellung auf
   // allen Rechnern steht. Erst danach faellt diese Zeile weg.
   anhaengen(pfadMessages(), nachricht);
-  console.log(`${GRUEN}Gesendet an ${to}${R}  ${GRAU}(id ${nachricht.id})${R}`);
+
+  if (zielHost !== rechner()) {
+    const fehler = zustellenAn(zielHost, ereignis);
+    if (fehler) {
+      console.error(`${ROT}Nicht zugestellt an ${zielHost}: ${fehler}${R}`);
+      console.error(`${GRAU}Der Auftrag steht lokal (id ${nachricht.id}), ${to} sieht ihn aber nicht.${R}`);
+      process.exit(1);
+    }
+    console.log(`${GRUEN}Gesendet an ${to}${R} ${GRAU}auf ${zielHost} (id ${nachricht.id})${R}`);
+  } else {
+    console.log(`${GRUEN}Gesendet an ${to}${R}  ${GRAU}(id ${nachricht.id})${R}`);
+  }
   if (nachricht.quittung) console.log(`${GRAU}Quittung erwartet - Stand mit: bus.mjs offen${R}`);
 }
 
@@ -359,16 +520,32 @@ function cmdAck(argv) {
     notiz,
   };
   const neuerZustand = zustandAusCode(code);
-  schreibe(db(), {
+  const ereignis = {
     auftrag_id: msgId, ts: quittung.ts, art: 'quittung', host: quittung.host,
-    von: quittung.from, von_session: quittung.fromSession, an: nachricht.from,
-    zustand: neuerZustand, status: code, notiz,
+    von_host: rechner(), von: quittung.from, von_session: quittung.fromSession,
+    an: nachricht.from, zustand: neuerZustand, status: code, notiz,
     nutzlast: { id: quittung.id, bedeutung: quittung.bedeutung },
-  });
+  };
+  schreibe(db(), ereignis);
   anhaengen(pfadReceipts(), quittung); // Uebergangsphase, siehe cmdSend
   const farbe = code < 300 ? GRUEN : code < 500 ? GELB : ROT;
   console.log(`${farbe}${code} ${quittung.bedeutung}${R}  ${GRAU}an ${nachricht.from} (msg ${msgId})${R}`);
   console.log(`${GRAU}Auftrag ${msgId} steht jetzt auf ${neuerZustand}${R}`);
+
+  // Kam der Auftrag von einem anderen Rechner, muss die Quittung dorthin
+  // zurueck - sonst bleibt er beim Absender auf ewig "abgelegt" stehen.
+  // Das Ereignis behaelt host = hier, damit drueben erkennbar bleibt, wo
+  // quittiert wurde. Es wird dort ueber die Auftrags-ID zugeordnet.
+  const zurueck = String(zeile.von_host || '').toUpperCase();
+  if (zurueck && zurueck !== rechner()) {
+    const fehler = zustellenAn(zurueck, ereignis);
+    if (fehler) {
+      console.error(`${GELB}Quittung nicht nach ${zurueck} gemeldet: ${fehler}${R}`);
+      console.error(`${GRAU}Lokal ist sie vermerkt - ${nachricht.from} sieht sie aber noch nicht.${R}`);
+    } else {
+      console.log(`${GRAU}Quittung an ${zurueck} gemeldet.${R}`);
+    }
+  }
 }
 
 function cmdOffen() {
@@ -588,6 +765,7 @@ if (direktAufgerufen) {
   const argv = process.argv.slice(2);
   switch (argv[0]) {
     case 'send': cmdSend(argv.slice(1)); break;
+    case 'uebernehmen': cmdUebernehmen(); break;
     case 'read': cmdRead(argv.slice(1)); break;
     case 'ack': cmdAck(argv.slice(1)); break;
     case 'auftraege': case 'auftrag': cmdAuftraege(argv.slice(1)); break;

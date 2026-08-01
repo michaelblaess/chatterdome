@@ -54,9 +54,9 @@
   "col.dir": "Folder",
   "col.uptime": "Uptime",
   "col.context": "Context",
-  "col.post": "Post",
+  "col.post": "Inbox",
   "col.tokens": "Tokens",
-  "col.tool": "Tool",
+  "col.tool": "Last tool",
   "tip.state": "Green: waiting for input. Yellow: working. Red: unreachable.",
   "tip.post": "Tasks queued for this agent that are still waiting to be picked up.",
   "tip.context": "Context in use. Above 600k it gets tight, above 800k /compact pays off - only the agent itself can trigger it.",
@@ -191,5 +191,8 @@
   "notify.no_dir": "No working directory known",
   "notify.remote_dir": "{name} runs on {rechner} - that folder is not here",
   "chat.clear": "Clear input",
-  "status.context": "Context"
+  "status.context": "Context",
+  "mesh.on": "on",
+  "mesh.off": "off",
+  "head.gone": "{n} gone"
 }

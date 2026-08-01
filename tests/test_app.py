@@ -11,7 +11,7 @@ import pytest
 from textual.widgets import Button, DataTable, Input
 
 from claude_sanctuary.kern.modelle import Agent, Auftrag, Bestand, Ereignis, Namenspool
-from claude_sanctuary.tui.app import SanctuaryApp
+from claude_sanctuary.tui.app import ABSENDER, SanctuaryApp
 from claude_sanctuary.tui.widgets.agenten_tabelle import AgentenTabelle
 from claude_sanctuary.tui.widgets.verlauf_panel import VerlaufPanel
 
@@ -63,8 +63,17 @@ class FakeQuelle:
             )
         ]
 
-    def senden(self, an: str, text: str, *, topic: str = "", quittung: bool = False) -> str:
-        self.gesendet.append((an, text))
+    def senden(
+        self,
+        an: str,
+        text: str,
+        *,
+        topic: str = "",
+        quittung: bool = False,
+        host: str = "",
+        von: str = "",
+    ) -> str:
+        self.gesendet.append((an, text, host, von))
         return ""
 
     def stoppen(self, name: str) -> str:
@@ -152,8 +161,14 @@ class TestOberflaeche:
                 if quelle.gesendet:
                     break
             assert quelle.gesendet
-            assert quelle.gesendet[0][1] == "Bitte Tests laufen lassen"
+            _an, text, host, von = quelle.gesendet[0]
+            assert text == "Bitte Tests laufen lassen"
             assert app.query_one("#eingabe", Input).value == ""
+            # Der Rechner des Empfaengers MUSS mitgehen, sonst landet der
+            # Auftrag auf dem Absenderrechner und der Empfaenger sieht ihn nie.
+            assert host == "TESTHOST", "Zielrechner fehlt im Auftrag"
+            # Ohne Absender stand in jedem Auftrag "unbekannt".
+            assert von == ABSENDER
 
     async def test_hilfe_oeffnet_und_schliesst(self, quelle: FakeQuelle) -> None:
         app = SanctuaryApp(quelle=quelle)

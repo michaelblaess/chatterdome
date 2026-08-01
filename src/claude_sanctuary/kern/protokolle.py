@@ -30,9 +30,20 @@ class Quelle(Protocol):
         """Auftraege und Quittungen mit einem bestimmten Agenten."""
         ...
 
-    def senden(self, an: str, text: str, *, topic: str = "", quittung: bool = False) -> str:
+    def senden(
+        self,
+        an: str,
+        text: str,
+        *,
+        topic: str = "",
+        quittung: bool = False,
+        host: str = "",
+        von: str = "",
+    ) -> str:
         """Legt einen Auftrag ab.
 
+        :param host: Rechner des Empfaengers - spart die Mesh-Suche.
+        :param von: Absendername, wenn kein Sitzungskontext vorliegt.
         :returns: leere Zeichenkette bei Erfolg, sonst die Fehlermeldung.
         """
         ...

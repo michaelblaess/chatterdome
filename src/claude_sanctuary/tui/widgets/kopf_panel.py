@@ -89,12 +89,12 @@ class KopfPanel(InfoHeader):  # type: ignore[misc]
             str(bestand.offene_auftraege),
             value_style="bold" if bestand.offene_auftraege else "",
         )
-        self.set_value("mesh", t("binding.local") if nur_lokal else "an")
+        self.set_value("mesh", t("mesh.off") if nur_lokal else t("mesh.on"))
         rechner = {a.rechner for a in bestand.agenten}
         fehlend = len(bestand.fehler)
         self.set_value(
             "reachable",
-            f"{len(rechner)}" + (f" ({fehlend} weg)" if fehlend else ""),
+            f"{len(rechner)}" + (f" ({t('head.gone', n=fehlend)})" if fehlend else ""),
             value_style="bold red" if fehlend else "",
         )
         self.set_value("updated", format_datetime(bestand.zeit))

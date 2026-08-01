@@ -49,6 +49,7 @@ export function oeffne(verzeichnis) {
       ts          TEXT NOT NULL,
       art         TEXT NOT NULL,
       host        TEXT NOT NULL,
+      von_host    TEXT,
       von         TEXT,
       von_session TEXT,
       an          TEXT,
@@ -67,6 +68,7 @@ export function oeffne(verzeichnis) {
       auftrag_id        TEXT PRIMARY KEY,
       zustand           TEXT NOT NULL,
       host              TEXT NOT NULL,
+      von_host          TEXT,
       von               TEXT,
       von_session       TEXT,
       an                TEXT,
@@ -84,7 +86,27 @@ export function oeffne(verzeichnis) {
       gelesen_bis INTEGER NOT NULL
     );
   `);
+  nachruesten(db);
   return db;
+}
+
+/**
+ * Ergaenzt Spalten, die spaeter dazugekommen sind.
+ *
+ * NOETIG, WEIL "CREATE TABLE IF NOT EXISTS" eine bereits vorhandene Tabelle
+ * unangetastet laesst - auf jedem Rechner, der den Bus schon benutzt hat,
+ * fehlte die neue Spalte sonst still, und erst das INSERT wuerde scheitern.
+ *
+ * @param {import('node:sqlite').DatabaseSync} db
+ */
+function nachruesten(db) {
+  const spalten = (tabelle) =>
+    new Set(db.prepare(`PRAGMA table_info(${tabelle})`).all().map((s) => s.name));
+  for (const tabelle of ['ereignis', 'auftrag']) {
+    if (!spalten(tabelle).has('von_host')) {
+      db.exec(`ALTER TABLE ${tabelle} ADD COLUMN von_host TEXT`);
+    }
+  }
 }
 
 /**
@@ -105,6 +127,13 @@ export function zustandAusCode(code) {
 /**
  * Schreibt ein Ereignis und zieht die Auftragstabelle nach.
  *
+ * ZUR BEDEUTUNG VON host UND von_host: ``host`` ist der Rechner des
+ * EMPFAENGERS, nicht der des Erzeugers - nur so findet ein Agent seine
+ * Auftraege, wenn sie von einem anderen Rechner kamen. ``von_host`` haelt
+ * fest, wohin die Quittung zurueckgeht. Vorher trug ``host`` den Erzeuger,
+ * und genau daran ist die rechneruebergreifende Zustellung gescheitert: ein
+ * auf RAINBOW abgelegter Auftrag an Franko@SENZA blieb dort liegen.
+ *
  * Beides in EINER Transaktion mit BEGIN IMMEDIATE. Ohne das Schluesselwort
  * beginnt SQLite eine Lesetransaktion und muss sie beim ersten Schreibbefehl
  * hochstufen - schlaegt das fehl, kommt SQLITE_BUSY_SNAPSHOT zurueck, und zwar
@@ -117,11 +146,11 @@ export function schreibe(db, e) {
   db.exec('BEGIN IMMEDIATE');
   try {
     const einfuegen = db.prepare(`
-      INSERT INTO ereignis (auftrag_id, ts, art, host, von, von_session, an, zustand, topic, text, status, notiz, cwd, nutzlast)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO ereignis (auftrag_id, ts, art, host, von_host, von, von_session, an, zustand, topic, text, status, notiz, cwd, nutzlast)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const r = einfuegen.run(
-      e.auftrag_id, e.ts || jetzt, e.art, e.host,
+      e.auftrag_id, e.ts || jetzt, e.art, e.host, e.von_host ?? null,
       e.von ?? null, e.von_session ?? null, e.an ?? null, e.zustand ?? null,
       e.topic ?? null, e.text ?? null, e.status ?? null, e.notiz ?? null,
       e.cwd ?? null, e.nutzlast ? JSON.stringify(e.nutzlast) : null,
@@ -130,11 +159,11 @@ export function schreibe(db, e) {
 
     if (e.art === 'auftrag') {
       db.prepare(`
-        INSERT INTO auftrag (auftrag_id, zustand, host, von, von_session, an, topic, text, quittung_erwartet, erstellt, geaendert, letztes_ereignis)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO auftrag (auftrag_id, zustand, host, von_host, von, von_session, an, topic, text, quittung_erwartet, erstellt, geaendert, letztes_ereignis)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(auftrag_id) DO UPDATE SET zustand = excluded.zustand, geaendert = excluded.geaendert, letztes_ereignis = excluded.letztes_ereignis
       `).run(
-        e.auftrag_id, e.zustand || 'submitted', e.host,
+        e.auftrag_id, e.zustand || 'submitted', e.host, e.von_host ?? null,
         e.von ?? null, e.von_session ?? null, e.an ?? null,
         e.topic ?? null, e.text ?? null, e.quittung_erwartet ? 1 : 0,
         e.ts || jetzt, e.ts || jetzt, id,

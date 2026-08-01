@@ -143,10 +143,33 @@ class LokaleQuelle:
             return []
         return [self._auftrag(e) for e in roh.get("auftraege", [])]
 
-    def senden(self, an: str, text: str, *, topic: str = "", quittung: bool = False) -> str:
+    def senden(
+        self,
+        an: str,
+        text: str,
+        *,
+        topic: str = "",
+        quittung: bool = False,
+        host: str = "",
+        von: str = "",
+    ) -> str:
+        """Legt einen Auftrag ab.
+
+        :param host:
+            Rechner des Empfaengers. Ohne die Angabe muss der Bus ihn ueber
+            eine Mesh-Abfrage suchen - gemessen 1,4 s gegenueber 0,1 s.
+            Die Oberflaeche kennt ihn aus der Tabelle und gibt ihn deshalb mit.
+        :param von:
+            Absendername. Noetig, weil die Oberflaeche keine Claude-Sitzung
+            ist: ohne CLAUDE_CODE_SESSION_ID stand als Absender "unbekannt".
+        """
         args = ["send", an, text]
         if topic:
             args += ["--topic", topic]
+        if host:
+            args += ["--host", host]
+        if von:
+            args += ["--von", von]
         if quittung:
             args.append("--erwartet-quittung")
         return self._still(args)
