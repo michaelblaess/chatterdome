@@ -81,3 +81,36 @@ weil die alten Commits fast immer mehrere Skills gleichzeitig betrafen.
 ## Lizenz
 
 Apache-2.0, siehe [LICENSE](LICENSE).
+
+## SSH: interaktiv oder mit Befehl
+
+Ein Unterschied, der überrascht, wenn man ihn zum ersten Mal trifft:
+
+```bash
+ssh senza                          # interaktive Login-Shell - alles wie gewohnt
+sanctuary status                   # funktioniert dort einfach
+
+ssh senza "sanctuary status"       # NICHT gefunden
+ssh senza 'bash -lc "sanctuary status"'   # so schon
+```
+
+Der Grund: `ssh rechner "befehl"` startet **keine** Login-Shell. Ubuntu bricht in den ersten
+Zeilen der `.bashrc` ab, wenn die Shell nicht interaktiv ist - `~/.local/bin` landet dann nie
+im PATH. Auf **Windows** ist es genau umgekehrt: der sshd übergibt den PATH aus der Registry,
+also funktioniert der direkte Aufruf, dafür führt `bash -lc` dort in die **WSL** statt in die
+Git Bash, wo es kein node gibt.
+
+**Für die tägliche Arbeit ändert sich nichts** - wer sich mit `ssh senza` eine Konsole holt,
+merkt davon gar nichts. Betroffen sind nur Skripte, die Befehle über SSH absetzen. `--mesh`
+probiert deshalb beide Wege.
+
+## Neue Skills
+
+`~/.claude/skills` enthält einen Symlink **je Skill**, nicht einen für das ganze Verzeichnis.
+Das erlaubt Skills aus mehreren Repos, hat aber einen Preis: ein neu hinzugekommener Skill
+erscheint nicht von allein nach einem `git pull`.
+
+Darum kümmert sich der SessionStart-Hook `session-sync-check.sh` aus `claude-config` - er legt
+fehlende Verweise beim nächsten Sitzungsstart an und meldet das (`Neue Skills verlinkt: ...`).
+Was bereits verlinkt ist, wird nie angefasst, Skills aus diesem Repo bleiben also unberührt.
+Wer nicht warten will, ruft `setup.sh` erneut auf - es ist idempotent.
