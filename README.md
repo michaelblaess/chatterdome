@@ -89,6 +89,10 @@ creates missing links at the next session start and reports them (`Neue Skills v
 Anything already linked is never touched, so skills from this repo stay untouched. If you
 cannot wait, run `setup.sh` again - it is idempotent.
 
+**On Windows targets setup also adds a PATH entry.** Without `~\.local\bin` in the **user**
+PATH your own shell finds the shortcut, but `status --mesh` fails - the Windows sshd hands
+exactly that user PATH to incoming connections. The entry is only appended, never replaced.
+
 ## Two classes of agents
 
 The central design decision, because it explains what this tool deliberately **cannot** do:
