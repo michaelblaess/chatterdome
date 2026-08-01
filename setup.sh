@@ -55,7 +55,27 @@ echo ""
 verlinke operator
 verlinke claude-bus
 
+# --- Kurzbefehl "sanctuary" ins PATH-Verzeichnis ---
+#
+# Ein Wrapper statt eines Symlinks auf die .mjs: der Symlink wuerde zwar
+# funktionieren, aber unter Git Bash auf Windows haengt die Ausfuehrbarkeit
+# einer Datei ohne Endung am Shebang - der Wrapper ruft node ausdruecklich auf
+# und ist damit ueberall gleich.
+BIN_DIR="$HOME/.local/bin"
+mkdir -p "$BIN_DIR"
+cat > "$BIN_DIR/sanctuary" <<WRAPPER
+#!/usr/bin/env bash
+exec node "$REPO_DIR/bin/sanctuary.mjs" "\$@"
+WRAPPER
+chmod +x "$BIN_DIR/sanctuary"
+echo "[OK]   sanctuary -> $BIN_DIR/sanctuary"
+
 echo ""
+if ! command -v sanctuary >/dev/null 2>&1; then
+    echo "HINWEIS: $BIN_DIR liegt nicht im PATH. Ergaenzen mit:"
+    echo "  echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.bashrc"
+    echo ""
+fi
 echo "Fertig. Probe:"
-echo "  node ~/.claude/skills/operator/operator.mjs status"
-echo "  node ~/.claude/skills/claude-bus/bus.mjs doctor"
+echo "  sanctuary status"
+echo "  sanctuary doctor"

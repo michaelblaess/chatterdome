@@ -66,7 +66,27 @@ Write-Host ''
 Set-SkillLink -Name 'operator'
 Set-SkillLink -Name 'claude-bus'
 
+# --- Kurzbefehl "sanctuary" ins PATH-Verzeichnis ---
+#
+# Zwei Dateien, weil Michael beide Shells benutzt: die .cmd greift in
+# PowerShell und cmd, die endungslose Datei in Git Bash. Beide rufen dasselbe
+# Skript auf.
+$binDir = Join-Path $env:USERPROFILE '.local\bin'
+New-Item -ItemType Directory -Force $binDir | Out-Null
+
+$cmdPfad = Join-Path $binDir 'sanctuary.cmd'
+$mjsPfad = Join-Path $repoDir 'bin\sanctuary.mjs'
+"@echo off`r`nnode `"$mjsPfad`" %*" | Out-File $cmdPfad -Encoding ascii
+Write-Host "[OK]   sanctuary.cmd -> $cmdPfad"
+
+$shPfad = Join-Path $binDir 'sanctuary'
+$shMjs = $mjsPfad -replace '\\', '/'
+# LF-Zeilenenden, sonst stolpert bash ueber das Wagenruecklauf-Zeichen im Shebang.
+$shInhalt = "#!/usr/bin/env bash`nexec node `"$shMjs`" `"`$@`"`n"
+[System.IO.File]::WriteAllText($shPfad, $shInhalt, [System.Text.UTF8Encoding]::new($false))
+Write-Host "[OK]   sanctuary (Git Bash) -> $shPfad"
+
 Write-Host ''
 Write-Host 'Fertig. Probe:'
-Write-Host '  node ~/.claude/skills/operator/operator.mjs status'
-Write-Host '  node ~/.claude/skills/claude-bus/bus.mjs doctor'
+Write-Host '  sanctuary status'
+Write-Host '  sanctuary doctor'
