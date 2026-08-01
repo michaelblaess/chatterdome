@@ -601,28 +601,41 @@ function werdeOperator() {
  * geworfen.
  */
 async function holeVonFerne(host) {
-  // Der Kurzbefehl statt eines Pfades mit ~: die Gegenstelle antwortet unter
-  // Windows mit cmd oder PowerShell, und dort ist ~ kein Heimatverzeichnis,
-  // sondern ein gewoehnliches Zeichen - "node ~/.claude/..." scheiterte
-  // deshalb mit ERR_MODULE_NOT_FOUND (senza -> RAINBOW, 01.08.2026).
-  // "sanctuary" liegt in ~/.local/bin und damit auf beiden Systemen im PATH.
-  const befehl = 'sanctuary status --json';
+  // Zwei Anlaeufe, weil es keinen Aufruf gibt, der auf beiden Systemen traegt
+  // (alles am 01.08.2026 gemessen):
+  //   1. "sanctuary status --json" - greift auf Windows, weil der sshd dort
+  //      den Benutzer-PATH samt ~/.local/bin mitbringt. Auf Linux scheitert es
+  //      mit "Befehl nicht gefunden", denn eine nicht-interaktive Shell liest
+  //      die .bashrc nicht (Ubuntu bricht dort oben per "case $- in *i*" ab).
+  //   2. "bash -lc ..." - greift auf Linux. Auf RAINBOW fuehrt es dagegen in
+  //      die WSL statt in die Git Bash, und dort gibt es kein node.
+  // Ein Pfad mit ~ scheidet ganz aus: unter cmd und PowerShell ist die Tilde
+  // ein gewoehnliches Zeichen, "node ~/.claude/..." endete in ERR_MODULE_NOT_FOUND.
+  const versuche = ['sanctuary status --json', 'bash -lc "sanctuary status --json"'];
   let stdout;
-  try {
-    // ConnectTimeout knapp halten: die Abfragen laufen zwar parallel, aber ein
-    // abgeschalteter Rechner verzoegert die Gesamtanzeige um genau diese
-    // Spanne. Gemessen mit dem offline dell - 8 s Timeout ergaben 8,8 s
-    // Gesamtlaufzeit, obwohl lokal und senza laengst geantwortet hatten.
-    ({ stdout } = await execFileAsync(
-      'ssh',
-      ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=5', host, befehl],
-      { timeout: 20000, maxBuffer: 8 * 1024 * 1024 },
-    ));
-  } catch (e) {
-    // ssh meldet "Connection refused"/"timed out" auf stderr, execFile packt
-    // das in e.stderr - die erste Zeile davon ist die brauchbare Auskunft.
-    const grund = (e.stderr || e.message || '').split('\n')[0].trim();
-    return { host, rechner: host.toUpperCase(), instanzen: [], fehler: grund || 'nicht erreichbar' };
+  let letzterFehler = '';
+  for (const befehl of versuche) {
+    try {
+      // ConnectTimeout knapp halten: die Abfragen laufen zwar parallel, aber
+      // ein abgeschalteter Rechner verzoegert die Gesamtanzeige um genau diese
+      // Spanne. Gemessen mit dem offline dell - 8 s Timeout ergaben 8,8 s
+      // Gesamtlaufzeit, obwohl lokal und senza laengst geantwortet hatten.
+      ({ stdout } = await execFileAsync(
+        'ssh',
+        ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=5', host, befehl],
+        { timeout: 20000, maxBuffer: 8 * 1024 * 1024 },
+      ));
+      break;
+    } catch (e) {
+      // ssh meldet "Connection refused"/"timed out" auf stderr, execFile packt
+      // das in e.stderr - die erste Zeile davon ist die brauchbare Auskunft.
+      letzterFehler = (e.stderr || e.message || '').split('\n')[0].trim();
+      // Ist der Rechner gar nicht da, bringt der zweite Anlauf nichts.
+      if (/connect|timed out|refused|resolve/i.test(letzterFehler)) break;
+    }
+  }
+  if (!stdout) {
+    return { host, rechner: host.toUpperCase(), instanzen: [], fehler: letzterFehler || 'nicht erreichbar' };
   }
 
   try {
