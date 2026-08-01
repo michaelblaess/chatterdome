@@ -16,10 +16,14 @@ from textual_widgets import SearchInputWithHistory
 from claude_sanctuary.i18n import t
 from claude_sanctuary.kern.modelle import Agent, Ampel
 
+# Feste Ampelfarben statt Theme-Variablen oder benannter ANSI-Farben: eine
+# Ampel hat rot, gelb und gruen, und die muessen auf jedem Theme genau so
+# aussehen. Die benannte Farbe "yellow" ist in vielen Terminal-Paletten ein
+# Orange - damit wird aus der Ampel eine vierte Farbe, die es nicht gibt.
 AMPEL_FARBE = {
-    Ampel.FREI: "bold green",
-    Ampel.BESCHAEFTIGT: "bold yellow",
-    Ampel.WEG: "bold red",
+    Ampel.FREI: "bold #2ecc71",
+    Ampel.BESCHAEFTIGT: "bold #f1c40f",
+    Ampel.WEG: "bold #e74c3c",
 }
 
 

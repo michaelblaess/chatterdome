@@ -16,10 +16,11 @@ from textual.widgets import Button, Static
 from claude_sanctuary.i18n import format_datetime, t
 from claude_sanctuary.kern.modelle import Agent, Ampel
 
+# Dieselben festen Farben wie in der Tabelle - siehe dort.
 AMPEL_TEXT = {
-    Ampel.FREI: ("●", "bold green", "state.free"),
-    Ampel.BESCHAEFTIGT: ("●", "bold yellow", "state.busy"),
-    Ampel.WEG: ("●", "bold red", "state.gone"),
+    Ampel.FREI: ("●", "bold #2ecc71", "state.free"),
+    Ampel.BESCHAEFTIGT: ("●", "bold #f1c40f", "state.busy"),
+    Ampel.WEG: ("●", "bold #e74c3c", "state.gone"),
 }
 
 

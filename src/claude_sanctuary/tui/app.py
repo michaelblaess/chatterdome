@@ -127,7 +127,13 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
                         target_id="verlauf", min_size=5, id="eingabe-splitter"
                     )
                     with Vertical(id="eingabe-raum"):
-                        yield Input(placeholder=t("chat.placeholder_none"), id="eingabe")
+                        # Textual bringt keinen Leeren-Knopf am Input mit, und
+                        # textual-widgets auch nicht - deshalb hier daneben.
+                        with Horizontal(id="eingabe-zeile"):
+                            yield Input(placeholder=t("chat.placeholder_none"), id="eingabe")
+                            leeren = Button("X", id="leeren", tooltip=t("chat.clear"))
+                            leeren.can_focus = False
+                            yield leeren
                         with Horizontal(id="schnellbefehle"):
                             yield Button(t("chat.send"), variant="primary", id="senden")
                             for schluessel in SCHNELLBEFEHLE:
@@ -287,6 +293,11 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         kennung = ereignis.button.id or ""
         if kennung == "senden":
             self._senden()
+            return
+        if kennung == "leeren":
+            feld = self.query_one("#eingabe", Input)
+            feld.value = ""
+            self.set_focus(feld)
             return
         if kennung.startswith("quick-"):
             self._schnellbefehl(kennung.removeprefix("quick-"))

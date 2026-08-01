@@ -190,5 +190,6 @@
   "quick.hint": "Quick phrases - they fill the input, sending still needs the button",
   "notify.copied": "Copied to clipboard",
   "notify.no_dir": "No working directory known",
-  "notify.remote_dir": "{name} runs on {rechner} - that folder is not here"
+  "notify.remote_dir": "{name} runs on {rechner} - that folder is not here",
+  "chat.clear": "Clear input"
 }

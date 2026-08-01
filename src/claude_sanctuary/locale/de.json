@@ -190,5 +190,6 @@
   "quick.hint": "Schnellbefehle - füllen das Eingabefeld, gesendet wird erst mit dem Knopf",
   "notify.copied": "In die Zwischenablage kopiert",
   "notify.no_dir": "Kein Arbeitsverzeichnis bekannt",
-  "notify.remote_dir": "{name} läuft auf {rechner} - der Ordner liegt nicht hier"
+  "notify.remote_dir": "{name} läuft auf {rechner} - der Ordner liegt nicht hier",
+  "chat.clear": "Eingabe leeren"
 }
