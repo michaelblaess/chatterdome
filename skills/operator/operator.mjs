@@ -601,7 +601,12 @@ function werdeOperator() {
  * geworfen.
  */
 async function holeVonFerne(host) {
-  const befehl = 'node ~/.claude/skills/operator/operator.mjs status --json';
+  // Der Kurzbefehl statt eines Pfades mit ~: die Gegenstelle antwortet unter
+  // Windows mit cmd oder PowerShell, und dort ist ~ kein Heimatverzeichnis,
+  // sondern ein gewoehnliches Zeichen - "node ~/.claude/..." scheiterte
+  // deshalb mit ERR_MODULE_NOT_FOUND (senza -> RAINBOW, 01.08.2026).
+  // "sanctuary" liegt in ~/.local/bin und damit auf beiden Systemen im PATH.
+  const befehl = 'sanctuary status --json';
   let stdout;
   try {
     // ConnectTimeout knapp halten: die Abfragen laufen zwar parallel, aber ein
