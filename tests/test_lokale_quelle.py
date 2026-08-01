@@ -49,6 +49,26 @@ ANTWORT = {
     ],
 }
 
+MESH = {
+    "zeit": "2026-08-01T20:39:10.779Z",
+    "rechner": [
+        {
+            "host": "rainbow",
+            "rechner": "RAINBOW",
+            "instanzen": [
+                {"name": "Operator", "status": "busy", "selbst": True, "post": 1},
+                {"name": "Marga", "status": "idle"},
+            ],
+        },
+        {
+            "host": "senza",
+            "rechner": "SENZA",
+            "instanzen": [{"name": "Lino", "status": "idle", "tokens": 42}],
+        },
+        {"host": "dell", "rechner": "DELL", "instanzen": [], "fehler": "offline (Tailscale)"},
+    ],
+}
+
 VERLAUF = {
     "rechner": "TESTHOST",
     "ich": "Operator",
@@ -137,3 +157,31 @@ class TestVerlauf:
     def test_fehler_liefert_leere_liste(self) -> None:
         quelle = LokaleQuelle(["gibt-es-ganz-sicher-nicht-12345"])
         assert quelle.verlauf("Klara") == []
+
+
+class TestMesh:
+    """Die Mesh-Ausgabe hat eine ANDERE Struktur als die lokale.
+
+    Lokal steht unter "rechner" ein Name und daneben "instanzen". Bei --mesh
+    ist "rechner" eine Liste von Zweigen, und "instanzen" gibt es oben gar
+    nicht. Wer nur den lokalen Fall liest, bekommt still eine leere Liste.
+    """
+
+    def test_agenten_aller_hosts(self) -> None:
+        bestand = _quelle(MESH).bestand(mesh=True)
+        assert [a.name for a in bestand.agenten] == ["Operator", "Marga", "Lino"]
+
+    def test_rechner_wird_je_zweig_uebernommen(self) -> None:
+        agenten = {a.name: a.rechner for a in _quelle(MESH).bestand(mesh=True).agenten}
+        assert agenten["Operator"] == "RAINBOW"
+        assert agenten["Lino"] == "SENZA"
+
+    def test_nicht_erreichbarer_host_wird_gemeldet(self) -> None:
+        bestand = _quelle(MESH).bestand(mesh=True)
+        assert bestand.fehler == ["dell: offline (Tailscale)"]
+
+    def test_summen_ueber_alle_hosts(self) -> None:
+        bestand = _quelle(MESH).bestand(mesh=True)
+        assert bestand.beschaeftigt == 1
+        assert bestand.offene_auftraege == 1
+        assert bestand.tokens == 42

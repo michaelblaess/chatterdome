@@ -61,16 +61,42 @@ class LokaleQuelle:
         roh, fehler = self._json(args)
         if roh is None:
             return Bestand(rechner=_rechnername(), zeit="", fehler=[fehler])
+        return self._bestand_aus(roh)
 
-        hier = str(roh.get("rechner", _rechnername()))
-        agenten = [self._agent(e, hier) for e in roh.get("instanzen", [])]
-        # Der Operator meldet nicht erreichbare Hosts als eigenen Zweig.
-        probleme = [str(p) for p in roh.get("fehler", []) if p]
+    @staticmethod
+    def _bestand_aus(roh: dict[str, Any]) -> Bestand:
+        """Liest beide Ausgabeformate des Operators.
+
+        ACHTUNG, die beiden unterscheiden sich grundlegend:
+
+        - lokal: ``{rechner: "NAME", zeit, instanzen: [...]}``
+        - mesh:  ``{zeit, rechner: [{host, rechner, instanzen, fehler}]}``
+
+        Bei Mesh ist ``rechner`` also eine Liste und ``instanzen`` fehlt oben
+        ganz. Wer nur den lokalen Fall liest, bekommt im Mesh-Betrieb still
+        eine leere Liste - genau das ist passiert.
+        """
+        zeit = str(roh.get("zeit", ""))
+        zweige = roh.get("rechner")
+
+        if isinstance(zweige, list):
+            agenten: list[Agent] = []
+            probleme: list[str] = []
+            for zweig in zweige:
+                name = str(zweig.get("rechner") or zweig.get("host") or "?")
+                agenten.extend(
+                    LokaleQuelle._agent(e, name) for e in zweig.get("instanzen", [])
+                )
+                if zweig.get("fehler"):
+                    probleme.append(f"{zweig.get('host', name)}: {zweig['fehler']}")
+            return Bestand(rechner=_rechnername(), zeit=zeit, agenten=agenten, fehler=probleme)
+
+        hier = str(zweige or _rechnername())
         return Bestand(
             rechner=hier,
-            zeit=str(roh.get("zeit", "")),
-            agenten=agenten,
-            fehler=probleme,
+            zeit=zeit,
+            agenten=[LokaleQuelle._agent(e, hier) for e in roh.get("instanzen", [])],
+            fehler=[str(p) for p in roh.get("fehler", []) if p],
         )
 
     def verlauf(self, name: str) -> list[Auftrag]:

@@ -95,6 +95,7 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         self._bestand = Bestand(rechner="", zeit="")
         self._gewaehlt: Agent | None = None
         self._stop_kandidat = ""
+        self._letzte_fehler: list[str] = []
         self._start = time.monotonic()
         self._laeuft = False
         with contextlib.suppress(Exception):
@@ -196,8 +197,14 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         )
         self.query_one("#agenten", AgentenTabelle).uebernehmen(bestand.agenten)
         self.query_one("#status", StatusZeile).uebernehmen(bestand)
-        for meldung in bestand.fehler:
-            self._schreibe_log(t("log.refresh_failed", fehler=meldung), "warning")
+
+        # Nur bei Aenderung melden. Ein dauerhaft offline stehender Rechner
+        # wuerde sonst im Sekundentakt dieselbe Zeile schreiben und das
+        # Protokoll unbrauchbar machen.
+        if bestand.fehler != self._letzte_fehler:
+            for meldung in bestand.fehler:
+                self._schreibe_log(t("log.refresh_failed", fehler=meldung), "warning")
+            self._letzte_fehler = list(bestand.fehler)
 
     @work(thread=True, exclusive=True, group="verlauf")
     def verlauf_laden(self, name: str) -> None:

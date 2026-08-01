@@ -20,7 +20,8 @@ ZUSTIMMUNG = VERZEICHNIS / "disclaimer.json"
 VORGABEN: dict[str, Any] = {
     "language": "de",
     "theme": "textual-dark",
-    "nur_lokal": True,
+    # Mesh ist die Vorgabe: wer mehrere Rechner betreibt, will sie auch sehen.
+    "nur_lokal": False,
     "aktualisierung_sekunden": 5,
     "proxy_url": "",
     "log_sichtbar": True,

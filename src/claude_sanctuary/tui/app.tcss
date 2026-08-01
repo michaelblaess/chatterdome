@@ -27,6 +27,13 @@ Screen {
     height: 1fr;
 }
 
+/* Keine eigene height-Vorgabe fuer die Suchleiste: sie rendert drei Zeilen
+   (Rahmen, Icon plus Eingabe, Rahmen). Wird die Hoehe gesetzt, quetscht es
+   die innere Zeile zusammen und das Feld ist unsichtbar. */
+#agenten SearchInputWithHistory {
+    padding: 0 1;
+}
+
 #agenten #agenten-daten {
     height: 1fr;
 }

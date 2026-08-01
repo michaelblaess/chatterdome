@@ -77,8 +77,9 @@ class AgentenTabelle(Vertical):
     def compose(self) -> ComposeResult:
         yield SearchInputWithHistory(
             placeholder=t("filter.placeholder"),
-            icon="/",
+            icon="🔍",
             input_id="agenten-filter",
+            dropdown_id="agenten-filter-verlauf",
             id="agenten-suche",
         )
         yield DataTable(id="agenten-daten", cursor_type="row", zebra_stripes=True)
