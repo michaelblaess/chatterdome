@@ -81,6 +81,7 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         Binding("n,N", "start_agent", "start", key_display="n"),
         Binding("delete", "stop_agent", "stop", key_display="DEL"),
         Binding("o,O", "toggle_local", "local", key_display="o"),
+        Binding("v,V", "show_usage", "usage", key_display="v"),
         Binding("slash", "focus_filter", "filter", key_display="/", show=False),
     ]
 
@@ -95,6 +96,7 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         "start_agent": "start",
         "stop_agent": "stop",
         "toggle_local": "local",
+        "show_usage": "usage",
         "focus_filter": "filter",
     }
 
@@ -114,6 +116,9 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         self._stop_kandidat = ""
         self._menue_ziel: Agent | None = None
         self._letzte_fehler: list[str] = []
+        self._verbrauch: int | None = None
+        """Zuletzt ermittelter Verbrauch. None, solange nie abgefragt."""
+
         self._gemeldete_systeme: dict[str, str] = {}
         self._start = time.monotonic()
         self._laeuft = False
@@ -215,23 +220,28 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
             self.aktualisieren()
 
     @work(thread=True, exclusive=True, group="abfrage")
-    def aktualisieren(self) -> None:
+    def aktualisieren(self, tokens: bool = False) -> None:
         """Holt den Bestand. Laeuft im Thread, weil der Unterprozess blockiert."""
         self._laeuft = True
         try:
-            bestand = self._quelle.bestand(mesh=not self._nur_lokal)
+            bestand = self._quelle.bestand(mesh=not self._nur_lokal, tokens=tokens)
         finally:
             self._laeuft = False
-        self.call_from_thread(self._bestand_uebernehmen, bestand)
+        self.call_from_thread(self._bestand_uebernehmen, bestand, tokens)
 
-    def _bestand_uebernehmen(self, bestand: Bestand) -> None:
+    def _bestand_uebernehmen(self, bestand: Bestand, verbrauch: bool = False) -> None:
         self._bestand = bestand
+        # Den Wert MERKEN, nicht nur ein Sichtbar-Flag setzen: die naechste
+        # Taktabfrage laeuft ohne --tokens und liefert wieder 0. Wer nur ein
+        # Flag setzt, zeigt ab dann eine Null als waere sie gemessen.
+        if verbrauch:
+            self._verbrauch = bestand.tokens
         laufzeit = int((time.monotonic() - self._start) * 1000)
         self.query_one("#kopf", KopfPanel).uebernehmen(
             bestand, nur_lokal=self._nur_lokal, laufzeit_ms=laufzeit
         )
         self.query_one("#agenten", AgentenTabelle).uebernehmen(bestand.agenten)
-        self.query_one("#status", StatusZeile).uebernehmen(bestand)
+        self.query_one("#status", StatusZeile).uebernehmen(bestand, verbrauch=self._verbrauch)
 
         # Betriebssystem je Rechner einmalig ins Protokoll - dauerhaft in
         # der Tabelle waere es eine Spalte, die in jeder Zeile dasselbe sagt.
@@ -462,6 +472,16 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
 
     def action_refresh_now(self) -> None:
         self.aktualisieren()
+
+    def action_show_usage(self) -> None:
+        """Ermittelt den Verbrauch - einmalig, auf Zuruf.
+
+        Bewusst kein Dauerzustand und keine Einstellung: der Operator liest
+        dafuer jedes Transkript vollstaendig. Im Fuenf-Sekunden-Takt waere das
+        Verschwendung, als einmalige Abfrage ist es die Wartezeit wert.
+        """
+        self.notify(t("notify.usage_running"))
+        self.aktualisieren(tokens=True)
 
     def action_focus_filter(self) -> None:
         with contextlib.suppress(Exception):

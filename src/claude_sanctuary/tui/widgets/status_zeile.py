@@ -26,26 +26,35 @@ class StatusZeile(StatusBar):  # type: ignore[misc]
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(hint=t("status.empty"), **kwargs)
 
-    def uebernehmen(self, bestand: Bestand) -> None:
+    def uebernehmen(self, bestand: Bestand, *, verbrauch: int | None = None) -> None:
+        """Traegt die Kennzahlen einer Abfrage ein.
+
+        :param verbrauch:
+            Zuletzt ermittelter Verbrauch, oder None. Er steht nur in einer
+            Abfrage mit --tokens und wird deshalb weitergereicht statt aus
+            dem Bestand gelesen - dort waere er in jeder Taktabfrage 0.
+        """
         rechner = len({a.rechner for a in bestand.agenten})
-        self.set_items(
-            [
-                StatusItem(t("status.agents"), str(len(bestand.agenten))),
-                StatusItem(
-                    t("status.busy"),
-                    str(bestand.beschaeftigt),
-                    value_style="bold yellow" if bestand.beschaeftigt else "bold",
-                ),
-                StatusItem(
-                    t("status.open"),
-                    str(bestand.offene_auftraege),
-                    value_style="bold" if bestand.offene_auftraege else "dim",
-                ),
-                StatusItem(t("status.machines"), str(rechner)),
-                # Kontext, NICHT Verbrauch: die Token-Summe liefert der Operator
-                # nur mit --tokens (voller Transkript-Read), sonst ist sie 0 -
-                # eine Null anzuzeigen, die nichts bedeutet, ist schlechter
-                # als die Zahl wegzulassen.
-                StatusItem(t("status.context"), _tokens(bestand.kontext)),
-            ]
-        )
+        posten = [
+            StatusItem(t("status.agents"), str(len(bestand.agenten))),
+            StatusItem(
+                t("status.busy"),
+                str(bestand.beschaeftigt),
+                value_style="bold yellow" if bestand.beschaeftigt else "bold",
+            ),
+            StatusItem(
+                t("status.open"),
+                str(bestand.offene_auftraege),
+                value_style="bold" if bestand.offene_auftraege else "dim",
+            ),
+            StatusItem(t("status.machines"), str(rechner)),
+            # Kontext, NICHT Verbrauch: der belegte Kontext steht in jeder
+            # Abfrage, die Token-Summe nur mit --tokens.
+            StatusItem(t("status.context"), _tokens(bestand.kontext)),
+        ]
+        # Ohne --tokens ist die Summe 0. Eine Null anzuzeigen, die nur
+        # "nicht ermittelt" heisst, behauptet etwas Falsches - dann lieber
+        # gar keine Spalte.
+        if verbrauch is not None:
+            posten.append(StatusItem(t("status.tokens"), _tokens(verbrauch)))
+        self.set_items(posten)

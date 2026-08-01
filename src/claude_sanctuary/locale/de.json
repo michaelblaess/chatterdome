@@ -194,5 +194,9 @@
   "status.context": "Kontext",
   "mesh.on": "an",
   "mesh.off": "aus",
-  "head.gone": "{n} weg"
+  "head.gone": "{n} weg",
+  "binding.usage": "Verbrauch",
+  "tooltip.usage": "Token-Verbrauch ermitteln (liest alle Transkripte, dauert)",
+  "notify.usage_running": "Verbrauch wird ermittelt...",
+  "status.tokens": "Verbrauch"
 }

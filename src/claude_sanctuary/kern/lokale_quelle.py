@@ -54,10 +54,20 @@ class LokaleQuelle:
 
     # -- oeffentlich ----------------------------------------------------
 
-    def bestand(self, *, mesh: bool = False) -> Bestand:
+    def bestand(self, *, mesh: bool = False, tokens: bool = False) -> Bestand:
+        """Alle sichtbaren Agenten.
+
+        :param tokens:
+            Auch den Verbrauch ermitteln. Bewusst abschaltbar: dafuer liest der
+            Operator jedes Transkript VOLLSTAENDIG statt nur die letzten Zeilen
+            (gemessen 194 ms je Datei gegen 3 ms). Im Sekundentakt waere das
+            Verschwendung, deshalb holt die Oberflaeche es nur auf Zuruf.
+        """
         args = ["status", "--json"]
         if mesh:
             args.append("--mesh")
+        if tokens:
+            args.append("--tokens")
         roh, fehler = self._json(args)
         if roh is None:
             return Bestand(rechner=_rechnername(), zeit="", fehler=[fehler])

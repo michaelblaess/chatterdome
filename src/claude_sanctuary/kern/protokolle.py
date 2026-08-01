@@ -15,10 +15,11 @@ from claude_sanctuary.kern.modelle import Auftrag, Bestand, Namenspool
 class Quelle(Protocol):
     """Liefert den Zustand der Agenten und nimmt Auftraege entgegen."""
 
-    def bestand(self, *, mesh: bool = False) -> Bestand:
+    def bestand(self, *, mesh: bool = False, tokens: bool = False) -> Bestand:
         """Alle sichtbaren Agenten.
 
         :param mesh: auch die anderen Rechner im Tailnet abfragen.
+        :param tokens: zusaetzlich den Verbrauch ermitteln (langsam).
         """
         ...
 

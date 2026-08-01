@@ -20,10 +20,13 @@ class FakeQuelle:
     """Antwortet aus dem Gedaechtnis und merkt sich, was gesendet wurde."""
 
     def __init__(self) -> None:
-        self.gesendet: list[tuple[str, str]] = []
+        self.gesendet: list[tuple[str, str, str, str]] = []
         self.gestoppt: list[str] = []
+        self.mit_tokens: list[bool] = []
+        """Je Abfrage, ob der Verbrauch mit angefordert wurde."""
 
-    def bestand(self, *, mesh: bool = False) -> Bestand:
+    def bestand(self, *, mesh: bool = False, tokens: bool = False) -> Bestand:
+        self.mit_tokens.append(tokens)
         return Bestand(
             rechner="TESTHOST",
             zeit="2026-08-01T19:00:00.000Z",
@@ -169,6 +172,26 @@ class TestOberflaeche:
             assert host == "TESTHOST", "Zielrechner fehlt im Auftrag"
             # Ohne Absender stand in jedem Auftrag "unbekannt".
             assert von == ABSENDER
+
+    async def test_verbrauch_nur_auf_zuruf(self, quelle: FakeQuelle) -> None:
+        """Die Taktabfrage darf den Verbrauch NICHT mitholen.
+
+        Der Operator liest dafuer jedes Transkript vollstaendig. Liefe das im
+        Fuenf-Sekunden-Takt mit, waere die Oberflaeche dauerhaft langsam.
+        """
+        app = SanctuaryApp(quelle=quelle)
+        app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
+        async with app.run_test(size=(160, 50)) as pilot:
+            await _gefuellt(app, pilot)
+            assert quelle.mit_tokens, "keine Abfrage gelaufen"
+            assert not any(quelle.mit_tokens), "Taktabfrage holt den Verbrauch mit"
+
+            await pilot.press("v")
+            for _ in range(60):
+                await pilot.pause()
+                if any(quelle.mit_tokens):
+                    break
+            assert any(quelle.mit_tokens), "v hat den Verbrauch nicht angefordert"
 
     async def test_hilfe_oeffnet_und_schliesst(self, quelle: FakeQuelle) -> None:
         app = SanctuaryApp(quelle=quelle)

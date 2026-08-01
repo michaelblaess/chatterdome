@@ -194,5 +194,9 @@
   "status.context": "Context",
   "mesh.on": "on",
   "mesh.off": "off",
-  "head.gone": "{n} gone"
+  "head.gone": "{n} gone",
+  "binding.usage": "usage",
+  "tooltip.usage": "Determine token usage (reads all transcripts, slow)",
+  "notify.usage_running": "Determining usage...",
+  "status.tokens": "Usage"
 }

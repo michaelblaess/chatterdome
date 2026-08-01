@@ -17,6 +17,7 @@ import { dirname, join } from 'node:path';
 const HIER = dirname(fileURLToPath(import.meta.url));
 const OPERATOR = join(HIER, '..', 'skills', 'operator', 'operator.mjs');
 const STARTE = join(HIER, '..', 'skills', 'operator', 'starte.mjs');
+const SHOT = join(HIER, '..', 'skills', 'operator', 'shot.mjs');
 const BUS = join(HIER, '..', 'skills', 'claude-bus', 'bus.mjs');
 const KOSTEN = join(HIER, '..', 'skills', 'claude-bus', 'kosten.mjs');
 
@@ -25,6 +26,7 @@ const ZIELE = {
   status: OPERATOR, watch: OPERATOR, stop: OPERATOR, names: OPERATOR,
   motiv: OPERATOR, motive: OPERATOR, 'reset-names': OPERATOR, 'werde-operator': OPERATOR,
   start: STARTE, starte: STARTE,
+  shot: SHOT, bild: SHOT,
   send: BUS, read: BUS, ack: BUS, offen: BUS, doctor: BUS, pending: BUS,
   auftraege: BUS, auftrag: BUS, verlauf: BUS, uebernehmen: BUS,
   kosten: KOSTEN,
@@ -46,6 +48,10 @@ function hilfe() {
     sanctuary start [Name]         neue Instanz mit Namen im Tab-Titel
     sanctuary stop <Name>          Instanz beenden
     sanctuary werde-operator       diese Sitzung uebernimmt den Operator-Namen
+
+  Bildschirm
+    sanctuary shot [RECHNER]       Bildschirmfoto, lokal oder ueber das Tailnet
+    sanctuary shot --einrichten    Windows: Aufgabe fuer den ssh-Zugriff anlegen
 
   Auftraege
     sanctuary send <Name|alle> "Text" [--topic t] [--erwartet-quittung]
@@ -74,7 +80,7 @@ if (!befehl) {
   const ziel = ZIELE[befehl];
   // starte.mjs und kosten.mjs kennen den Unterbefehl nicht, sie sind selbst
   // schon das Kommando - deshalb faellt er dort weg.
-  const rest = (ziel === STARTE || ziel === KOSTEN) ? argv.slice(1) : argv;
+  const rest = (ziel === STARTE || ziel === KOSTEN || ziel === SHOT) ? argv.slice(1) : argv;
   process.argv = [process.argv[0], ziel, ...rest];
   await import(pathToFileURL(ziel).href);
 } else {
