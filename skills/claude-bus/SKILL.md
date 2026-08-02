@@ -1,27 +1,32 @@
 ---
 name: claude-bus
-description: Nachrichtenkanal zwischen mehreren gleichzeitig laufenden Claude-Code-Instanzen auf demselben Rechner. Senden, Empfangen, Quittieren mit HTTP-Statuscodes. Zustellung über einen Stop-Hook statt über Polling. Die Daten bleiben strikt lokal, Sitzungen verschiedener Rechner sehen einander nie. Verwende diesen Skill, wenn Michael "Message-Bus", "sag der anderen Instanz", "schick Patrick eine Nachricht", "was liegt an", "/message bus" sagt, oder wenn eine Instanz einer anderen einen Auftrag übergeben soll.
+description: Nachrichtenkanal zwischen mehreren gleichzeitig laufenden Claude-Code-Instanzen, auch über Rechnergrenzen im Tailnet. Senden, Empfangen, Quittieren mit HTTP-Statuscodes. Zustellung über einen Stop-Hook statt über Polling. Jeder Rechner führt seinen eigenen Bestand, zugestellt wird gezielt per ssh. Verwende diesen Skill, wenn Michael "Message-Bus", "sag der anderen Instanz", "schick Patrick eine Nachricht", "was liegt an", "/message bus" sagt, oder wenn eine Instanz einer anderen einen Auftrag übergeben soll.
 ---
 
 # Claude-Bus
 
-Aufträge zwischen Claude-Instanzen auf **einem** Rechner. Eine SQLite-Datei mit
-Ereignis-Protokoll und Auftragszuständen, ein Lesezeiger je Sitzung. Kein Server, kein Port,
-kein Daemon.
+Aufträge zwischen Claude-Instanzen, auf diesem Rechner und über das Tailnet hinweg. Eine
+SQLite-Datei je Rechner mit Ereignis-Protokoll und Auftragszuständen, ein Lesezeiger je
+Sitzung. Kein Server, kein Port, kein Daemon - zugestellt wird per ssh.
 
 ```bash
 BUS=~/.claude/skills/claude-bus/bus.mjs
 
-node $BUS send Patrick "Bitte Tests laufen lassen" --topic auftrag --erwartet-quittung
-node $BUS send alle "Ich fasse gleich claude-config an"
+node $BUS send Patrick "Bitte Tests laufen lassen" --topic auftrag --expect-receipt
+node $BUS send Franko "..." --host SENZA    # Zielrechner spart die Mesh-Suche
+node $BUS send all "Ich fasse gleich claude-config an"    # NUR dieser Rechner, s. u.
 node $BUS read                          # neue Nachrichten holen (schiebt den Lesezeiger)
-node $BUS auftraege                     # Warteschlange - unabhängig vom Lesezeiger
-node $BUS auftraege --alle              # auch erledigte
+node $BUS tasks                         # Warteschlange - unabhängig vom Lesezeiger
+node $BUS tasks --all                   # auch erledigte
+node $BUS history <Name>                # Aufträge und Quittungen mit einem Agenten
 node $BUS ack <msgId> 202 "mache ich"   # quittieren, setzt zugleich den Zustand
-node $BUS offen                         # Stand der eigenen Nachrichten
+node $BUS open                          # Stand der eigenen Nachrichten
 node $BUS doctor                        # Pfad-Isolation und Datenbank prüfen
 
 node ~/.claude/skills/claude-bus/kosten.mjs   # was das Messaging gekostet hat
+
+# Die deutschen Namen (auftraege, verlauf, offen, uebernehmen) und die alten Flags
+# (--alle, --erwartet-quittung, --von) funktionieren weiterhin - siehe operator-Skill.
 ```
 
 ## Aufträge mit Zustand statt Nachrichten an Instanzen
@@ -206,9 +211,17 @@ nicht als 0 - sonst läse sich Messaging als gratis.
 
 ## Rechnertrennung
 
-Michael arbeitet auf mehreren Rechnern (RAINBOW, SENZA, einem Kundenrechner). **Sitzungen
-eines Rechners dürfen auf keinem anderen sichtbar werden**, insbesondere darf nichts vom
-Kundenrechner nach GitHub gelangen.
+Michael arbeitet auf mehreren Rechnern (RAINBOW, SENZA, einem Kundenrechner). **Vom
+Kundenrechner darf nichts abfliessen**, und kein Rechner darf ungefragt die Sitzungsinhalte
+eines anderen einsammeln.
+
+**Korrektur vom 02.08.2026:** Hier stand, Sitzungen verschiedener Rechner sähen einander
+nie. Das gilt nicht mehr - der Bus stellt seit dem 02.08.2026 gezielt über ssh zu. Die
+Trennung ist damit keine Mauer mehr, sondern eine gerichtete Zustellung: Es geht nur, was
+ausdrücklich an einen benannten Agenten adressiert ist, nur an Rechner aus `mesh.json`, und
+nur über das Tailnet. Der Kundenrechner hat `claude-sanctuary` bewusst noch gar nicht
+installiert, ist also weiterhin vollständig aussen vor. Was unverändert gilt: die Ablage
+bleibt lokal und wird nie committet.
 
 Die Trennung entsteht dadurch, dass der Message-Bus unter `~/.claude/message bus/<RECHNER>/` liegt - lokal,
 kein Symlink, nicht in Git. Nur fünf Elemente unter `~/.claude/` sind Symlinks ins Repo
@@ -220,9 +233,24 @@ Pfad in einem Cloud-Sync-Ordner liegt, hinter einem Symlink (auch weiter oben in
 Elternkette), oder in einem Git-Arbeitsverzeichnis. Lieber kein Message-Bus als ein leckender Message-Bus.
 
 Als zweiter Gürtel steht der Rechnername im Pfad **und** in jeder Nachricht. `read` verwirft
-alles mit fremdem `host`.
+alles mit fremdem `host`. Achtung bei der Bedeutung: `host` ist seit dem 02.08.2026 der
+Rechner des **Empfängers**, nicht der des Erzeugers - nur so findet ein zugestellter Auftrag
+seinen Adressaten. Den Rückweg der Quittung hält `von_host` fest.
 
 ## Fallstricke
+
+- **`send all` bleibt auf dem eigenen Rechner.** Der Rundruf setzt `zielHost = rechner()`
+  (`bus.mjs`, "Der Rundruf bleibt bewusst lokal") - eine stille Ausweitung auf alle Rechner
+  wäre eine eigene Entscheidung und keine Nebenwirkung. Wer wirklich alle erreichen will,
+  schickt **je Agent einen eigenen Auftrag** mit dessen `--host`. Genau das macht der
+  Rundruf-Dialog der Oberfläche seit dem 02.08.2026, und er ist damit nicht nur richtig,
+  sondern besser: eigene Kennung, eigener Verlaufseintrag und eigene Quittung je Agent.
+  Wer stattdessen `send all` nimmt, wiederholt den Fehler vom Vortag - die Aufträge lägen
+  auf dem Absenderrechner, und die Empfänger sähen nie etwas.
+- **Umlaute überstehen den Bus unbeschädigt** - lokal wie über ssh. Gemessen am 02.08.2026
+  mit `äöüÄÖÜß` in Auftragstext und Nutzlast, in beiden Richtungen identisch zurück. Die
+  Ersatzschreibung in älteren Auftragstexten war reine Nachlässigkeit beim Formulieren und
+  hatte nie einen technischen Grund. Also auch hier echte Umlaute schreiben.
 
 - **`import.meta.url` ist der aufgelöste Pfad, `process.argv[1]` nicht.** `~/.claude/skills`
   ist ein Symlink ins Repo claude-config. Der Vergleich "wurde ich direkt aufgerufen?" war

@@ -19,10 +19,14 @@ node $OP/operator.mjs status --mesh     # zusätzlich die Rechner aus mesh.json
 node $OP/operator.mjs watch 2 --json    # NDJSON-Strom, eine Zeile je Takt
 node $OP/operator.mjs watch 10          # alle 10 s neu zeichnen
 node $OP/operator.mjs stop Patrick      # beenden, fragt vorher nach
+node $OP/operator.mjs stop Patrick --force   # ohne Rueckfrage
 node $OP/operator.mjs names             # vergebene Namen
-node $OP/operator.mjs motiv [name]      # Namensmotive anzeigen oder umschalten
+node $OP/operator.mjs motif [name]      # Namensmotive anzeigen oder umschalten
 node $OP/operator.mjs reset-names       # beendete Sitzungen aufräumen
-node $OP/operator.mjs werde-operator    # diese Sitzung auf "Operator" umbenennen
+node $OP/operator.mjs become-operator   # diese Sitzung auf "Operator" umbenennen
+
+node $OP/update.mjs --check             # installierte Claude-Version
+node $OP/update.mjs SENZA --method npm  # Claude auf einem anderen Rechner aktualisieren
 
 node $OP/starte.mjs                     # neue Instanz mit Namen im Tab-Titel
 node $OP/starte.mjs Klara               # bestimmter Name
@@ -218,7 +222,45 @@ gar nicht. So bleibt derselbe Eintrag auf allen Rechnern gültig, was nötig ist
 | Name dauerhaft sichtbar | geht über die Statuszeile, unabhängig vom Start |
 | maschinenlesbare Ausgabe | geht: `--json`, mit `watch` als NDJSON-Strom |
 | rechnerübergreifende Sicht | geht: `--mesh`, Hosts in `mesh.json` |
+| Claude aktualisieren | geht: `update.mjs`, lokal und über ssh |
 | `compact <Name>` | **geht nicht** |
+
+## Englische Befehle, deutsche Aliase (02.08.2026)
+
+Michaels Vorgabe: die Kommandozeile spricht Englisch. Umbenannt wurden
+`motiv` zu `motif`, `werde-operator` zu `become-operator`, im Bus
+`auftraege` zu `tasks`, `verlauf` zu `history`, `offen` zu `open`,
+`kosten` zu `cost`, `uebernehmen` zu `receive`, dazu die Flags `--alle`
+zu `--all`, `--von` zu `--from`, `--erwartet-quittung` zu
+`--expect-receipt` und `--einrichten` zu `--setup`.
+
+**Die deutschen Namen bleiben als stille Aliase bestehen, und das ist keine
+Bequemlichkeit.** `uebernehmen` ruft ein Rechner auf dem anderen per ssh auf
+(`zustellenAn` in `bus.mjs`). Dessen Stand kann älter sein - die Repos werden
+je Rechner von Hand gezogen. Wer den alten Namen entfernt, bricht die
+Zustellung zu jedem Rechner, der noch nicht nachgezogen hat. Aus demselben
+Grund SENDET `zustellenAn` weiterhin `uebernehmen`: das versteht jede Fassung,
+`receive` nur die neue. Umstellen erst, wenn alle Rechner nachgezogen haben.
+
+## Aktualisieren: `update.mjs`
+
+`sanctuary update [RECHNER] [--method claude|npm|winget|choco|brew]`, mit
+`--check` nur die Version melden, mit `--json` maschinenlesbar.
+
+**Das Verfahren wird mitgegeben und NICHT erraten.** Wie Claude Code
+installiert wurde, weiss nur der Anwender - es steht in den Einstellungen der
+Oberfläche. Ein geratenes Verfahren ist schlimmer als keins: `winget upgrade`
+auf einer npm-Installation meldet Erfolg und ändert nichts.
+
+Für den fernen Rechner dieselben zwei Anläufe wie beim Bus (erst direkt, dann
+über `bash -lc`), weil `~/.local/bin` in einer nicht-interaktiven Shell fehlt.
+
+**Windows-Wrapper NICHT über `shell: true` aufrufen.** `claude`, `npm` und
+`winget` sind dort Skripte, die `execFileSync` ohne Hilfe nicht findet. Der
+naheliegende Schalter `shell: true` ist seit Node 22 abgekündigt und meldet
+DEP0190 auf stderr (gesehen am 02.08.2026), weil die Argumente dann unmaskiert
+aneinandergehängt werden. Stattdessen `cmd /c` davorsetzen - damit bleibt die
+Argumentliste eine Liste.
 
 ## Ausgabe für Werkzeuge: `--json` und der Strom
 
@@ -278,6 +320,24 @@ Operator kann deshalb nur **melden**, wer nah an der Grenze ist (Spalte Kontext 
 
 ## Fallstricke
 
+- **`stop` fragt nach - und liest die Antwort vom Terminal des Aufrufers.** Bis zum
+  02.08.2026 rief die Oberfläche `stop <Name> --ja` auf. Dieses Flag gibt es nicht, es
+  heisst `--force`. Der Operator stellte also wie vorgesehen seine Rückfrage und hängte
+  seinen Zeileneditor in die geerbte Standardeingabe - das war das Terminal der laufenden
+  TUI. Ergebnis: Rückfrage mitten im Bild, Maus-Steuerzeichen überall, Oberfläche blockiert
+  bis zum Timeout. Es sah nach einem Absturz aus und war keiner. Nachgestellt mit
+  `sanctuary stop <Name> --ja < /dev/null`, worauf `... wirklich beenden? [j/N]` in der
+  Ausgabe stand. `frage()` prüft jetzt `process.stdin.isTTY` und lehnt ohne Terminal ab,
+  statt zu fragen. Die Gegenseite (`stdin=DEVNULL`) steht im python-specialist.
+- **Die PID aus `sammle()` ist eine Momentaufnahme.** Ist die Instanz zwischen Abfrage und
+  Signal ausgestiegen, kann das Betriebssystem dieselbe Nummer längst neu vergeben haben -
+  unter Windows geschieht das schnell. Ein SIGTERM ginge dann an einen Unbeteiligten, und
+  weil Windows dafür `TerminateProcess` benutzt, stirbt der ohne aufzuräumen. `stoppe()`
+  prüft deshalb vorher den Prozessnamen (`tasklist` bzw. `ps -o args=`) und bricht ab, wenn
+  "claude" nicht darin vorkommt - fail-closed. Auf Linux MUSS es `args=` sein und nicht
+  `comm=`: auf senza liegt Claude als ELF-Binary unter
+  `~/.local/share/claude/versions/2.1.220`, der blosse Prozessname trägt die Version, nicht
+  den Namen (geprüft am 02.08.2026).
 - **`Select-Object -First 1` hinter nativem Aufruf** verfälscht `$LASTEXITCODE`. Betraf die
   alte PowerShell-Fassung, dort lief der Git-Guard deshalb erst nicht an.
 - **Keine Anführungszeichen im Hook-Text.** Die JSON-Ausgabe wird per `printf` gebaut, weil
