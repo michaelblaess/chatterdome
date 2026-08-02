@@ -383,6 +383,20 @@ function cmdUebernehmen() {
   }
 
   schreibe(d, ereignis);
+
+  // AUCH in die JSONL schreiben, nicht nur in die Datenbank. Der Stop-Hook
+  // filtert billig ueber die Dateizeit von messages.jsonl, bevor er ueberhaupt
+  // node startet - ein nur in der Datenbank abgelegter Auftrag loest diesen
+  // Vorfilter nicht aus und wird dem Empfaenger nie gemeldet. Faellt weg,
+  // sobald die Uebergangsphase endet und der Hook auf die Datenbank schaut.
+  if (ereignis.art === 'auftrag') {
+    anhaengen(pfadMessages(), {
+      id: ereignis.auftrag_id, ts: ereignis.ts, host: ereignis.host,
+      vonHost: ereignis.von_host, from: ereignis.von, fromSession: ereignis.von_session,
+      cwd: ereignis.cwd, to: ereignis.an, topic: ereignis.topic, text: ereignis.text,
+      quittung: Boolean(ereignis.quittung_erwartet),
+    });
+  }
   console.log(JSON.stringify({ ok: true, auftrag_id: ereignis.auftrag_id, host: rechner() }));
 }
 
