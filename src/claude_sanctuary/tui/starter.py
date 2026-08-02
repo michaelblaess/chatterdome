@@ -3,6 +3,10 @@
 Nur lokal. Ein Fernstart braeuchte ein TTY, das ``ssh host "befehl"`` nicht
 liefert - dafuer waere tmux noetig, und das ist bewusst nicht Teil dieser
 Fassung.
+
+Welches Terminal genommen wird und was vorher darin laufen soll, steht in den
+Einstellungen. Der eigentliche Aufruf laeuft ueber eine erzeugte Startdatei,
+siehe ``kern.terminals`` - dort steht auch, warum.
 """
 
 from __future__ import annotations
@@ -12,70 +16,102 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
+from claude_sanctuary.kern.einstellungen import Einstellungen
 from claude_sanctuary.kern.lokale_quelle import finde_befehl
+from claude_sanctuary.kern.terminals import Terminal, finde, startdatei, vorbereitung
 
 
-def starte_lokal(name: str = "", verzeichnis: str = "") -> str:
+def starte_lokal(
+    name: str = "",
+    verzeichnis: str = "",
+    einstellungen: dict[str, Any] | None = None,
+) -> str:
     """Oeffnet ein Terminalfenster und startet dort eine neue Sitzung.
 
     :param name: gewuenschter Agentenname, leer fuer den naechsten freien.
     :param verzeichnis: Arbeitsverzeichnis, leer fuer das aktuelle.
+    :param einstellungen: geladene Einstellungen, sonst werden sie geholt.
     :returns: leere Zeichenkette bei Erfolg, sonst die Fehlermeldung.
     """
-    ordner = verzeichnis or str(Path.cwd())
     befehl = [*finde_befehl(), "start"]
     if name:
         befehl.append(name)
+    return _oeffne(befehl, verzeichnis, einstellungen)
+
+
+def starte_resume(session_id: str, verzeichnis: str = "",
+                  einstellungen: dict[str, Any] | None = None) -> str:
+    """Setzt eine bestehende Sitzung in einem neuen Terminalfenster fort.
+
+    Bewusst NICHT ueber ``sanctuary start``: das vergibt einen Namen aus dem
+    Pool und lehnt einen bereits vergebenen ab - und beim Fortsetzen ist der
+    Name ja noch vergeben, er gehoert dieser Sitzung. ``claude --resume``
+    behaelt die Sitzungskennung, und daran haengt die Namenszuordnung. Der
+    Agent kommt also unter seinem alten Namen zurueck.
+
+    :param session_id: Kennung der fortzusetzenden Sitzung.
+    :returns: leere Zeichenkette bei Erfolg, sonst die Fehlermeldung.
+    """
+    if not session_id:
+        return "Keine Sitzungskennung bekannt - ohne sie gibt es nichts fortzusetzen."
+    claude = os.environ.get("CLAUDE_CODE_EXECPATH") or shutil.which("claude") or "claude"
+    return _oeffne([claude, "--resume", session_id], verzeichnis, einstellungen)
+
+
+def _oeffne(befehl: list[str], verzeichnis: str, einstellungen: dict[str, Any] | None) -> str:
+    """Gemeinsamer Weg: Startdatei schreiben, Terminal damit oeffnen."""
+    werte = einstellungen if einstellungen is not None else Einstellungen().laden()
+    ordner = verzeichnis or str(Path.cwd())
+    terminal = finde(str(werte.get("terminal", "")))
+    if terminal is None:
+        return "Kein Terminalprogramm gefunden - in den Einstellungen eines auswaehlen."
 
     try:
-        if sys.platform == "win32":
-            return _windows(befehl, ordner)
-        return _unix(befehl, ordner)
+        datei = startdatei(vorbereitung(werte), ordner, befehl)
+        # Der Terminalname stammt aus der festen Liste in kern.terminals,
+        # die Nutzereingaben stehen in der Startdatei - nicht in der Zeile.
+        subprocess.Popen(
+            _zeile(terminal, datei, ordner),
+            close_fds=True,
+            start_new_session=sys.platform != "win32",
+        )
     except OSError as fehler:
         return str(fehler)
-
-
-def _windows(befehl: list[str], ordner: str) -> str:
-    """Neuer Tab im laufenden Windows Terminal, sonst ein eigenes Fenster."""
-    wt = shutil.which("wt")
-    if wt:
-        # -w 0 haengt den Tab an das bereits offene Fenster an.
-        subprocess.Popen(
-            [wt, "-w", "0", "nt", "-d", ordner, "cmd", "/k", *befehl],
-            close_fds=True,
-        )
-        return ""
-    subprocess.Popen(
-        ["cmd", "/c", "start", "", "cmd", "/k", *befehl],
-        cwd=ordner,
-        close_fds=True,
-    )
     return ""
 
 
-def _unix(befehl: list[str], ordner: str) -> str:
-    """Erster verfuegbarer Terminal-Emulator gewinnt."""
-    zeile = " ".join(_quote(teil) for teil in befehl)
-    kandidaten: list[list[str]] = [
-        ["gnome-terminal", "--working-directory", ordner, "--",
-         "bash", "-lc", f"{zeile}; exec bash"],
-        ["konsole", "--workdir", ordner, "-e", "bash", "-lc", f"{zeile}; exec bash"],
-        ["xfce4-terminal", "--working-directory", ordner, "-e", f"bash -lc '{zeile}; exec bash'"],
-        ["xterm", "-e", f"bash -lc 'cd {_quote(ordner)}; {zeile}; exec bash'"],
-    ]
-    for kandidat in kandidaten:
-        if shutil.which(kandidat[0]):
-            subprocess.Popen(kandidat, close_fds=True, start_new_session=True)
-            return ""
-    return "Kein Terminal-Emulator gefunden (gnome-terminal, konsole, xfce4-terminal, xterm)"
+def _zeile(terminal: Terminal, datei: Path, ordner: str) -> list[str]:
+    """Baut den Aufruf, der das Terminal mit der Startdatei oeffnet."""
+    pfad = str(datei)
+    programm = shutil.which(terminal.programm) or terminal.programm
 
-
-def _quote(text: str) -> str:
-    """Minimales Quoting fuer die Shell-Zeile."""
-    if not text or any(zeichen in text for zeichen in " \t\"'"):
-        return "'" + text.replace("'", "'\\''") + "'"
-    return text
+    if terminal.schluessel == "wt":
+        # -w 0 haengt den Tab an ein bereits offenes Fenster an.
+        return [programm, "-w", "0", "nt", "-d", ordner, "cmd", "/k", pfad]
+    if terminal.schluessel in {"wezterm", "wezterm-linux"}:
+        # start --cwd oeffnet ein neues Fenster im gewuenschten Verzeichnis.
+        if sys.platform == "win32":
+            return [programm, "start", "--cwd", ordner, "--", "cmd", "/k", pfad]
+        return [programm, "start", "--cwd", ordner, "--", "bash", "-lc", f"{pfad}; exec bash"]
+    if terminal.schluessel in {"pwsh", "powershell"}:
+        return [programm, "-NoExit", "-NoProfile", "-File", pfad]
+    if terminal.schluessel == "cmd":
+        return ["cmd", "/c", "start", "", "cmd", "/k", pfad]
+    if terminal.schluessel == "gnome-terminal":
+        return [programm, "--working-directory", ordner, "--",
+                "bash", "-lc", f"{pfad}; exec bash"]
+    if terminal.schluessel == "konsole":
+        return [programm, "--workdir", ordner, "-e", "bash", "-lc", f"{pfad}; exec bash"]
+    if terminal.schluessel in {"alacritty", "kitty"}:
+        return [programm, "-e", "bash", "-lc", f"{pfad}; exec bash"]
+    if terminal.schluessel == "xfce4-terminal":
+        return [programm, "--working-directory", ordner, "-e",
+                f"bash -lc '{pfad}; exec bash'"]
+    if terminal.schluessel == "terminal-app":
+        return [programm, "-a", "Terminal", pfad]
+    return [programm, "-e", "bash", "-lc", f"{pfad}; exec bash"]
 
 
 def terminal_vorhanden() -> bool:
@@ -83,10 +119,7 @@ def terminal_vorhanden() -> bool:
     if sys.platform == "win32":
         return True  # cmd gibt es immer
     if os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"):
-        return any(
-            shutil.which(name)
-            for name in ("gnome-terminal", "konsole", "xfce4-terminal", "xterm")
-        )
+        return finde("") is not None
     return False
 
 

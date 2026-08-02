@@ -62,3 +62,12 @@ class Quelle(Protocol):
         :returns: (Pfad, Fehlermeldung) - genau eines von beiden ist gefuellt.
         """
         ...
+
+    def aktualisiere_claude(self, rechner: str = "", verfahren: str = "claude") -> tuple[str, str]:
+        """Aktualisiert Claude Code auf einem Rechner.
+
+        :param rechner: leer fuer diesen Rechner, sonst der Zielrechner.
+        :param verfahren: wie installiert wurde - claude, npm, winget, choco, brew.
+        :returns: (Version, Fehlermeldung) - genau eines von beiden ist gefuellt.
+        """
+        ...

@@ -10,7 +10,7 @@
 // CopyFromScreen scheitert mit "Das Handle ist ungueltig". Der Ausweg ist eine
 // geplante Aufgabe, die im angemeldeten Benutzerkontext laeuft und per
 // "schtasks /Run" ausgeloest wird - damit entstand das Bild (2,1 MB, geprueft).
-// Einzurichten mit: sanctuary shot --einrichten
+// Einzurichten mit: sanctuary shot --setup
 //
 // LINUX: import(1) aus ImageMagick, mit DISPLAY und XAUTHORITY des laufenden
 // Xorg. Beides ist in einer ssh-Sitzung nicht gesetzt und wird deshalb aus der
@@ -90,7 +90,7 @@ function ueberAufgabe(ziel) {
   if (!aufgabeVorhanden()) {
     throw new Error(
       'Kein Desktop in dieser Sitzung und keine Aufgabe eingerichtet. '
-      + 'Auf dem Zielrechner einmalig ausfuehren: sanctuary shot --einrichten',
+      + 'Auf dem Zielrechner einmalig ausfuehren: sanctuary shot --setup',
     );
   }
   if (existsSync(ziel)) unlinkSync(ziel);
@@ -237,7 +237,7 @@ export function holeVonFerne(host, ziel = join(shotOrdner(), `shot-${String(host
 // ---------------------------------------------------------------------------
 
 function main(argv) {
-  if (argv.includes('--einrichten')) {
+  if (argv.includes('--setup') || argv.includes('--einrichten')) {
     try {
       const hinweis = richteAufgabeEin();
       console.log(hinweis || `${GRUEN}Aufgabe ${AUFGABE} eingerichtet.${R}`);

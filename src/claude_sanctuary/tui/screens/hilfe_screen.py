@@ -15,25 +15,33 @@ from textual.widgets import Button, Static
 from claude_sanctuary.i18n import t
 
 BEFEHLE: list[tuple[str, str]] = [
-    ("sanctuary status", "Tabelle aller Instanzen"),
-    ("sanctuary status <Name>", "Detailansicht einer Instanz"),
-    ("sanctuary status --mesh", "zusätzlich die anderen Rechner"),
-    ("sanctuary status --json", "maschinenlesbar"),
-    ("sanctuary watch [Sek]", "laufend neu zeichnen, mit --json als Strom"),
-    ("sanctuary start [Name]", "neue Instanz mit Namen im Tab-Titel"),
-    ("sanctuary stop <Name>", "Instanz beenden"),
-    ("sanctuary werde-operator", "diese Sitzung übernimmt den Operator-Namen"),
-    ("sanctuary names", "vergebene Namen"),
-    ("sanctuary motiv [Pool]", "Namensmotive anzeigen oder umschalten"),
-    ("sanctuary send <Name> \"Text\"", "Auftrag ablegen, --erwartet-quittung für Rückmeldung"),
-    ("sanctuary auftraege [--json]", "Warteschlange, unabhängig vom Lesezeiger"),
-    ("sanctuary verlauf <Name>", "Aufträge und Quittungen mit einem Agenten"),
-    ("sanctuary read [--alle]", "neue Nachrichten holen"),
-    ("sanctuary ack <id> <Code>", "quittieren: 200 erledigt, 202 angenommen, 409 steckt fest"),
-    ("sanctuary offen", "Stand der eigenen Aufträge"),
-    ("sanctuary doctor", "Bus prüfen"),
-    ("sanctuary kosten", "was die Zustellung gekostet hat"),
+    ("sanctuary status", "cmd.status"),
+    ("sanctuary status <Name>", "cmd.status_name"),
+    ("sanctuary status --mesh", "cmd.status_mesh"),
+    ("sanctuary status --json", "cmd.status_json"),
+    ("sanctuary watch [Sek]", "cmd.watch"),
+    ("sanctuary start [Name]", "cmd.start"),
+    ("sanctuary stop <Name> [--force]", "cmd.stop"),
+    ("sanctuary become-operator", "cmd.become_operator"),
+    ("sanctuary names", "cmd.names"),
+    ("sanctuary motif [Pool]", "cmd.motif"),
+    ('sanctuary send <Name> "Text"', "cmd.send"),
+    ("sanctuary tasks [--all]", "cmd.tasks"),
+    ("sanctuary history <Name>", "cmd.history"),
+    ("sanctuary read [--all]", "cmd.read"),
+    ("sanctuary ack <id> <Code>", "cmd.ack"),
+    ("sanctuary open", "cmd.open"),
+    ("sanctuary doctor", "cmd.doctor"),
+    ("sanctuary cost", "cmd.cost"),
+    ("sanctuary shot [RECHNER]", "cmd.shot"),
+    ("sanctuary update [RECHNER]", "cmd.update"),
 ]
+"""Befehl und der Schluessel seiner Erklaerung.
+
+Die Erklaerungen standen hier frueher woertlich auf Deutsch - in der
+englischen Fassung war die halbe Hilfe damit deutsch. Der Befehl selbst
+bleibt natuerlich, wie er ist.
+"""
 
 
 class HilfeScreen(ModalScreen[None]):
@@ -69,8 +77,8 @@ class HilfeScreen(ModalScreen[None]):
     """
 
     BINDINGS: ClassVar[list[BindingType]] = [
-        Binding("escape", "close", "Schliessen"),
-        Binding("h,H", "close", "Schliessen", show=False),
+        Binding("escape", "close", "ESC"),
+        Binding("h,H", "close", "ESC", show=False),
     ]
 
     def __init__(self, **kwargs: Any) -> None:
@@ -83,15 +91,15 @@ class HilfeScreen(ModalScreen[None]):
                 yield Static(t("help.intro"))
                 yield Static(self._tabelle())
             with Horizontal(id="hilfe-knoepfe"):
-                yield Button("Schließen (Esc)", variant="primary", id="hilfe-zu")
+                yield Button(t("help.close"), variant="primary", id="hilfe-zu")
 
     @staticmethod
     def _tabelle() -> Table:
         tabelle = Table(show_header=False, box=None, padding=(0, 2, 0, 0))
         tabelle.add_column(style="bold cyan", no_wrap=True)
         tabelle.add_column(overflow="fold")
-        for befehl, zweck in BEFEHLE:
-            tabelle.add_row(befehl, zweck)
+        for befehl, schluessel in BEFEHLE:
+            tabelle.add_row(befehl, t(schluessel))
         return tabelle
 
     @on(Button.Pressed, "#hilfe-zu")

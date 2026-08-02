@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import platform
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -24,6 +25,10 @@ from claude_sanctuary.kern.modelle import Agent, Auftrag, Bestand, Ereignis, Nam
 
 ZEITGRENZE = 25.0
 """Sekunden. Eine Mesh-Abfrage ueber SSH braucht spuerbar laenger als eine lokale."""
+
+UPDATE_GRENZE = 300.0
+"""Sekunden fuer die Aktualisierung. Ein Paketmanager laedt herunter, entpackt
+und schreibt - mit 25 Sekunden waere jeder zweite Lauf ein falscher Fehlschlag."""
 
 
 def _repo_wurzel() -> Path:
@@ -148,7 +153,7 @@ class LokaleQuelle:
         )
 
     def verlauf(self, name: str) -> list[Auftrag]:
-        roh, _fehler = self._json(["verlauf", name, "--json"])
+        roh, _fehler = self._json(["history", name, "--json"])
         if roh is None:
             return []
         return [self._auftrag(e) for e in roh.get("auftraege", [])]
@@ -179,14 +184,17 @@ class LokaleQuelle:
         if host:
             args += ["--host", host]
         if von:
-            args += ["--von", von]
+            args += ["--from", von]
         if quittung:
-            args.append("--erwartet-quittung")
+            args.append("--expect-receipt")
         return self._still(args)
 
     def stoppen(self, name: str) -> str:
-        # --ja unterdrueckt die Rueckfrage; die Oberflaeche hat vorher gefragt.
-        return self._still(["stop", name, "--ja"])
+        # --force unterdrueckt die Rueckfrage; die Oberflaeche hat vorher
+        # gefragt. Hier stand einmal "--ja", das der Operator nicht kennt -
+        # er stellte die Rueckfrage dann trotzdem und las sie vom Terminal
+        # der Oberflaeche. Beleg und Absicherung siehe _lauf().
+        return self._still(["stop", name, "--force"])
 
     def bildschirmfoto(self, rechner: str = "") -> tuple[str, str]:
         """Nimmt den Bildschirm eines Rechners auf.
@@ -207,53 +215,81 @@ class LokaleQuelle:
             return "", str(roh["fehler"])
         return str(roh.get("pfad", "")), ""
 
+    def aktualisiere_claude(self, rechner: str = "", verfahren: str = "claude") -> tuple[str, str]:
+        """Aktualisiert Claude Code, hier oder auf einem anderen Rechner.
+
+        Das Verfahren wird bewusst MITGEGEBEN und nicht erraten: nur der
+        Anwender weiss, wie installiert wurde. Ein geratenes Verfahren waere
+        schlimmer als keins - winget meldet auf einer npm-Installation
+        Erfolg und aendert nichts.
+
+        :returns: (Version, Fehlermeldung). Genau eines von beiden ist gefuellt.
+        """
+        args = ["update", "--method", verfahren, "--json"]
+        if rechner:
+            args.insert(1, rechner)
+        roh, fehler = self._json(args, grenze=UPDATE_GRENZE)
+        if roh is None:
+            return "", fehler
+        if not roh.get("ok"):
+            return "", str(roh.get("ausgabe") or "Aktualisierung fehlgeschlagen")
+        return str(roh.get("version", "")), ""
+
     # -- intern ---------------------------------------------------------
 
-    def _json(self, args: list[str]) -> tuple[dict[str, Any] | None, str]:
-        """Fuehrt ein Kommando aus und liest dessen JSON-Ausgabe."""
+    def _lauf(
+        self, args: list[str], grenze: float = ZEITGRENZE
+    ) -> tuple[subprocess.CompletedProcess[str] | None, str]:
+        """Startet ein Kommando und faengt die beiden Startfehler ab.
+
+        WICHTIG IST HIER ``stdin=DEVNULL``. Ohne die Angabe erbt der
+        Unterprozess die Standardeingabe - und das ist bei einer TUI das
+        Terminal, auf dem die Oberflaeche selbst laeuft. Ein Kommando, das
+        eine Rueckfrage stellt, haengt dann seinen Zeileneditor in genau
+        diesen Eingabestrom: zwei Leser an einem Terminal, die Rueckfrage
+        mitten im Bild, Steuerzeichen ueberall. Belegt am 02.08.2026 - der
+        Stop schickte ein "--ja", das der Operator nicht kennt, worauf der
+        wie vorgesehen nachfragte. Mit DEVNULL bekommt er sofort EOF und
+        bricht ab, statt die Oberflaeche zu kapern.
+        """
         try:
             lauf = subprocess.run(  # fester Befehl, keine Shell
                 [*self._befehl, *args],
                 capture_output=True,
+                stdin=subprocess.DEVNULL,
                 text=True,
                 encoding="utf-8",
                 errors="replace",
-                timeout=ZEITGRENZE,
+                timeout=grenze,
                 check=False,
             )
         except FileNotFoundError:
             return None, f"Befehl nicht gefunden: {' '.join(self._befehl)}"
         except subprocess.TimeoutExpired:
-            return None, f"Zeitueberschreitung nach {ZEITGRENZE:.0f} s"
-
+            return None, f"Zeitueberschreitung nach {grenze:.0f} s"
         if lauf.returncode != 0:
-            meldung = (lauf.stderr or lauf.stdout or "").strip().splitlines()
-            return None, meldung[0] if meldung else f"Exit-Code {lauf.returncode}"
+            roh = (lauf.stderr or lauf.stdout or "").strip().splitlines()
+            # Ohne das Entfernen der Farbcodes stuenden die Steuerzeichen
+            # spaeter woertlich in der Meldung und im Protokoll.
+            zeilen = [z for z in (_ohne_farbe(r).strip() for r in roh) if z]
+            return None, zeilen[0] if zeilen else f"Exit-Code {lauf.returncode}"
+        return lauf, ""
+
+    def _json(
+        self, args: list[str], grenze: float = ZEITGRENZE
+    ) -> tuple[dict[str, Any] | None, str]:
+        """Fuehrt ein Kommando aus und liest dessen JSON-Ausgabe."""
+        lauf, fehler = self._lauf(args, grenze)
+        if lauf is None:
+            return None, fehler
         try:
             return json.loads(lauf.stdout), ""
-        except json.JSONDecodeError as fehler:
-            return None, f"Antwort ist kein JSON: {fehler}"
+        except json.JSONDecodeError as ausnahme:
+            return None, f"Antwort ist kein JSON: {ausnahme}"
 
     def _still(self, args: list[str]) -> str:
         """Fuehrt ein Kommando aus, dessen Ausgabe nicht gebraucht wird."""
-        try:
-            lauf = subprocess.run(  # fester Befehl, keine Shell
-                [*self._befehl, *args],
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=ZEITGRENZE,
-                check=False,
-            )
-        except FileNotFoundError:
-            return f"Befehl nicht gefunden: {' '.join(self._befehl)}"
-        except subprocess.TimeoutExpired:
-            return f"Zeitueberschreitung nach {ZEITGRENZE:.0f} s"
-        if lauf.returncode != 0:
-            meldung = (lauf.stderr or lauf.stdout or "").strip().splitlines()
-            return meldung[0] if meldung else f"Exit-Code {lauf.returncode}"
-        return ""
+        return self._lauf(args)[1]
 
     @staticmethod
     def _agent(e: dict[str, Any], hier: str, system: str = "") -> Agent:
@@ -284,6 +320,11 @@ class LokaleQuelle:
 
     @staticmethod
     def _auftrag(e: dict[str, Any]) -> Auftrag:
+        # Wer wo sitzt: Der Auftrag wurde auf "von_host" abgeschickt, der
+        # Empfaenger arbeitet auf "host" - und von dort kommt die Quittung.
+        # Traegt die Quittung einen eigenen Rechner, gilt der.
+        ab_host = str(e.get("von_host") or "")
+        ziel_host = str(e.get("host") or "")
         verlauf = [
             Ereignis(
                 art="auftrag",
@@ -292,6 +333,7 @@ class LokaleQuelle:
                 an=str(e.get("an", "")),
                 text=str(e.get("text", "")),
                 zustand=str(e.get("zustand", "")),
+                host=ab_host,
             )
         ]
         for q in e.get("quittungen", []):
@@ -305,6 +347,7 @@ class LokaleQuelle:
                     zustand=str(q.get("zustand", "")),
                     status=q.get("status"),
                     notiz=str(q.get("notiz") or ""),
+                    host=str(q.get("host") or ziel_host),
                 )
             )
         return Auftrag(
@@ -319,6 +362,14 @@ class LokaleQuelle:
             quittung_erwartet=bool(e.get("quittung_erwartet")),
             verlauf=verlauf,
         )
+
+
+FARBCODE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _ohne_farbe(text: str) -> str:
+    """Entfernt ANSI-Farbcodes aus einer Meldung."""
+    return FARBCODE.sub("", text)
 
 
 def _rechnername() -> str:

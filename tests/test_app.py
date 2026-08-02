@@ -7,11 +7,16 @@ Statuszeile und Verlauf an, und reagieren die Tasten.
 
 from __future__ import annotations
 
+import time as zeit_modul
+
 import pytest
 from textual.widgets import Button, DataTable, Input
 
 from claude_sanctuary.kern.modelle import Agent, Auftrag, Bestand, Ereignis, Namenspool
+from claude_sanctuary.kern.protokolle import Quelle
+from claude_sanctuary.tui import starter as starter_modul
 from claude_sanctuary.tui.app import ABSENDER, SanctuaryApp
+from claude_sanctuary.tui.screens.rundruf_screen import RundrufErgebnis, RundrufScreen
 from claude_sanctuary.tui.widgets.agenten_tabelle import AgentenTabelle
 from claude_sanctuary.tui.widgets.verlauf_panel import VerlaufPanel
 
@@ -28,6 +33,10 @@ class FakeQuelle:
         self.fotos: list[str] = []
         self.foto_pfad = ""
         self.foto_fehler = "kein Desktop"
+
+        self.updates: list[tuple[str, str]] = []
+        self.update_version = "2.1.220"
+        self.update_fehler = ""
 
     def bestand(self, *, mesh: bool = False, tokens: bool = False) -> Bestand:
         self.mit_tokens.append(tokens)
@@ -90,6 +99,10 @@ class FakeQuelle:
     def bildschirmfoto(self, rechner: str = "") -> tuple[str, str]:
         self.fotos.append(rechner)
         return self.foto_pfad, self.foto_fehler
+
+    def aktualisiere_claude(self, rechner: str = "", verfahren: str = "claude") -> tuple[str, str]:
+        self.updates.append((rechner, verfahren))
+        return self.update_version, self.update_fehler
 
 
 async def _gefuellt(app: SanctuaryApp, pilot: object) -> DataTable[object]:
@@ -348,3 +361,181 @@ class TestBedienung:
             werte = {k: i.value for k, i in kopf._items.items()}
             assert werte["pool"] == "Comicmotiv"
             assert werte["free"] == "1"
+
+
+class TestProtokoll:
+    def test_fake_erfuellt_die_schnittstelle(self, quelle: FakeQuelle) -> None:
+        """Haelt die Attrappe mit dem Protokoll Schritt?
+
+        Der Test prueft nichts zur Laufzeit - er zwingt mypy dazu. Genau
+        diese Zuweisung hat gefehlt, als die Quelle um Parameter wuchs: die
+        Attrappe kannte sie nicht, der TypeError entstand erst im Worker und
+        wurde dort verschluckt. Die Tabelle blieb einfach leer.
+        """
+        geprueft: Quelle = quelle
+        assert geprueft is quelle
+
+
+class TestRundruf:
+    """Nachricht an alle - die Auswahl der Empfaenger ist der heikle Teil."""
+
+    def _screen(self, mit_operator: bool) -> RundrufScreen:
+        agenten = [
+            Agent(name="Klara", status="idle", rechner="TESTHOST"),
+            Agent(name="Operator", status="idle", rechner="TESTHOST"),
+            Agent(name="Franko", status="idle", rechner="SENZA"),
+            Agent(name="Lino", status="idle", rechner="TESTHOST", selbst=True),
+        ]
+        screen = RundrufScreen(agenten, ["Operator"])
+        self._mit_operator = mit_operator
+        return screen
+
+    def test_eigene_sitzung_bleibt_aussen_vor(self) -> None:
+        # An sich selbst wird nie gesendet - der Auftrag laege im Eingang
+        # genau der Sitzung, die ihn abschickt.
+        namen = [a.name for a in self._screen(False)._empfaenger(False)]
+        assert "Lino" not in namen
+
+    def test_operator_nur_auf_wunsch(self) -> None:
+        screen = self._screen(False)
+        ohne = [a.name for a in screen._empfaenger(False)]
+        mit = [a.name for a in screen._empfaenger(True)]
+        assert ohne == ["Klara", "Franko"]
+        assert "Operator" in mit
+
+    def test_andere_rechner_sind_dabei(self) -> None:
+        """Der springende Punkt: der Rundruf des Bus bleibt lokal.
+
+        Deshalb schickt die Oberflaeche je Agent einen eigenen Auftrag mit
+        dessen Rechner. Faellt SENZA hier heraus, ist genau der Fehler
+        zurueck, an dem die Zustellung schon einmal gescheitert ist.
+        """
+        rechner = {a.rechner for a in self._screen(False)._empfaenger(False)}
+        assert rechner == {"TESTHOST", "SENZA"}
+
+    async def test_senden_erreicht_jeden_einzeln(self, quelle: FakeQuelle) -> None:
+        app = SanctuaryApp(quelle=quelle)
+        app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
+        async with app.run_test(size=(160, 50)) as pilot:
+            await _gefuellt(app, pilot)
+            ergebnis = RundrufErgebnis(
+                "Bitte alle melden",
+                [
+                    Agent(name="Klara", status="idle", rechner="TESTHOST"),
+                    Agent(name="Franko", status="idle", rechner="SENZA"),
+                ],
+            )
+            app._rundruf_abgeschickt(ergebnis)
+            for _ in range(60):
+                await pilot.pause()
+
+            assert len(quelle.gesendet) == 2
+            # Der Rechner MUSS mitgehen, sonst sucht der Bus ihn per Mesh
+            # (gemessen 1,4 s statt 0,1 s) - oder findet ihn gar nicht.
+            assert ("Klara", "Bitte alle melden", "TESTHOST", ABSENDER) in quelle.gesendet
+            assert ("Franko", "Bitte alle melden", "SENZA", ABSENDER) in quelle.gesendet
+
+
+class TestNeustart:
+    async def test_ohne_sitzungskennung_kein_neustart(self, quelle: FakeQuelle) -> None:
+        app = SanctuaryApp(quelle=quelle)
+        app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
+        async with app.run_test(size=(160, 50)) as pilot:
+            await _gefuellt(app, pilot)
+            # Die Attrappe liefert Agenten ohne session_id.
+            app.action_restart_agent()
+            await pilot.pause()
+            assert quelle.gestoppt == []
+
+    async def test_neustart_stoppt_und_setzt_fort(
+        self, quelle: FakeQuelle, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        gerufen: list[tuple[str, str]] = []
+
+        def fake_resume(
+            session_id: str, verzeichnis: str = "", einstellungen: object = None
+        ) -> str:
+            gerufen.append((session_id, verzeichnis))
+            return ""
+
+        monkeypatch.setattr(starter_modul, "starte_resume", fake_resume)
+        monkeypatch.setattr(zeit_modul, "sleep", lambda _s: None)
+
+        app = SanctuaryApp(quelle=quelle)
+        app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
+        async with app.run_test(size=(160, 50)) as pilot:
+            await _gefuellt(app, pilot)
+            app._neustart_ausfuehren("Klara", "sid-42", r"C:\Repos\test")
+            for _ in range(60):
+                await pilot.pause()
+
+            assert quelle.gestoppt == ["Klara"]
+            assert gerufen == [("sid-42", r"C:\Repos\test")]
+
+
+class TestAktualisierung:
+    async def test_update_nimmt_verfahren_aus_den_einstellungen(
+        self, quelle: FakeQuelle
+    ) -> None:
+        app = SanctuaryApp(quelle=quelle)
+        app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
+        async with app.run_test(size=(160, 50)) as pilot:
+            await _gefuellt(app, pilot)
+            app._einstellungen.speichern({"update_verfahren": "npm"})
+            app._update_starten("SENZA")
+            for _ in range(60):
+                await pilot.pause()
+            assert quelle.updates == [("SENZA", "npm")]
+
+    async def test_eigener_rechner_ohne_ziel(self, quelle: FakeQuelle) -> None:
+        """Der eigene Rechner wird ohne Namen aufgerufen - sonst ginge es
+        ueber ssh zu sich selbst, und das braucht einen Schluessel."""
+        app = SanctuaryApp(quelle=quelle)
+        app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
+        async with app.run_test(size=(160, 50)) as pilot:
+            await _gefuellt(app, pilot)
+            app._update_starten("TESTHOST")
+            for _ in range(60):
+                await pilot.pause()
+            assert quelle.updates == [("", "claude")]
+
+
+class TestDialoge:
+    """Oeffnen die neuen Dialoge ueberhaupt?
+
+    Ein Fehler in compose() faellt sonst erst beim Anwender auf - die
+    Oberflaeche zeigt dann nur den Fehlerdialog, und bei einem Fehler im
+    Fehlerdialog gar nichts mehr.
+    """
+
+    async def test_einstellungen_zeigen_die_neuen_reiter(self, quelle: FakeQuelle) -> None:
+        from textual.widgets import Select, TabPane, TextArea
+
+        app = SanctuaryApp(quelle=quelle)
+        app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
+        async with app.run_test(size=(160, 50)) as pilot:
+            await _gefuellt(app, pilot)
+            app.action_show_settings()
+            for _ in range(40):
+                await pilot.pause()
+            reiter = {p.id for p in app.screen.query(TabPane)}
+            assert {"tab-terminal", "tab-update"} <= reiter
+            assert app.screen.query_one("#set-terminal", Select)
+            assert app.screen.query_one("#set-terminal-vorbereitung", TextArea)
+            assert app.screen.query_one("#set-update", Select)
+
+    async def test_rundruf_zeigt_die_empfaenger(self, quelle: FakeQuelle) -> None:
+        from textual.widgets import Static
+
+        app = SanctuaryApp(quelle=quelle)
+        app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
+        async with app.run_test(size=(160, 50)) as pilot:
+            await _gefuellt(app, pilot)
+            app.action_broadcast()
+            for _ in range(40):
+                await pilot.pause()
+            zeile = app.screen.query_one("#rundruf-ziele", Static)
+            text = str(zeile.render())
+            # Klara ist da, die eigene Sitzung Lino nicht.
+            assert "Klara" in text
+            assert "Lino" not in text

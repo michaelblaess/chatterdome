@@ -287,6 +287,10 @@ const SSH_ZEIT = 20000;
  */
 export function zustellenAn(host, ereignis) {
   const nutzlast = JSON.stringify(ereignis);
+  // BEWUSST der alte deutsche Name, obwohl der Befehl inzwischen "receive"
+  // heisst: hier ruft ein Rechner den anderen, und dessen Stand kann aelter
+  // sein. "uebernehmen" versteht jede Fassung, "receive" nur die neue.
+  // Umstellen erst, wenn alle Rechner nachgezogen haben.
   const versuche = ['sanctuary uebernehmen', 'bash -lc "sanctuary uebernehmen"'];
   let letzterFehler = '';
   for (const befehl of versuche) {
@@ -406,7 +410,7 @@ function cmdSend(argv) {
 
   // Flags MIT Wert muessen samt Wert uebersprungen werden, sonst landet der
   // Wert im Nachrichtentext (genau so beim ersten Test passiert).
-  const mitWert = new Set(['--topic', '--host', '--von']);
+  const mitWert = new Set(['--topic', '--host', '--from', '--von']);
   const worte = [];
   for (let i = 1; i < argv.length; i++) {
     if (mitWert.has(argv[i])) { i++; continue; }
@@ -427,7 +431,7 @@ function cmdSend(argv) {
   // Wer sendet: --von schlaegt die Sitzungserkennung. Noetig fuer Aufrufer
   // ohne eigene Claude-Sitzung - die TUI etwa lief bisher als "unbekannt",
   // weil CLAUDE_CODE_SESSION_ID dort nicht gesetzt ist.
-  const vonName = wert('--von') || selbstName();
+  const vonName = wert('--from') || wert('--von') || selbstName();
   const rundruf = ['alle', 'all'].includes(String(to).toLowerCase());
 
   // Wohin: --host spart die Suche. Der Rundruf bleibt bewusst lokal - "alle"
@@ -449,7 +453,7 @@ function cmdSend(argv) {
     to,
     topic: topicIdx >= 0 ? argv[topicIdx + 1] : 'allgemein',
     text,
-    quittung: argv.includes('--erwartet-quittung'),
+    quittung: argv.includes('--expect-receipt') || argv.includes('--erwartet-quittung'),
   };
   const ereignis = {
     auftrag_id: nachricht.id, ts: nachricht.ts, art: 'auftrag',
@@ -478,12 +482,12 @@ function cmdSend(argv) {
   } else {
     console.log(`${GRUEN}Gesendet an ${to}${R}  ${GRAU}(id ${nachricht.id})${R}`);
   }
-  if (nachricht.quittung) console.log(`${GRAU}Quittung erwartet - Stand mit: bus.mjs offen${R}`);
+  if (nachricht.quittung) console.log(`${GRAU}Quittung erwartet - Stand mit: bus.mjs open${R}`);
 }
 
 function cmdRead(argv) {
   sicherstellen();
-  const alles = argv.includes('--alle');
+  const alles = argv.includes('--all') || argv.includes('--alle');
   const { gesamt, neu } = offeneNachrichten();
   const zuZeigen = alles
     ? ereignisseAb(db(), 0).filter((z) => z.art === 'auftrag').map(alsNachricht)
@@ -603,7 +607,7 @@ function cmdOffen() {
  */
 function cmdAuftraege(argv) {
   sicherstellen();
-  const alle = argv.includes('--alle');
+  const alle = argv.includes('--all') || argv.includes('--alle');
   const d = db();
   const liste = alle ? auftraege(d, {}) : auftraege(d, {}).filter((a) => ['submitted', 'working', 'input_required'].includes(a.zustand));
 
@@ -652,7 +656,7 @@ function cmdVerlauf(argv) {
   const alsJson = argv.includes('--json');
   const name = argv.find((a) => !a.startsWith('--'));
   if (!name) {
-    console.error('Aufruf: bus.mjs verlauf <Name> [--json]');
+    console.error('Aufruf: bus.mjs history <Name> [--json]');
     process.exitCode = 1;
     return;
   }
@@ -751,14 +755,18 @@ function hilfe() {
   console.log(`
   Bus - Nachrichten zwischen Claude-Instanzen auf diesem Rechner
 
-    send <Name|alle> "Text" [--topic t] [--erwartet-quittung]
-    read [--alle]                 neue Nachrichten holen (schiebt den Lesezeiger)
-    auftraege [--alle] [--json]   Warteschlange - was liegt an, unabhaengig vom Lesezeiger
-    verlauf <Name> [--json]       Auftraege und Quittungen mit einem Agenten
+    send <Name|all> "Text" [--topic t] [--expect-receipt]
+    read [--all]                  neue Nachrichten holen (schiebt den Lesezeiger)
+    tasks [--all] [--json]        Warteschlange - was liegt an, unabhaengig vom Lesezeiger
+    history <Name> [--json]       Auftraege und Quittungen mit einem Agenten
     ack <msgId> <Code> ["Notiz"]  quittieren, setzt zugleich den Auftragszustand
-    offen                         Stand der eigenen Nachrichten
+    open                          Stand der eigenen Nachrichten
     doctor                        Pfad-Isolation und Datenbank pruefen
     pending                       nur fuer den Stop-Hook
+    receive                       Nutzlast von einem anderen Rechner uebernehmen
+
+  Die frueheren deutschen Namen (auftraege, verlauf, offen, uebernehmen) und
+  Flags (--alle, --erwartet-quittung, --von) funktionieren weiterhin.
 
   Zustaende: submitted -> working (202) -> completed (2xx) | failed (4xx/5xx)
              409 und 503 setzen zurueck auf submitted, der Auftrag bleibt liegen
@@ -788,14 +796,18 @@ function aufgeloest(pfad) {
 
 if (direktAufgerufen) {
   const argv = process.argv.slice(2);
+  // Die deutschen Namen bleiben als stille Aliase bestehen. Sie sind nicht
+  // nur Bequemlichkeit: "uebernehmen" ruft ein anderer Rechner ueber SSH auf,
+  // und solange dort noch ein aelterer Stand liegt, kommt genau dieses Wort.
   switch (argv[0]) {
     case 'send': cmdSend(argv.slice(1)); break;
-    case 'uebernehmen': cmdUebernehmen(); break;
+    case 'receive': case 'uebernehmen': cmdUebernehmen(); break;
     case 'read': cmdRead(argv.slice(1)); break;
     case 'ack': cmdAck(argv.slice(1)); break;
+    case 'tasks': case 'task':
     case 'auftraege': case 'auftrag': cmdAuftraege(argv.slice(1)); break;
-    case 'verlauf': cmdVerlauf(argv.slice(1)); break;
-    case 'offen': cmdOffen(); break;
+    case 'history': case 'verlauf': cmdVerlauf(argv.slice(1)); break;
+    case 'open': case 'offen': cmdOffen(); break;
     case 'doctor': cmdDoctor(); break;
     case 'pending': cmdPending(); break;
     default: hilfe();

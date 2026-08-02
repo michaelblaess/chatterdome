@@ -26,6 +26,14 @@ VORGABEN: dict[str, Any] = {
     "proxy_url": "",
     "log_sichtbar": True,
     "id_spalte": False,
+    # Neues Terminal. "auto" heisst: das erste vorhandene nehmen.
+    "terminal": "auto",
+    # Befehle, die im neuen Terminal VOR Claude laufen - eine je Zeile.
+    "terminal_vorbereitung": "",
+    # Optionaler Pfad zu einem Skript, das vor diesen Zeilen ausgefuehrt wird.
+    "terminal_skript": "",
+    # Wie Claude Code auf einem Agenten-Rechner aktualisiert wird.
+    "update_verfahren": "claude",
 }
 
 

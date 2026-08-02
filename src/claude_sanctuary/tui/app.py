@@ -30,6 +30,7 @@ from textual_widgets import (
 
 from claude_sanctuary import __author__, __version__, __year__
 from claude_sanctuary.i18n import current_language, t
+from claude_sanctuary.kern import absturz
 from claude_sanctuary.kern.einstellungen import ZUSTIMMUNG, Einstellungen
 from claude_sanctuary.kern.lokale_quelle import LokaleQuelle
 from claude_sanctuary.kern.modelle import Agent, Bestand, Namenspool
@@ -82,6 +83,8 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         Binding("delete", "stop_agent", "stop", key_display="DEL"),
         Binding("o,O", "toggle_local", "local", key_display="o"),
         Binding("v,V", "show_usage", "usage", key_display="v"),
+        Binding("b,B", "broadcast", "broadcast", key_display="b"),
+        Binding("r,R", "restart_agent", "restart", key_display="r"),
         Binding("slash", "focus_filter", "filter", key_display="/", show=False),
     ]
 
@@ -97,6 +100,8 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         "stop_agent": "stop",
         "toggle_local": "local",
         "show_usage": "usage",
+        "broadcast": "broadcast",
+        "restart_agent": "restart",
         "focus_filter": "filter",
     }
 
@@ -122,6 +127,10 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         self._bild_rechner = ""
         self._bild_pfad = ""
 
+        self._reserviert: list[str] = []
+        """Namen aus dem Pool, die vorab vergeben sind - fuer den Rundruf."""
+
+        self._neustart_kandidat: Agent | None = None
         self._gemeldete_systeme: dict[str, str] = {}
         self._start = time.monotonic()
         self._laeuft = False
@@ -273,6 +282,7 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         self.call_from_thread(self._namen_uebernehmen, pool)
 
     def _namen_uebernehmen(self, pool: Namenspool) -> None:
+        self._reserviert = list(pool.reserviert)
         self.query_one("#kopf", KopfPanel).namen_setzen(pool.motiv, len(pool.frei))
 
     @work(thread=True, exclusive=True, group="verlauf")
@@ -369,6 +379,11 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
             ContextMenuItem.separator(),
             ContextMenuItem("bild", t("menu.screenshot")),
             ContextMenuItem("nur_host", t("menu.filter_host")),
+            ContextMenuItem("update", t("menu.update")),
+            ContextMenuItem.separator(),
+            ContextMenuItem(
+                "neustart", t("menu.restart"), enabled=hier and bool(agent.session_id)
+            ),
             ContextMenuItem("stop", t("menu.stop"), enabled=hier),
         ]
         self.push_screen(
@@ -400,6 +415,10 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
             self._bild_holen(agent.rechner)
         elif auswahl == "nur_host":
             self.query_one("#agenten", AgentenTabelle).setze_filter(agent.rechner)
+        elif auswahl == "update":
+            self._update_starten(agent.rechner)
+        elif auswahl == "neustart":
+            self.action_restart_agent()
         elif auswahl == "stop":
             self.action_stop_agent()
 
@@ -506,6 +525,145 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
             self._bild_holen(self._bild_rechner)
         elif aktion == "kopieren":
             self._in_zwischenablage(self._bild_pfad)
+
+    # -- Rundruf --------------------------------------------------------
+
+    def action_broadcast(self) -> None:
+        """Oeffnet den Dialog fuer eine Nachricht an alle Agenten."""
+        from claude_sanctuary.tui.screens.rundruf_screen import RundrufScreen
+
+        if not [a for a in self._bestand.agenten if not a.selbst]:
+            self.notify(t("broadcast.nobody"), severity="warning")
+            return
+        self.push_screen(
+            RundrufScreen(self._bestand.agenten, self._reserviert),
+            callback=self._rundruf_abgeschickt,
+        )
+
+    def _rundruf_abgeschickt(self, ergebnis: Any | None) -> None:
+        if ergebnis is None:
+            return
+        ziele = [(a.name, a.rechner) for a in ergebnis.empfaenger]
+        self.notify(t("broadcast.running", anzahl=len(ziele)))
+        self._rundruf_senden(ergebnis.text, ziele)
+
+    @work(thread=True, group="rundruf")
+    def _rundruf_senden(self, text: str, ziele: list[tuple[str, str]]) -> None:
+        """Schickt je Agent einen eigenen Auftrag.
+
+        Nacheinander und nicht als ein Rundruf: der Rundruf des Bus bleibt
+        bewusst auf dem eigenen Rechner, damit waeren alle anderen aussen vor.
+        Je Agent ein Auftrag heisst ausserdem: eigene Kennung, eigener
+        Eintrag im Verlauf, eigene Quittung.
+        """
+        fehler: list[str] = []
+        for name, rechner in ziele:
+            meldung = self._quelle.senden(
+                name, text, quittung=True, host=rechner, von=ABSENDER
+            )
+            if meldung:
+                fehler.append(f"{name}@{rechner.upper()}: {meldung}")
+        self.call_from_thread(self._rundruf_fertig, len(ziele), fehler)
+
+    def _rundruf_fertig(self, anzahl: int, fehler: list[str]) -> None:
+        geglueckt = anzahl - len(fehler)
+        self._schreibe_log(t("log.broadcast", anzahl=geglueckt, gesamt=anzahl), "success")
+        for meldung in fehler:
+            self._schreibe_log(t("log.send_failed", name="", fehler=meldung), "error")
+        if fehler:
+            self.notify(t("broadcast.partly", anzahl=geglueckt, gesamt=anzahl), severity="warning")
+        self.aktualisieren()
+        if self._gewaehlt is not None:
+            self.verlauf_laden(self._gewaehlt.name)
+
+    # -- Neustart -------------------------------------------------------
+
+    def action_restart_agent(self) -> None:
+        """Beendet den gewaehlten Agenten und setzt ihn sofort fort.
+
+        Zweck ist der Versionswechsel: eine laufende Sitzung haelt ihre
+        Claude-Version fest, ein Neustart holt die installierte. Mit
+        ``--resume`` bleibt dabei das Gespraech erhalten, und weil die
+        Sitzungskennung dieselbe bleibt, auch der Name.
+        """
+        from claude_sanctuary.tui.screens.bestaetigung_screen import BestaetigungScreen
+
+        agent = self._gewaehlt
+        if agent is None:
+            self.notify(t("notify.select_agent"), severity="warning")
+            return
+        if agent.rechner.upper() != self._bestand.rechner.upper():
+            self.notify(
+                t("notify.remote_stop", name=agent.name, rechner=agent.rechner),
+                severity="warning",
+            )
+            return
+        if not agent.session_id:
+            self.notify(t("notify.no_session"), severity="warning")
+            return
+
+        self._neustart_kandidat = agent
+        self.push_screen(
+            BestaetigungScreen(
+                titel=t("confirm.restart_title"),
+                text=t("confirm.restart_text", name=agent.name),
+            ),
+            callback=self._neustart_bestaetigt,
+        )
+
+    def _neustart_bestaetigt(self, ja: bool | None) -> None:
+        agent = self._neustart_kandidat
+        self._neustart_kandidat = None
+        if ja and agent is not None:
+            self._neustart_ausfuehren(agent.name, agent.session_id, agent.cwd)
+
+    @work(thread=True, group="neustart")
+    def _neustart_ausfuehren(self, name: str, session_id: str, cwd: str) -> None:
+        from claude_sanctuary.tui.starter import starte_resume
+
+        fehler = self._quelle.stoppen(name)
+        if fehler:
+            self.call_from_thread(self._neustart_fertig, name, fehler)
+            return
+        # Kurz warten: das Terminal des alten Prozesses gibt die Datei erst
+        # frei, wenn er wirklich weg ist. Ein sofortiger Resume traefe auf
+        # eine noch belegte Sitzung.
+        time.sleep(1.5)
+        fehler = starte_resume(session_id, cwd, self._einstellungen.laden())
+        self.call_from_thread(self._neustart_fertig, name, fehler)
+
+    def _neustart_fertig(self, name: str, fehler: str) -> None:
+        if fehler:
+            self._schreibe_log(t("log.restart_failed", name=name, fehler=fehler), "error")
+            self.notify(fehler, severity="error")
+        else:
+            self._schreibe_log(t("log.restarted", name=name), "success")
+        self.set_timer(3.0, self.aktualisieren)
+        self.set_timer(3.5, self.namen_laden)
+
+    # -- Claude aktualisieren -------------------------------------------
+
+    def _update_starten(self, rechner: str) -> None:
+        """Aktualisiert Claude Code auf einem Rechner."""
+        eigener = rechner.upper() == self._bestand.rechner.upper()
+        verfahren = str(self._einstellungen.laden().get("update_verfahren", "claude"))
+        self.notify(t("notify.update_running", rechner=rechner))
+        self._schreibe_log(t("log.update_started", rechner=rechner, verfahren=verfahren))
+        self._update_ausfuehren("" if eigener else rechner, rechner, verfahren)
+
+    @work(thread=True, exclusive=True, group="update")
+    def _update_ausfuehren(self, ziel: str, anzeige: str, verfahren: str) -> None:
+        version, fehler = self._quelle.aktualisiere_claude(ziel, verfahren)
+        self.call_from_thread(self._update_fertig, anzeige, version, fehler)
+
+    def _update_fertig(self, rechner: str, version: str, fehler: str) -> None:
+        if fehler:
+            self._schreibe_log(t("log.update_failed", rechner=rechner, fehler=fehler), "error")
+            self.notify(fehler, severity="error")
+            return
+        self._schreibe_log(t("log.updated", rechner=rechner, version=version or "?"), "success")
+        self.notify(t("notify.updated", rechner=rechner, version=version or "?"))
+        self.aktualisieren()
 
     def action_refresh_now(self) -> None:
         self.aktualisieren()
@@ -638,7 +796,9 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
     def action_start_agent(self) -> None:
         from claude_sanctuary.tui.starter import starte_lokal
 
-        fehler = starte_lokal()
+        # Die Einstellungen mitgeben: dort steht, welches Terminal genommen
+        # wird und was darin vor Claude laufen soll.
+        fehler = starte_lokal(einstellungen=self._einstellungen.laden())
         if fehler:
             self._schreibe_log(t("log.start_failed", fehler=fehler), "error")
             self.notify(fehler, severity="error")
@@ -647,11 +807,22 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         self.set_timer(3.0, self.aktualisieren)
         self.set_timer(3.5, self.namen_laden)
 
+    def _handle_exception(self, error: Exception) -> None:
+        """Schreibt den Traceback auf Platte, bevor der Fehlerdialog laeuft.
+
+        Der CrashGuard zeigt ihn nur im Dialog. Scheitert der beim Aufbau
+        selbst, waere der Bericht verloren - und der naechste Absturz wieder
+        so undiagnostizierbar wie der erste.
+        """
+        with contextlib.suppress(Exception):
+            absturz.absturz(error)
+        super()._handle_exception(error)
+
     def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
         # Modale Dialoge sollen die App-Tasten nicht durchreichen.
         if len(self.screen_stack) > 1:
             return None
-        if action == "stop_agent" and self._gewaehlt is None:
+        if action in {"stop_agent", "restart_agent"} and self._gewaehlt is None:
             return None
         return True
 

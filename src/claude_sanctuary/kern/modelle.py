@@ -97,11 +97,25 @@ class Ereignis:
     zustand: str = ""
     status: int | None = None
     notiz: str = ""
+    host: str = ""
+    """Rechner des Absenders dieses Eintrags.
+
+    Beim Auftrag ist das ``von_host`` (wo er abgeschickt wurde), bei der
+    Quittung der Rechner des Agenten. Ein blosser Name genuegt im Mesh nicht:
+    derselbe Name kann auf zwei Rechnern vergeben sein, und beim Lesen ist
+    nicht erkennbar, wer geantwortet hat.
+    """
 
     @property
     def eigen(self) -> bool:
         """Wahr, wenn dieser Eintrag von uns stammt (rechte Blase)."""
         return self.art == "auftrag"
+
+    @property
+    def absender(self) -> str:
+        """Absender als ``Name@RECHNER``, oder nur der Name ohne Rechner."""
+        name = self.von or "?"
+        return f"{name}@{self.host.upper()}" if self.host else name
 
 
 @dataclass(slots=True)

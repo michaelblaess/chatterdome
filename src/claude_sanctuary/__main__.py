@@ -7,6 +7,7 @@ import sys
 
 from claude_sanctuary import __version__
 from claude_sanctuary.i18n import DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES, load_locale
+from claude_sanctuary.kern import absturz
 from claude_sanctuary.kern.einstellungen import Einstellungen
 
 
@@ -45,6 +46,11 @@ def main() -> None:
         vorab_initialisieren()
 
     set_terminal_title(f"claude-sanctuary v{__version__}")
+    # Die Klammer MUSS hier stehen und nicht in der App: nur so umschliesst
+    # sie auch das Aufraeumen unten. Bleibt die Endzeile im Protokoll aus,
+    # ist genau dieses finally nicht mehr gelaufen - dann war es kein
+    # Python-Fehler, sondern ein harter Abbruch von aussen.
+    absturz.beobachte(__version__)
     try:
         SanctuaryApp().run()
     finally:

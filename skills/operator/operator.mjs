@@ -461,7 +461,20 @@ function druckeDetail(z) {
   console.log('');
 }
 
+/**
+ * Stellt eine Rueckfrage auf dem Terminal.
+ *
+ * Sitzt niemand davor, wird NICHT gefragt, sondern sofort abgelehnt. Ohne
+ * diese Sperre haengt der Zeileneditor sich in eine fremde Standardeingabe -
+ * ruft eine Oberflaeche den Befehl auf, ist das deren eigenes Terminal, und
+ * die Rueckfrage erscheint mitten in deren Bild. Wer keine Rueckfrage
+ * beantworten kann, soll den Befehl mit --force erteilen.
+ *
+ * @param {string} text  Die Frage samt Eingabeaufforderung.
+ * @returns {Promise<string>}  Antwort in Kleinschreibung, leer wenn kein TTY.
+ */
 async function frage(text) {
+  if (!process.stdin.isTTY) return '';
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   const antwort = await new Promise((res) => rl.question(text, res));
   rl.close();
@@ -488,11 +501,32 @@ async function stoppe(suchName, { ohneRueckfrage = false } = {}) {
   }
 
   if (!ohneRueckfrage) {
+    if (!process.stdin.isTTY) {
+      console.log(`  ${ROT}Keine Rueckfrage moeglich - hier haengt kein Terminal.${R}`);
+      console.log(`  ${GRAU}Wer nicht antworten kann, erteilt den Befehl mit --force.${R}\n`);
+      process.exitCode = 1;
+      return;
+    }
     const a = await frage(`  ${z.name} wirklich beenden? [j/N] `);
     if (a !== 'j' && a !== 'ja') {
       console.log(`  ${GRAU}Abgebrochen.${R}\n`);
       return;
     }
+  }
+
+  // Vor dem Signal pruefen, WEN wir da treffen. Die PID stammt aus einer
+  // Momentaufnahme; ist die Instanz dazwischen ausgestiegen, kann das
+  // Betriebssystem dieselbe Nummer laengst neu vergeben haben - unter Windows
+  // geschieht das schnell. Ein SIGTERM ginge dann an einen unbeteiligten
+  // Prozess, und weil Windows dafuer TerminateProcess benutzt, stirbt der
+  // ohne jede Chance aufzuraeumen.
+  const traeger = prozessName(z.pid);
+  if (!traeger.includes('claude')) {
+    const was = traeger ? `"${traeger}"` : 'nicht ermittelbar';
+    console.log(`\n  ${ROT}PID ${z.pid} gehoert nicht mehr zu Claude (${was}).${R}`);
+    console.log(`  ${GRAU}Nichts beendet. Liste mit "sanctuary status" neu holen.${R}\n`);
+    process.exitCode = 1;
+    return;
   }
 
   try {
@@ -501,6 +535,39 @@ async function stoppe(suchName, { ohneRueckfrage = false } = {}) {
   } catch (e) {
     console.log(`  ${ROT}Konnte nicht beenden: ${e.message}${R}\n`);
     process.exitCode = 1;
+  }
+}
+
+/**
+ * Ermittelt den Namen des Programms hinter einer PID.
+ *
+ * Bewusst fail-closed gebaut: laesst sich der Name nicht feststellen, kommt
+ * eine leere Zeichenkette zurueck und der Aufrufer bricht ab. Ein
+ * verweigerter Stop ist aergerlich, ein Signal an den falschen Prozess ist
+ * teuer.
+ *
+ * @param {number|string} pid  Prozesskennung.
+ * @returns {string}  Kleingeschriebener Programmname, leer wenn unbekannt.
+ */
+function prozessName(pid) {
+  const nummer = Number(pid);
+  if (!Number.isInteger(nummer) || nummer <= 0) return '';
+  try {
+    if (platform() === 'win32') {
+      const aus = execFileSync('tasklist', ['/FI', `PID eq ${nummer}`, '/FO', 'CSV', '/NH'],
+        { encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] });
+      // Ohne Treffer meldet tasklist einen Hinweistext statt einer CSV-Zeile.
+      const treffer = aus.match(/^"([^"]+)"/m);
+      return treffer ? treffer[1].toLowerCase() : '';
+    }
+    // Die volle Kommandozeile, nicht "comm": Claude Code laeuft auf Linux als
+    // Node-Programm, der blosse Prozessname waere dort "node". Im Argument
+    // steht dagegen der Pfad zum claude-Skript.
+    const aus = execFileSync('ps', ['-p', String(nummer), '-o', 'args='],
+      { encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] });
+    return aus.trim().toLowerCase();
+  } catch {
+    return '';
   }
 }
 
@@ -933,9 +1000,10 @@ switch (befehl) {
     else await stoppe(rest[0], { ohneRueckfrage: argv.includes('--force') });
     break;
   case 'names': zeigeNamen(argv); break;
-  case 'motiv': case 'motive': zeigeMotive(rest[0]); break;
+  // Englische Namen sind fuehrend, die deutschen bleiben als stille Aliase.
+  case 'motif': case 'motiv': case 'motive': zeigeMotive(rest[0]); break;
   case 'reset-names': raeumeNamen(); break;
-  case 'werde-operator': werdeOperator(); break;
+  case 'become-operator': case 'werde-operator': werdeOperator(); break;
   default:
     console.log(`
   Operator - Übersicht über laufende Claude-Instanzen
@@ -946,9 +1014,9 @@ switch (befehl) {
     watch [Sekunden]    Tabelle periodisch neu zeichnen (Standard 10s)
     stop <Name>         Instanz beenden (fragt nach, --force überspringt)
     names               vergebene Namen
-    motiv [schlüssel]   Namensmotive anzeigen oder umschalten
+    motif [schlüssel]   Namensmotive anzeigen oder umschalten
     reset-names         Zuordnungen beendeter Sitzungen aufräumen
-    werde-operator      diese Sitzung auf den reservierten Namen umbenennen
+    become-operator     diese Sitzung auf den reservierten Namen umbenennen
 
     --tokens            zusätzlich den Gesamtverbrauch (langsamer)
     --json              maschinenlesbar statt Tabelle; mit watch als

@@ -27,13 +27,18 @@ ZUSTAND_FARBE = {
     "cancelled": "red",
 }
 
-QUITTUNG_TEXT = {
-    200: "erledigt",
-    202: "angenommen",
-    403: "nicht erlaubt",
-    409: "steckt fest",
-    503: "beschäftigt",
+QUITTUNG_SCHLUESSEL = {
+    200: "receipt.200",
+    202: "receipt.202",
+    403: "receipt.403",
+    409: "receipt.409",
+    503: "receipt.503",
 }
+"""Quittungscodes auf Uebersetzungsschluessel.
+
+Vorher standen die deutschen Woerter direkt hier - in der englischen Fassung
+las man dann "200 erledigt". Codes bleiben Codes, ihre Bedeutung ist Text.
+"""
 
 
 class VerlaufPanel(VerticalScroll):
@@ -72,7 +77,10 @@ class VerlaufPanel(VerticalScroll):
         """Setzt eine einzelne Blase aus Kopf und Inhalt zusammen."""
         text = Text()
         kopf = Text()
-        kopf.append(f"{ereignis.von or '?'} ", style="bold")
+        # Name@RECHNER statt nur Name: im Mesh kann derselbe Name auf zwei
+        # Rechnern vergeben sein, und ohne den Zusatz ist nicht erkennbar,
+        # von wo die Antwort kam.
+        kopf.append(f"{ereignis.absender} ", style="bold")
         kopf.append(format_time(ereignis.ts), style="dim")
         if ereignis.eigen:
             zustand = auftrag.zustand
@@ -85,7 +93,8 @@ class VerlaufPanel(VerticalScroll):
                 kopf.append(f"  [{auftrag.topic}]", style="dim")
         elif ereignis.status is not None:
             kopf.append("  ")
-            beschriftung = QUITTUNG_TEXT.get(int(ereignis.status), str(ereignis.status))
+            schluessel = QUITTUNG_SCHLUESSEL.get(int(ereignis.status))
+            beschriftung = t(schluessel) if schluessel else str(ereignis.status)
             kopf.append(
                 f"{ereignis.status} {beschriftung}",
                 style=ZUSTAND_FARBE.get(ereignis.zustand, "dim"),

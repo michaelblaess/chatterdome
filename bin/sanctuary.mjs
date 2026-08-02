@@ -18,18 +18,26 @@ const HIER = dirname(fileURLToPath(import.meta.url));
 const OPERATOR = join(HIER, '..', 'skills', 'operator', 'operator.mjs');
 const STARTE = join(HIER, '..', 'skills', 'operator', 'starte.mjs');
 const SHOT = join(HIER, '..', 'skills', 'operator', 'shot.mjs');
+const UPDATE = join(HIER, '..', 'skills', 'operator', 'update.mjs');
 const BUS = join(HIER, '..', 'skills', 'claude-bus', 'bus.mjs');
 const KOSTEN = join(HIER, '..', 'skills', 'claude-bus', 'kosten.mjs');
 
 // Welcher Unterbefehl gehoert wem. Ueberschneidungen gibt es keine.
+//
+// Fuehrend sind die englischen Namen. Die deutschen stehen weiter darunter und
+// werden bewusst NICHT entfernt: "uebernehmen" ruft ein anderer Rechner ueber
+// ssh auf, und dessen Stand kann aelter sein als der hiesige.
 const ZIELE = {
   status: OPERATOR, watch: OPERATOR, stop: OPERATOR, names: OPERATOR,
-  motiv: OPERATOR, motive: OPERATOR, 'reset-names': OPERATOR, 'werde-operator': OPERATOR,
+  motif: OPERATOR, 'reset-names': OPERATOR, 'become-operator': OPERATOR,
+  motiv: OPERATOR, motive: OPERATOR, 'werde-operator': OPERATOR,
   start: STARTE, starte: STARTE,
   shot: SHOT, bild: SHOT,
-  send: BUS, read: BUS, ack: BUS, offen: BUS, doctor: BUS, pending: BUS,
-  auftraege: BUS, auftrag: BUS, verlauf: BUS, uebernehmen: BUS,
-  kosten: KOSTEN,
+  update: UPDATE,
+  send: BUS, read: BUS, ack: BUS, doctor: BUS, pending: BUS,
+  open: BUS, tasks: BUS, task: BUS, history: BUS, receive: BUS,
+  offen: BUS, auftraege: BUS, auftrag: BUS, verlauf: BUS, uebernehmen: BUS,
+  cost: KOSTEN, kosten: KOSTEN,
 };
 
 function hilfe() {
@@ -42,29 +50,38 @@ function hilfe() {
     sanctuary status --json        maschinenlesbar
     sanctuary watch [Sek]          laufend neu zeichnen (mit --json als Strom)
     sanctuary names                vergebene Namen
-    sanctuary motiv [schluessel]   Namensmotive anzeigen oder umschalten
+    sanctuary motif [schluessel]   Namensmotive anzeigen oder umschalten
 
   Instanzen
     sanctuary start [Name]         neue Instanz mit Namen im Tab-Titel
-    sanctuary stop <Name>          Instanz beenden
-    sanctuary werde-operator       diese Sitzung uebernimmt den Operator-Namen
+    sanctuary stop <Name> [--force]  Instanz beenden (--force ohne Rueckfrage)
+    sanctuary become-operator      diese Sitzung uebernimmt den Operator-Namen
 
   Bildschirm
     sanctuary shot [RECHNER]       Bildschirmfoto, lokal oder ueber das Tailnet
-    sanctuary shot --einrichten    Windows: Aufgabe fuer den ssh-Zugriff anlegen
+    sanctuary shot --setup         Windows: Aufgabe fuer den ssh-Zugriff anlegen
+
+  Wartung
+    sanctuary update [RECHNER] [--method claude|npm|winget|choco|brew]
+                                   Claude Code aktualisieren
+    sanctuary update --check       nur die installierte Version melden
 
   Auftraege
-    sanctuary send <Name|alle> "Text" [--topic t] [--erwartet-quittung]
-                                   [--host RECHNER] [--von Name]
-    sanctuary auftraege [--alle]   Warteschlange (mit --json maschinenlesbar)
-    sanctuary verlauf <Name>       Auftraege und Quittungen mit einem Agenten
-    sanctuary read [--alle]        neue Nachrichten holen
+    sanctuary send <Name|all> "Text" [--topic t] [--expect-receipt]
+                                   [--host RECHNER] [--from Name]
+    sanctuary tasks [--all]        Warteschlange (mit --json maschinenlesbar)
+    sanctuary history <Name>       Auftraege und Quittungen mit einem Agenten
+    sanctuary read [--all]         neue Nachrichten holen
     sanctuary ack <id> <Code> ["Notiz"]
-    sanctuary offen                Stand der eigenen Auftraege
+    sanctuary open                 Stand der eigenen Auftraege
     sanctuary doctor               Bus pruefen
-    sanctuary kosten               was die Zustellung gekostet hat
+    sanctuary cost                 was die Zustellung gekostet hat
 
   Ohne Unterbefehl: status
+
+  Die frueheren deutschen Namen gelten weiter: auftraege, verlauf, offen,
+  kosten, motiv, werde-operator, uebernehmen - ebenso die Flags --alle,
+  --erwartet-quittung, --von und --einrichten.
 `);
 }
 
@@ -80,7 +97,8 @@ if (!befehl) {
   const ziel = ZIELE[befehl];
   // starte.mjs und kosten.mjs kennen den Unterbefehl nicht, sie sind selbst
   // schon das Kommando - deshalb faellt er dort weg.
-  const rest = (ziel === STARTE || ziel === KOSTEN || ziel === SHOT) ? argv.slice(1) : argv;
+  const eigenstaendig = [STARTE, KOSTEN, SHOT, UPDATE];
+  const rest = eigenstaendig.includes(ziel) ? argv.slice(1) : argv;
   process.argv = [process.argv[0], ziel, ...rest];
   await import(pathToFileURL(ziel).href);
 } else {

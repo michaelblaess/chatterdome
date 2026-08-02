@@ -7,13 +7,25 @@ import json
 from pathlib import Path
 from typing import Any
 
+from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.widgets import Checkbox, Input, Label, Select, Static, TabPane
+from textual.widgets import Button, Checkbox, Input, Label, Select, Static, TabPane, TextArea
 from textual_widgets import BaseSettingsScreen
 
 from claude_sanctuary.i18n import t
+from claude_sanctuary.kern.absturz import PROTOKOLL
 from claude_sanctuary.kern.einstellungen import DATEI, ZUSTIMMUNG
+from claude_sanctuary.kern.terminals import AUTOMATISCH, auswahl
+
+VERFAHREN = ("claude", "npm", "winget", "choco", "brew")
+"""Aktualisierungsverfahren, gleiche Reihenfolge wie in update.mjs.
+
+Bewusst hier gespiegelt und nicht aus Node gelesen: es sind fuenf feste
+Woerter, und ein Unterprozess nur zum Fuellen einer Auswahlliste waere
+Verschwendung. Aendert sich die Liste drueben, faellt es beim Speichern auf -
+update.mjs lehnt einen unbekannten Schluessel ausdruecklich ab.
+"""
 
 
 def _namenspool_datei() -> Path:
@@ -43,6 +55,18 @@ class EinstellungenScreen(BaseSettingsScreen):  # type: ignore[misc]
     }
     EinstellungenScreen .pool-block Input {
         width: 1fr;
+    }
+    EinstellungenScreen .feldname {
+        margin-top: 1;
+        text-style: bold;
+    }
+    EinstellungenScreen #set-terminal-vorbereitung {
+        height: 8;
+        border: round $surface-lighten-2;
+    }
+    EinstellungenScreen #set-terminal-suchen {
+        margin-left: 1;
+        min-width: 12;
     }
     """
 
@@ -93,6 +117,34 @@ class EinstellungenScreen(BaseSettingsScreen):  # type: ignore[misc]
             datei.write_text(
                 json.dumps(roh, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
             )
+
+    # -- Werte fuer die Auswahlfelder -----------------------------------
+
+    def _terminal_wert(self) -> str:
+        """Gespeichertes Terminal, sofern es hier ueberhaupt existiert.
+
+        Ein Wert, den die Liste nicht enthaelt, wird von Select abgelehnt -
+        und gespeichert sein kann leicht etwas, das nur auf einem anderen
+        Rechner installiert ist. Die Einstellungen wandern ja mit.
+        """
+        gespeichert = str(self._settings.get("terminal", AUTOMATISCH))
+        vorhanden = {schluessel for _, schluessel in auswahl()}
+        return gespeichert if gespeichert in vorhanden else AUTOMATISCH
+
+    def _update_wert(self) -> str:
+        gespeichert = str(self._settings.get("update_verfahren", "claude"))
+        return gespeichert if gespeichert in VERFAHREN else "claude"
+
+    @on(Button.Pressed, "#set-terminal-suchen")
+    def _skript_suchen(self) -> None:
+        from claude_sanctuary.tui.screens.dateiwahl_screen import DateiwahlScreen
+
+        feld = self.query_one("#set-terminal-skript", Input)
+        self.app.push_screen(DateiwahlScreen(feld.value), callback=self._skript_gewaehlt)
+
+    def _skript_gewaehlt(self, pfad: str | None) -> None:
+        if pfad:
+            self.query_one("#set-terminal-skript", Input).value = pfad
 
     # -- Hooks der Basisklasse ------------------------------------------
 
@@ -147,6 +199,44 @@ class EinstellungenScreen(BaseSettingsScreen):  # type: ignore[misc]
                             value=", ".join(self._pools[schluessel]), id=f"pool-liste-{i}"
                         )
 
+        with TabPane(t("settings.tab_terminal"), id="tab-terminal"), VerticalScroll():
+            with Horizontal(classes="settings-row"):
+                yield Label(t("settings.terminal_program"))
+                # Nur was hier wirklich installiert ist - eine Auswahl, die
+                # nicht vorhandene Programme anbietet, erzeugt nur Fehlschlaege.
+                yield Select(
+                    [(t("settings.terminal_auto"), AUTOMATISCH), *auswahl()],
+                    value=self._terminal_wert(),
+                    id="set-terminal",
+                )
+            yield Static(t("settings.terminal_hint"), classes="hint")
+
+            yield Static(t("settings.terminal_script"), classes="feldname")
+            with Horizontal(classes="settings-row"):
+                yield Input(
+                    value=str(self._settings.get("terminal_skript", "")),
+                    placeholder=t("settings.terminal_script_ph"),
+                    id="set-terminal-skript",
+                )
+                yield Button(t("settings.browse"), id="set-terminal-suchen")
+
+            yield Static(t("settings.terminal_prepare"), classes="feldname")
+            yield TextArea(
+                str(self._settings.get("terminal_vorbereitung", "")),
+                id="set-terminal-vorbereitung",
+            )
+            yield Static(t("settings.terminal_prepare_hint"), classes="hint")
+
+        with TabPane(t("settings.tab_update"), id="tab-update"), VerticalScroll():
+            with Horizontal(classes="settings-row"):
+                yield Label(t("settings.update_method"))
+                yield Select(
+                    [(t(f"settings.update_{s}"), s) for s in VERFAHREN],
+                    value=self._update_wert(),
+                    id="set-update",
+                )
+            yield Static(t("settings.update_hint"), classes="hint")
+
         with TabPane(t("settings.tab_database"), id="tab-datenbank"), VerticalScroll():
             yield Checkbox(
                 t("settings.show_ids"),
@@ -159,6 +249,17 @@ class EinstellungenScreen(BaseSettingsScreen):  # type: ignore[misc]
         settings["nur_lokal"] = self.query_one("#set-nur-lokal", Checkbox).value
         settings["id_spalte"] = self.query_one("#set-ids", Checkbox).value
         settings["proxy_url"] = self.query_one("#set-proxy", Input).value.strip()
+        settings["terminal_skript"] = self.query_one("#set-terminal-skript", Input).value.strip()
+        settings["terminal_vorbereitung"] = self.query_one(
+            "#set-terminal-vorbereitung", TextArea
+        ).text
+        for feld, schluessel, vorgabe in (
+            ("#set-terminal", "terminal", AUTOMATISCH),
+            ("#set-update", "update_verfahren", "claude"),
+        ):
+            wert = self.query_one(feld, Select).value
+            # Select.NULL ist kein Text - dann bleibt es bei der Vorgabe.
+            settings[schluessel] = wert if isinstance(wert, str) else vorgabe
         try:
             settings["aktualisierung_sekunden"] = max(
                 2, int(self.query_one("#set-takt", Input).value or 5)
@@ -184,4 +285,5 @@ class EinstellungenScreen(BaseSettingsScreen):  # type: ignore[misc]
             (t("settings.storage.config"), DATEI),
             (t("settings.storage.bus"), _bus_datei()),
             (t("settings.storage.disclaimer"), ZUSTIMMUNG),
+            (t("settings.storage.fault"), PROTOKOLL),
         ]
