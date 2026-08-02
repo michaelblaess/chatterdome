@@ -10,14 +10,25 @@ from typing import Any
 
 from textual_widgets import StatusBar, StatusItem
 
-from claude_sanctuary.i18n import t
+from claude_sanctuary.i18n import current_language, t
 from claude_sanctuary.kern.modelle import Bestand
 
 
 def _tokens(wert: int) -> str:
+    """Kuerzt grosse Zahlen lesbar ab.
+
+    Ab einer Million auf "M" wechseln, sonst steht dort "5275k" - eine Zahl,
+    die niemand auf einen Blick liest. Der Dezimaltrenner folgt der Sprache:
+    im Deutschen das Komma, im Englischen der Punkt.
+    """
     if wert <= 0:
         return "0"
-    return str(wert) if wert < 10_000 else f"{round(wert / 1000)}k"
+    if wert < 10_000:
+        return str(wert)
+    if wert < 1_000_000:
+        return f"{round(wert / 1000)}k"
+    text = f"{wert / 1_000_000:.1f}M"
+    return text.replace(".", ",") if current_language() == "de" else text
 
 
 class StatusZeile(StatusBar):  # type: ignore[misc]
