@@ -712,7 +712,16 @@ function cmdDoctor() {
 function cmdPending() {
   const wurzel = busWurzel();
   if (pfadProbleme(wurzel).length) process.exit(0);
-  const { gesamt, neu } = offeneNachrichten();
+  const { gesamt, neu: ungelesen } = offeneNachrichten();
+
+  // NUR melden, was auch noch offen ist. Der Lesezeiger allein genuegt nicht:
+  // er wird ausschliesslich von "read" fortgeschrieben, nicht von "ack". Wer
+  // einen Auftrag ueber "auftraege" sieht und direkt quittiert, bekam ihn
+  // deshalb bei JEDEM weiteren Stop erneut gemeldet - am 02.08.2026 an einem
+  // bereits auf completed stehenden Auftrag beobachtet. Bei einem Hook, der
+  // nach jedem Werkzeugaufruf laeuft, waere das eine Dauerschleife.
+  const offeneIds = new Set(offeneAuftraege().map((m) => m.id));
+  const neu = ungelesen.filter((m) => offeneIds.has(m.id));
   if (!neu.length) process.exit(0);
 
   // Zustellung protokollieren, damit die Kosten spaeter messbar sind.
