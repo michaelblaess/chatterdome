@@ -851,8 +851,10 @@ function zeigeMesh(bloecke) {
  * Betriebssystem in lesbarer Kurzform.
  *
  * Auf Linux steht der brauchbare Name in /etc/os-release ("Ubuntu 24.04.4
- * LTS"); die Kernel-Version allein sagt niemandem etwas. Windows und macOS
- * melden ihre Version ueber release() ausreichend genau.
+ * LTS"); die Kernel-Version allein sagt niemandem etwas. macOS meldet seine
+ * Version ueber release() ausreichend genau. Windows aber meldet sich im
+ * Kernel weiterhin als "10.0.x" - auch Windows 11. Unterschieden wird ueber
+ * die Build-Nummer (drittes Segment): ab 22000 ist es Windows 11.
  *
  * @returns {string}
  */
@@ -865,9 +867,29 @@ function systemName() {
     } catch { /* ohne os-release bleibt die Kernel-Angabe */ }
     return `Linux ${release()}`;
   }
-  if (p === 'win32') return `Windows ${release()}`;
+  if (p === 'win32') return windowsName();
   if (p === 'darwin') return `macOS ${release()}`;
   return `${p} ${release()}`;
+}
+
+/**
+ * Windows-Produktversion aus der Kernel-Version ableiten.
+ *
+ * release() liefert etwas wie "10.0.22631". Windows 11 meldet sich weiter
+ * als "10.0", die Build-Nummer (drittes Segment) macht den Unterschied: ab
+ * Build 22000 ist es Windows 11, darunter Windows 10. Die rohe Build-Nummer
+ * bleibt fuer die Diagnose sichtbar.
+ *
+ * @returns {string}
+ */
+function windowsName() {
+  const roh = release();
+  const build = Number.parseInt(roh.split('.')[2], 10);
+  if (!Number.isNaN(build)) {
+    const produkt = build >= 22000 ? '11' : '10';
+    return `Windows ${produkt} (Build ${build})`;
+  }
+  return `Windows ${roh}`;
 }
 
 /**
