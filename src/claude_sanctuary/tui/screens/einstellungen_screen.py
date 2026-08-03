@@ -114,8 +114,12 @@ class EinstellungenScreen(BaseSettingsScreen):  # type: ignore[misc]
         if self._aktiv:
             roh["aktiv"] = self._aktiv
         with contextlib.suppress(OSError):
+            # newline="\n": ohne das macht Windows CRLF daraus, und die
+            # versionierte Datei taucht nach jedem Speichern als geaendert auf.
             datei.write_text(
-                json.dumps(roh, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+                json.dumps(roh, indent=2, ensure_ascii=False) + "\n",
+                encoding="utf-8",
+                newline="\n",
             )
 
     # -- Werte fuer die Auswahlfelder -----------------------------------

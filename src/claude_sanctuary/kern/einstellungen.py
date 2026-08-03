@@ -63,7 +63,9 @@ class Einstellungen:
         werte = self.laden()
         werte.update(aenderungen)
         self._datei.parent.mkdir(parents=True, exist_ok=True)
+        # newline="\n": sonst schreibt Windows CRLF in die JSON-Datei.
         self._datei.write_text(
             json.dumps(werte, indent=2, ensure_ascii=False) + "\n",
             encoding="utf-8",
+            newline="\n",
         )
