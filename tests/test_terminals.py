@@ -84,3 +84,19 @@ class TestStartdatei:
         inhalt = pfad.read_text(encoding="utf-8")
         assert '"C:/Program Files/claude.exe"' in inhalt or \
                "'C:/Program Files/claude.exe'" in inhalt
+
+    def test_powershell_schreibt_ps1_mit_ps_syntax(self, tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+        """Ein PowerShell-Terminal braucht eine .ps1, keine Batch.
+
+        powershell -File lehnt eine .cmd ab, und die Vorbereitungsbefehle sind
+        PowerShell-Syntax ($env:...), die in einer Batch nicht laufen wuerde.
+        """
+        monkeypatch.setattr(sys, "platform", "win32")
+        pfad = startdatei(["$env:HTTPS_PROXY = 'http://p:8080'"], str(tmp_path),
+                          ["sanctuary", "start", "Peanut"], powershell=True)
+        assert pfad.suffix == ".ps1"
+        inhalt = pfad.read_text(encoding="utf-8-sig")
+        assert "@echo off" not in inhalt                    # keine Batch-Syntax
+        assert "Set-Location -LiteralPath" in inhalt
+        assert "$env:HTTPS_PROXY" in inhalt                 # PS-Vorbefehl unangetastet
+        assert "& 'sanctuary' 'start' 'Peanut'" in inhalt   # PS-Call-Operator

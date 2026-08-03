@@ -20,7 +20,13 @@ from typing import Any
 
 from claude_sanctuary.kern.einstellungen import Einstellungen
 from claude_sanctuary.kern.lokale_quelle import finde_befehl
-from claude_sanctuary.kern.terminals import Terminal, finde, startdatei, vorbereitung
+from claude_sanctuary.kern.terminals import (
+    Terminal,
+    finde,
+    ist_powershell,
+    startdatei,
+    vorbereitung,
+)
 
 
 def starte_lokal(
@@ -69,7 +75,10 @@ def _oeffne(befehl: list[str], verzeichnis: str, einstellungen: dict[str, Any] |
         return "Kein Terminalprogramm gefunden - in den Einstellungen eines auswaehlen."
 
     try:
-        datei = startdatei(vorbereitung(werte), ordner, befehl)
+        # PowerShell-Terminals brauchen eine .ps1 mit PowerShell-Syntax; cmd
+        # eine .cmd. Die Vorbereitungsbefehle richten sich danach.
+        ps = ist_powershell(terminal.schluessel)
+        datei = startdatei(vorbereitung(werte, ps), ordner, befehl, ps)
         # Der Terminalname stammt aus der festen Liste in kern.terminals,
         # die Nutzereingaben stehen in der Startdatei - nicht in der Zeile.
         subprocess.Popen(
@@ -96,7 +105,9 @@ def _zeile(terminal: Terminal, datei: Path, ordner: str) -> list[str]:
             return [programm, "start", "--cwd", ordner, "--", "cmd", "/k", pfad]
         return [programm, "start", "--cwd", ordner, "--", "bash", "-lc", f"{pfad}; exec bash"]
     if terminal.schluessel in {"pwsh", "powershell"}:
-        return [programm, "-NoExit", "-NoProfile", "-File", pfad]
+        # start oeffnet ein NEUES Fenster - ohne das laeuft PowerShell in der
+        # Konsole der Oberflaeche und schreibt seine Ausgabe dort hinein.
+        return ["cmd", "/c", "start", "", programm, "-NoExit", "-NoProfile", "-File", pfad]
     if terminal.schluessel == "cmd":
         return ["cmd", "/c", "start", "", "cmd", "/k", pfad]
     if terminal.schluessel == "gnome-terminal":
