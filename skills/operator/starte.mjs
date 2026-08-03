@@ -66,17 +66,45 @@ if (name) {
 }
 
 const claudeCmd = process.env.CLAUDE_CODE_EXECPATH || 'claude';
+const argumente = ['-n', name, ...durchreichen];
+const umgebung = { ...process.env, CLAUDE_INSTANZ_NAME: name };
 
 // stdio: 'inherit' gibt das Terminal komplett an Claude weiter, sonst waere die
 // Oberflaeche nicht bedienbar.
-const kind = spawn(claudeCmd, ['-n', name, ...durchreichen], {
-  stdio: 'inherit',
-  shell: !process.env.CLAUDE_CODE_EXECPATH,
-  env: { ...process.env, CLAUDE_INSTANZ_NAME: name },
-});
+//
+// Zwei Wege, je nachdem ob der echte Binaerpfad bekannt ist:
+//   - CLAUDE_CODE_EXECPATH gesetzt -> ohne Shell, Argumente als Array (sicher).
+//   - sonst ist "claude" unter Windows ein Wrapper, den nur die Shell im PATH
+//     findet. Dann die GANZE Zeile als EIN String uebergeben - ein Args-Array
+//     zusammen mit shell:true ist seit Node 24 abgekuendigt (DEP0190), weil die
+//     Argumente dabei nur konkateniert statt escaped werden.
+let kind;
+if (process.env.CLAUDE_CODE_EXECPATH) {
+  kind = spawn(claudeCmd, argumente, { stdio: 'inherit', shell: false, env: umgebung });
+} else {
+  const zeile = [claudeCmd, ...argumente].map(_zitatShell).join(' ');
+  kind = spawn(zeile, { stdio: 'inherit', shell: true, env: umgebung });
+}
 
 kind.on('exit', (code) => process.exit(code ?? 0));
 kind.on('error', (e) => {
   console.error(`Konnte claude nicht starten: ${e.message}`);
   process.exit(1);
 });
+
+/**
+ * Quotet ein Argument fuer die Shell, damit shell:true es nicht zerlegt.
+ *
+ * Windows nutzt cmd.exe, POSIX /bin/sh - beide werden bedient. Die hier
+ * uebergebenen Werte (validierter Name, Flags) sind harmlos, aber korrektes
+ * Quoting ist billig und faengt Argumente mit Leerzeichen ab.
+ *
+ * @param {string} teil
+ * @returns {string}
+ */
+function _zitatShell(teil) {
+  if (process.platform === 'win32') {
+    return /[\s"&|<>^()]/.test(teil) ? `"${teil.replace(/"/g, '""')}"` : teil;
+  }
+  return /[^A-Za-z0-9_@%+=:,./-]/.test(teil) ? `'${teil.replace(/'/g, "'\\''")}'` : teil;
+}
