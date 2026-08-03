@@ -58,7 +58,9 @@ def notiere(anlass: str, text: str = "") -> None:
         _kuerzen()
         stempel = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
         kopf = f"[{stempel}] {anlass} (PID {os.getpid()}, {platform.node()})\n"
-        with PROTOKOLL.open("a", encoding="utf-8") as datei:
+        # newline="\n" hier und in _kuerzen, sonst schreibt Windows CRLF und
+        # die Datei bekommt beim Kuerzen gemischte Zeilenenden.
+        with PROTOKOLL.open("a", encoding="utf-8", newline="\n") as datei:
             datei.write(kopf + (f"{text.rstrip()}\n" if text else ""))
 
 
@@ -72,7 +74,9 @@ def _kuerzen() -> None:
         # Erst ab der naechsten Kopfzeile weiterschreiben, sonst beginnt die
         # Datei mitten in einem Traceback.
         schnitt = rest.find("\n[")
-        PROTOKOLL.write_text(rest[schnitt + 1 :] if schnitt >= 0 else rest, encoding="utf-8")
+        PROTOKOLL.write_text(
+            rest[schnitt + 1 :] if schnitt >= 0 else rest, encoding="utf-8", newline="\n"
+        )
 
 
 def absturz(fehler: BaseException) -> None:

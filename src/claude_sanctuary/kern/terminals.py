@@ -113,20 +113,25 @@ def startdatei(zeilen: list[str], ordner: str, endbefehl: list[str],
         start = "& " + " ".join(_zitat_ps(teil) for teil in endbefehl)
         inhalt = [f"Set-Location -LiteralPath {_zitat_ps(ordner)}", *zeilen, start]
         # BOM (utf-8-sig), damit PowerShell 5.1 Sonderzeichen richtig liest.
-        pfad.write_text("\r\n".join(inhalt) + "\r\n", encoding="utf-8-sig")
+        # newline="": die Zeilenenden stehen schon im String. Ohne das macht
+        # der Textmodus unter Windows aus jedem \r\n ein \r\r\n.
+        pfad.write_text("\r\n".join(inhalt) + "\r\n", encoding="utf-8-sig", newline="")
         return pfad
 
     if sys.platform == "win32":
         pfad = ordner_ / "start.cmd"
         start = " ".join(_zitat_win(teil) for teil in endbefehl)
         inhalt = ["@echo off", f'cd /d "{ordner}"', *zeilen, start]
-        pfad.write_text("\r\n".join(inhalt) + "\r\n", encoding="utf-8")
+        # newline="" wie oben - sonst landet \r\r\n in der .cmd.
+        pfad.write_text("\r\n".join(inhalt) + "\r\n", encoding="utf-8", newline="")
         return pfad
 
     pfad = ordner_ / "start.sh"
     inhalt = ["#!/usr/bin/env bash", f'cd "{ordner}" || exit 1', *zeilen,
               " ".join(_zitat_posix(t) for t in endbefehl)]
-    pfad.write_text("\n".join(inhalt) + "\n", encoding="utf-8")
+    # newline="\n": eine .sh vertraegt kein CRLF, auch nicht wenn sie
+    # ausnahmsweise unter Windows erzeugt wird.
+    pfad.write_text("\n".join(inhalt) + "\n", encoding="utf-8", newline="\n")
     pfad.chmod(pfad.stat().st_mode | stat.S_IXUSR)
     return pfad
 

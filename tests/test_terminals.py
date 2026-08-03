@@ -100,3 +100,34 @@ class TestStartdatei:
         assert "Set-Location -LiteralPath" in inhalt
         assert "$env:HTTPS_PROXY" in inhalt                 # PS-Vorbefehl unangetastet
         assert "& 'sanctuary' 'start' 'Peanut'" in inhalt   # PS-Call-Operator
+
+
+class TestZeilenenden:
+    """Die Bytes der Startdatei, nicht ihr Text.
+
+    Alle Tests oben lesen mit ``read_text``, und das vereinheitlicht die
+    Zeilenenden beim Lesen - ein falsches Zeilenende faellt dort also gar
+    nicht auf. Diese Tests lesen deshalb roh.
+    """
+
+    def test_cmd_hat_einfaches_crlf(self, tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+        """Ohne newline="" macht der Textmodus unter Windows \\r\\r\\n daraus."""
+        monkeypatch.setattr(sys, "platform", "win32")
+        pfad = startdatei([], str(tmp_path), ["sanctuary", "start"])
+        rohdaten = pfad.read_bytes()
+        assert b"\r\r\n" not in rohdaten
+        assert b"\r\n" in rohdaten
+
+    def test_ps1_hat_einfaches_crlf(self, tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+        monkeypatch.setattr(sys, "platform", "win32")
+        pfad = startdatei([], str(tmp_path), ["sanctuary", "start"], powershell=True)
+        rohdaten = pfad.read_bytes()
+        assert rohdaten.startswith(b"\xef\xbb\xbf")   # BOM fuer PowerShell 5.1
+        assert b"\r\r\n" not in rohdaten
+        assert b"\r\n" in rohdaten
+
+    def test_sh_hat_kein_cr(self, tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+        """Eine .sh vertraegt kein CR, auch nicht unter Windows erzeugt."""
+        monkeypatch.setattr(sys, "platform", "linux")
+        pfad = startdatei([], str(tmp_path), ["sanctuary", "start"])
+        assert b"\r" not in pfad.read_bytes()

@@ -86,6 +86,20 @@ class TestProtokoll:
         erste = _eigenes_protokoll.read_text(encoding="utf-8").splitlines()[0]
         assert erste.startswith("[")
 
+    def test_protokoll_bleibt_bei_lf(
+        self, _eigenes_protokoll: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Anhaengen und Kuerzen muessen dasselbe Zeilenende schreiben.
+
+        Ohne newline="\\n" macht der Textmodus unter Windows CRLF daraus -
+        ``read_text`` vereinheitlicht das beim Lesen, die Datei traegt es
+        aber trotzdem. Darum roh pruefen.
+        """
+        monkeypatch.setattr(absturz, "GRENZE", 1000)
+        for i in range(60):
+            absturz.notiere(f"Probe {i}", "Zeile\nZeile")
+        assert b"\r" not in _eigenes_protokoll.read_bytes()
+
     def test_unschreibbares_ziel_wirft_nicht(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
