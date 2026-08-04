@@ -8,6 +8,7 @@ Statuszeile und Verlauf an, und reagieren die Tasten.
 from __future__ import annotations
 
 import time as zeit_modul
+from datetime import datetime, timedelta
 
 import pytest
 from textual.widgets import Button, DataTable, Input
@@ -53,10 +54,20 @@ class FakeQuelle:
                     tokens=1000,
                     modell="claude-opus-5",
                     cwd="C:\\Repos\\test",
+                    letzte_zeit="2026-08-04T12:54:00",
+                    aufgabe="mach den /release",
                 ),
                 # selbst=True: die Sitzung, die die Oberflaeche bedient.
+                # Der lange Auftragstext ist Absicht: er treibt die
+                # Aufgabenspalte auf ihre volle Breite und macht damit den
+                # Ernstfall messbar statt den bequemen Kurztext.
                 Agent(
-                    name="Lino", status="busy", rechner="TESTHOST", tokens=500, selbst=True
+                    name="Lino",
+                    status="busy",
+                    rechner="TESTHOST",
+                    tokens=500,
+                    selbst=True,
+                    aufgabe="Bitte alle Tests laufen lassen, danach den Release bauen",
                 ),
             ],
         )
@@ -361,6 +372,140 @@ class TestBedienung:
             werte = {k: i.value for k, i in kopf._items.items()}
             assert werte["pool"] == "Comicmotiv"
             assert werte["free"] == "1"
+
+
+class TestAufgabenspalte:
+    """Aufgabe und letzte Aktivitaet stehen auch in der Tabelle.
+
+    Vorher waren sie nur in der Detailansicht zu sehen - fuer die Frage
+    "woran haengt gerade wer" hiesse das, jede Zeile einzeln aufzumachen.
+    """
+
+    async def test_tabelle_zeigt_aufgabe_und_alter(self, quelle: FakeQuelle) -> None:
+        app = SanctuaryApp(quelle=quelle)
+        app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
+        async with app.run_test(size=(200, 50)) as pilot:
+            tabelle = await _gefuellt(app, pilot)
+            # Nach Post absteigend steht Klara oben.
+            zeile = [str(zelle) for zelle in tabelle.get_row_at(0)]
+            assert zeile[AgentenTabelle._AUFGABEN_SPALTE] == "mach den /release"
+            # Der Wert selbst haengt am Kalender - geprueft wird nur, dass
+            # ueberhaupt ein Alter dasteht und nicht der Strich fuer "nichts".
+            assert zeile[AgentenTabelle._ZEIT_SPALTE] != "-"
+
+    async def test_beide_spalten_sind_ohne_scrollen_zu_sehen(
+        self, quelle: FakeQuelle
+    ) -> None:
+        """Der Punkt der Uebung: sichtbar, nicht hinter dem Seitwaerts-Scroll.
+
+        Frueher standen beide Spalten am rechten Ende - bei 141 Zeichen
+        Gesamtbreite und rund 70 sichtbaren war das dasselbe wie gar nicht da.
+        """
+        from claude_sanctuary.tui.widgets.agenten_tabelle import AgentenDaten
+
+        app = SanctuaryApp(quelle=quelle)
+        app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
+        # Bewusst schmal: 120 Zeichen sind ein normales Fenster.
+        async with app.run_test(size=(120, 45)) as pilot:
+            tabelle = await _gefuellt(app, pilot)
+            for _ in range(20):
+                await pilot.pause()
+            daten = app.query_one("#agenten-daten", AgentenDaten)
+            spalten = list(daten.columns.values())
+            bis_ende_aufgabe = sum(
+                s.get_render_width(daten)
+                for s in spalten[: AgentenTabelle._ZEIT_SPALTE + 1]
+            )
+            assert bis_ende_aufgabe <= tabelle.size.width, (
+                f"Aufgabe und Alter brauchen {bis_ende_aufgabe} Zeichen, "
+                f"sichtbar sind {tabelle.size.width}"
+            )
+
+    async def test_voller_text_haengt_als_hinweis_an_der_zelle(
+        self, quelle: FakeQuelle
+    ) -> None:
+        """Die Spalte ist gekuerzt - der volle Text muss erreichbar bleiben."""
+        from textual.coordinate import Coordinate
+
+        from claude_sanctuary.tui.widgets.agenten_tabelle import AgentenDaten
+
+        app = SanctuaryApp(quelle=quelle)
+        app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
+        async with app.run_test(size=(200, 50)) as pilot:
+            await _gefuellt(app, pilot)
+            tabelle = app.query_one("#agenten-daten", AgentenDaten)
+            tabelle.hover_coordinate = Coordinate(0, AgentenTabelle._AUFGABEN_SPALTE)
+            await pilot.pause()
+            assert tabelle.tooltip == "mach den /release"
+
+            # Die Spalte zeigt nur das Alter - der genaue Zeitpunkt muss
+            # trotzdem erreichbar bleiben, sonst geht er ganz verloren.
+            tabelle.hover_coordinate = Coordinate(0, AgentenTabelle._ZEIT_SPALTE)
+            await pilot.pause()
+            assert tabelle.tooltip == "04.08.2026 12:54"
+
+            # Ausserhalb der umgerechneten Spalten haengt kein Hinweis, sonst
+            # wiederholt er nur, was die Zelle ohnehin zeigt.
+            tabelle.hover_coordinate = Coordinate(0, 1)
+            await pilot.pause()
+            assert tabelle.tooltip is None
+
+    def test_langer_auftrag_wird_gekuerzt(self) -> None:
+        from claude_sanctuary.tui.widgets.agenten_tabelle import _aufgabe
+
+        lang = "Bitte alle Tests laufen lassen und danach den Release bauen"
+        gekuerzt = _aufgabe(lang, breite=40)
+        assert len(gekuerzt) <= 40
+        assert gekuerzt.endswith("...")
+        # Zeilenumbrueche wuerden die Tabellenzeile sprengen.
+        assert "\n" not in _aufgabe("erste Zeile\nzweite Zeile", breite=40)
+
+    def test_alter_rechnet_gegen_einen_festen_bezug(self) -> None:
+        """Der Bezugszeitpunkt wird uebergeben, nicht aus der Uhr gelesen.
+
+        Sonst waere jede Erwartung hier eine Zeitbombe - richtig, bis die
+        Minute umspringt.
+        """
+        from claude_sanctuary.tui.widgets.agenten_tabelle import _alter
+
+        jetzt = datetime(2026, 8, 4, 13, 0).astimezone()
+
+        def vor(minuten: int) -> str:
+            return (jetzt - timedelta(minutes=minuten)).isoformat()
+
+        assert _alter(vor(0), jetzt) == "gerade"
+        assert _alter(vor(6), jetzt) == "6 min"
+        assert _alter(vor(90), jetzt) == "1 h"
+        assert _alter(vor(60 * 50), jetzt) == "2 d"
+        assert _alter("", jetzt) == "-"
+        assert _alter("kein Datum", jetzt) == "?"
+
+
+class TestBildschirmfotoTaste:
+    async def test_taste_p_nimmt_auf(self, quelle: FakeQuelle) -> None:
+        app = SanctuaryApp(quelle=quelle)
+        app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
+        async with app.run_test(size=(160, 50)) as pilot:
+            await _gefuellt(app, pilot)
+            await pilot.press("p")
+            for _ in range(60):
+                await pilot.pause()
+                if quelle.fotos:
+                    break
+            # Klara laeuft auf dem eigenen Rechner - also ohne Ziel.
+            assert quelle.fotos == [""]
+
+    def test_textuals_eigener_screenshot_bleibt_unangetastet(self) -> None:
+        """Der Aktionsname ``screenshot`` gehoert Textual.
+
+        Dort speichert er ein SVG der Oberflaeche. Wer ihn hier ueberschreibt,
+        nimmt der Befehlspalette diese Funktion weg - deshalb heisst die
+        eigene Aktion ``bildschirmfoto``.
+        """
+        from textual.app import App
+
+        assert SanctuaryApp.action_screenshot is App.action_screenshot
+        assert hasattr(SanctuaryApp, "action_bildschirmfoto")
 
 
 class TestProtokoll:

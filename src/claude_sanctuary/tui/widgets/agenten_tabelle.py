@@ -3,17 +3,19 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import datetime
 from typing import Any, ClassVar
 
 from rich.text import Text
 from textual import events
 from textual.app import ComposeResult
 from textual.containers import Vertical
+from textual.coordinate import Coordinate
 from textual.message import Message
 from textual.widgets import DataTable
 from textual_widgets import SearchInputWithHistory
 
-from claude_sanctuary.i18n import t
+from claude_sanctuary.i18n import format_datetime, t
 from claude_sanctuary.kern.modelle import Agent, Ampel
 
 # Feste Ampelfarben statt Theme-Variablen oder benannter ANSI-Farben: eine
@@ -40,11 +42,63 @@ def _dauer(ms: int) -> str:
     return f"{minuten // 60}h {minuten % 60:02d}m"
 
 
-def _ordner(pfad: str, breite: int = 28) -> str:
+ORDNER_BREITE = 28
+"""Ab hier wird der Pfad in der Tabelle gekuerzt."""
+
+
+def _ordner(pfad: str, breite: int = ORDNER_BREITE) -> str:
     """Kuerzt von links - das Ende eines Pfades ist das Aussagekraeftige."""
     if len(pfad) <= breite:
         return pfad
     return "..." + pfad[-(breite - 3) :]
+
+
+def _alter(zeitpunkt: str, jetzt: datetime | None = None) -> str:
+    """Abstand zum letzten Eintrag, kompakt: ``4 min``, ``2 h``, ``3 d``.
+
+    In der Tabelle steht bewusst das Alter und nicht der Zeitstempel: die
+    Frage lautet "wie lange ist da nichts mehr passiert", und die beantwortet
+    ein Abstand ohne Kopfrechnen - bei einem Drittel der Spaltenbreite. Der
+    genaue Zeitpunkt haengt als Hinweis an der Zelle und steht im Detail.
+    """
+    if not zeitpunkt:
+        return "-"
+    try:
+        wert = datetime.fromisoformat(zeitpunkt.replace("Z", "+00:00")).astimezone()
+    except (ValueError, TypeError):
+        return "?"
+    bezug = jetzt.astimezone() if jetzt is not None else datetime.now().astimezone()
+    minuten = int((bezug - wert).total_seconds() // 60)
+    if minuten < 1:
+        return t("age.now")
+    if minuten < 60:
+        return f"{minuten} min"
+    if minuten < 60 * 24:
+        return f"{minuten // 60} h"
+    return f"{minuten // (60 * 24)} d"
+
+
+AUFGABEN_BREITE = 30
+"""Deckel fuer die Aufgabenspalte.
+
+Gemessen an einem Fenster von 120 Zeichen: die Tabelle sieht davon rund 70,
+und bei 40 Zeichen Aufgabe schiebt allein diese Spalte Kontext und Post aus
+dem Bild. Bei 30 bleiben sie stehen, und kurze Auftraege brauchen ohnehin
+weniger - die Spalte waechst nur so weit wie ihr laengster Text.
+"""
+
+
+def _aufgabe(text: str, breite: int = AUFGABEN_BREITE) -> str:
+    """Kuerzt von rechts - der Anfang eines Auftrags traegt die Aussage.
+
+    Ohne Deckel wuerde die Spalte so breit wie der laengste Auftragstext,
+    und die Tabelle waere nur noch seitlich zu lesen. Der volle Text steht
+    im Hinweis unter der Maus und in der Detailansicht.
+    """
+    einzeilig = " ".join(text.split())
+    if len(einzeilig) <= breite:
+        return einzeilig
+    return einzeilig[: breite - 3].rstrip() + "..."
 
 
 class AgentenDaten(DataTable[Any]):
@@ -56,7 +110,23 @@ class AgentenDaten(DataTable[Any]):
     unterbindet nur das Bubbling, nicht die Aufrufkette entlang der MRO.
     Dafuer ist ``prevent_default()`` da, und ein ``super()``-Aufruf darf
     NICHT dazu, weil Textual die Basis ohnehin selbst aufruft.
+
+    Ausserdem zeigt sie den vollen Inhalt gekuerzter Zellen als Hinweis
+    unter der Maus. Textual kennt keine Hinweise je Textabschnitt - der
+    Hinweis gehoert immer dem ganzen Widget, also wird er beim Wandern der
+    Maus umgeschrieben.
     """
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.zell_hinweise: dict[tuple[int, int], str] = {}
+        """(Zeile, Spalte) auf den vollen Text der gekuerzten Zelle."""
+
+    def watch_hover_coordinate(self, old: Coordinate, value: Coordinate) -> None:
+        # super() ist Pflicht: die Basis zeichnet die verlassene und die neue
+        # Zelle neu. Ohne den Aufruf bleibt die Hervorhebung stehen.
+        super().watch_hover_coordinate(old, value)
+        self.tooltip = self.zell_hinweise.get((value.row, value.column))
 
     class RechtsKlick(Message):
         def __init__(self, tabelle: AgentenDaten, zeile: int, bei: tuple[int, int]) -> None:
@@ -122,25 +192,37 @@ class AgentenTabelle(Vertical):
             self.agent = agent
             self.bei = bei
 
+    # Reihenfolge nach Betriebssicht: wer, wo, woran, seit wann nichts mehr,
+    # dann die Kennzahlen. Die statischen Angaben (Modell, Version, Ordner,
+    # Werkzeug) stehen hinten - sie beantworten keine Frage im Minutentakt.
     # Nur Spalten in diesem Verzeichnis sind sortierbar.
     _SORTIER: ClassVar[dict[int, Callable[[Agent], Any]]] = {
         1: lambda a: a.name.casefold(),
         2: lambda a: a.rechner.casefold(),
-        3: lambda a: (a.modell or "").casefold(),
-        4: lambda a: (a.version or "").casefold(),
-        5: lambda a: a.cwd.casefold(),
-        6: lambda a: a.laufzeit_ms,
-        7: lambda a: a.kontext,
-        8: lambda a: a.post,
-        9: lambda a: a.tokens,
+        4: lambda a: a.letzte_zeit,
+        5: lambda a: a.kontext,
+        6: lambda a: a.post,
+        7: lambda a: a.laufzeit_ms,
+        8: lambda a: a.tokens,
+        9: lambda a: (a.modell or "").casefold(),
+        10: lambda a: (a.version or "").casefold(),
+        11: lambda a: a.cwd.casefold(),
     }
+    """Spalte 3 (Aufgabe) und 12 (Werkzeug) sind freier Text - eine
+    alphabetische Sortierung danach ordnet nichts Sinnvolles."""
+
+    _AUFGABEN_SPALTE = 3
+    _ZEIT_SPALTE = 4
+    _ORDNER_SPALTE = 11
+    """Spalten mit gekuerztem oder umgerechnetem Inhalt - dort haengt der
+    volle Wert als Hinweis unter der Maus."""
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self._agenten: list[Agent] = []
         self._sichtbar: list[Agent] = []
         self._filter = ""
-        self._sortiert_nach: int | None = 8  # Post - dort steht der Handlungsbedarf
+        self._sortiert_nach: int | None = 6  # Post - dort steht der Handlungsbedarf
         self._absteigend = True
         self._kopf: list[str] = []
         self._spalten: list[Any] = []
@@ -158,12 +240,15 @@ class AgentenTabelle(Vertical):
     def on_mount(self) -> None:
         tabelle = self.query_one("#agenten-daten", DataTable)
         self._kopf = [
-            t("col.state"), t("col.name"), t("col.host"), t("col.model"),
-            t("col.version"), t("col.dir"), t("col.uptime"), t("col.context"),
-            t("col.post"), t("col.tokens"), t("col.tool"),
+            t("col.state"), t("col.name"), t("col.host"), t("col.task"),
+            t("col.last_seen"), t("col.context"), t("col.post"), t("col.uptime"),
+            t("col.tokens"), t("col.model"), t("col.version"), t("col.dir"),
+            t("col.tool"),
         ]
         self._spalten = list(tabelle.add_columns(*self._kopf))
-        tabelle.fixed_columns = 1
+        # Zwei feste Spalten: beim Blaettern nach rechts muss erkennbar
+        # bleiben, zu wem die Zeile gehoert - die Ampel allein genuegt nicht.
+        tabelle.fixed_columns = 2
         self._kopf_zeichnen()
 
     # -- Daten ----------------------------------------------------------
@@ -210,8 +295,20 @@ class AgentenTabelle(Vertical):
         self._sichtbar = sichtbar
 
         tabelle.clear()
-        for a in sichtbar:
+        hinweise: dict[tuple[int, int], str] = {}
+        for zeile, a in enumerate(sichtbar):
             tabelle.add_row(*self._zeile(a), key=f"{a.rechner}/{a.name}")
+            # Nur wo wirklich gekuerzt wurde - sonst haengt an jeder Zelle ein
+            # Hinweis, der dasselbe sagt wie die Zelle selbst.
+            if a.cwd and len(a.cwd) > ORDNER_BREITE:
+                hinweise[(zeile, self._ORDNER_SPALTE)] = a.cwd
+            if a.aufgabe:
+                hinweise[(zeile, self._AUFGABEN_SPALTE)] = " ".join(a.aufgabe.split())
+            if a.letzte_zeit:
+                # Die Spalte zeigt das Alter - der genaue Zeitpunkt hier.
+                hinweise[(zeile, self._ZEIT_SPALTE)] = format_datetime(a.letzte_zeit)
+        if isinstance(tabelle, AgentenDaten):
+            tabelle.zell_hinweise = hinweise
 
         if gemerkt:
             for i, a in enumerate(sichtbar):
@@ -237,13 +334,15 @@ class AgentenTabelle(Vertical):
             Text("●", style=AMPEL_FARBE[a.ampel]),
             name,
             Text(a.rechner, style="dim"),
+            Text(_aufgabe(a.aufgabe) if a.aufgabe else "-", style="" if a.aufgabe else "dim"),
+            Text(_alter(a.letzte_zeit), justify="right", style="dim"),
+            kontext,
+            post,
+            laufzeit,
+            Text(_tokens(a.tokens), justify="right", style="dim"),
             Text(a.modell or "-", style="" if a.modell else "dim"),
             Text(a.version or "-", style="dim"),
             Text(_ordner(a.cwd), style="dim"),
-            laufzeit,
-            kontext,
-            post,
-            Text(_tokens(a.tokens), justify="right", style="dim"),
             Text(a.letztes_tool or "-", style="dim"),
         ]
 

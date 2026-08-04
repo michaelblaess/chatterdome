@@ -85,6 +85,10 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         Binding("v,V", "show_usage", "usage", key_display="v"),
         Binding("b,B", "broadcast", "broadcast", key_display="b"),
         Binding("r,R", "restart_agent", "restart", key_display="r"),
+        # NICHT "screenshot": diesen Aktionsnamen belegt Textual selbst, dort
+        # speichert er ein SVG der Oberflaeche. Hier geht es um ein Foto des
+        # ganzen Bildschirms - zwei verschiedene Dinge.
+        Binding("p,P", "bildschirmfoto", "screenshot", key_display="p"),
         Binding("slash", "focus_filter", "filter", key_display="/", show=False),
     ]
 
@@ -102,6 +106,7 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         "show_usage": "usage",
         "broadcast": "broadcast",
         "restart_agent": "restart",
+        "bildschirmfoto": "screenshot",
         "focus_filter": "filter",
     }
 
@@ -496,6 +501,20 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         self.aktualisieren()
 
     # -- Bildschirmfoto -------------------------------------------------
+
+    def action_bildschirmfoto(self) -> None:
+        """Nimmt den Bildschirm auf - vom gewaehlten Agenten, sonst von hier.
+
+        Ohne Auswahl ist der eigene Rechner das Naheliegende: das Bild soll
+        zeigen, was gerade zu sehen ist, und nicht nichts.
+        """
+        agent = self._gewaehlt
+        rechner = agent.rechner if agent is not None else self._bestand.rechner
+        if not rechner:
+            # Vor der ersten Abfrage ist noch kein Rechnername bekannt.
+            self.notify(t("notify.no_host"), severity="warning")
+            return
+        self._bild_holen(rechner)
 
     def _bild_holen(self, rechner: str) -> None:
         """Stoesst die Aufnahme an. Der eigene Rechner braucht kein Ziel."""
