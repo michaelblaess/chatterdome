@@ -23,10 +23,10 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: uv einrichten
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v7
         with:
           # Setzt UV_PYTHON und schlaegt damit die .python-version des
           # Repos - sonst liefe jede Zeile der Matrix auf 3.13.
