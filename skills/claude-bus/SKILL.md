@@ -211,7 +211,7 @@ nicht als 0 - sonst läse sich Messaging als gratis.
 
 ## Rechnertrennung
 
-Michael arbeitet auf mehreren Rechnern (RAINBOW, SENZA, einem Kundenrechner). **Vom
+Michael arbeitet auf mehreren Rechnern - zwei privaten und einem Kundenrechner. **Vom
 Kundenrechner darf nichts abfliessen**, und kein Rechner darf ungefragt die Sitzungsinhalte
 eines anderen einsammeln.
 

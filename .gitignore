@@ -10,3 +10,8 @@ venv/
 .DS_Store
 *.egg-info/
 .mypy_cache/
+
+# Interne Planungsnotizen - bleiben lokal, nicht im Repo. Sie halten den
+# Arbeitsstand waehrend der Entwicklung fest, nicht das fertige Werkzeug.
+docs/plan-tui.md
+docs/roadmap.md
