@@ -11,6 +11,12 @@ venv/
 *.egg-info/
 .mypy_cache/
 
+# Nuitka: fertige Pakete und Zwischenstand des Compilers.
+dist/
+*.build/
+*.dist/
+*.onefile-build/
+
 # Interne Planungsnotizen - bleiben lokal, nicht im Repo. Sie halten den
 # Arbeitsstand waehrend der Entwicklung fest, nicht das fertige Werkzeug.
 docs/plan-tui.md

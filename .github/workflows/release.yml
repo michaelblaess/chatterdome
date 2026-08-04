@@ -1,0 +1,91 @@
+name: Release
+
+# Ein Tag vX.Y.Z baut die Oberflaeche je Betriebssystem zu einem
+# eigenstaendigen Paket und haengt es an das GitHub-Release.
+#
+# ACHTUNG, Kosten: dieses Repo ist privat, GitHub rechnet die Minuten also
+# gegen das Kontingent - Linux einfach, Windows doppelt, macOS zehnfach.
+# Ein vollstaendiger Lauf kostet dadurch rund 260 Minuten, davon 200 fuer
+# macOS allein. Wer das nicht braucht, nimmt macos-latest aus der Matrix.
+#
+# Was die Pakete NICHT enthalten: den Kurzbefehl sanctuary (Node), die
+# Skills und die Hooks. Das ist die Oberflaeche, nicht die ganze Zentrale -
+# die wird weiterhin ueber setup.ps1 / setup.sh aus dem Repo eingerichtet.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        # macos-latest ist Apple Silicon. Ein Paket von dort startet auf
+        # einem Intel-Mac nicht ("bad CPU type"), und Rosetta hilft nicht -
+        # es uebersetzt nur andersherum. Wer Intel braucht, ergaenzt
+        # macos-15-intel (laut GitHub verfuegbar bis August 2027); die
+        # Architektur steht dank uname -m schon im Archivnamen, die beiden
+        # Pakete ueberschreiben sich also nicht.
+        os: [windows-latest, ubuntu-22.04, macos-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: uv einrichten
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      # Nuitka linkt unter Linux gegen patchelf, das auf dem Runner fehlt.
+      - name: patchelf (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y patchelf
+
+      - name: Bauen (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./compile-win64.ps1
+
+      - name: Bauen (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: ./compile-linux.sh
+
+      - name: Bauen (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: ./compile-macos.sh
+
+      - name: Paket hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.os }}
+          # Einen Tag: der release-Job holt die Pakete im selben Lauf ab,
+          # danach sind sie ueberfluessig. Die Vorgabe waeren 90 Tage, und
+          # Artefakte zaehlen gegen den Speicher des Kontos.
+          retention-days: 1
+          path: |
+            dist/claude-sanctuary-v*.zip
+            dist/claude-sanctuary-v*.tar.gz
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pakete einsammeln
+        uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - name: Release anlegen
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            *.zip
+            *.tar.gz

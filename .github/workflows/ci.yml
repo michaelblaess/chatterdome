@@ -1,0 +1,46 @@
+name: CI
+
+# Windows laeuft bewusst mit, obwohl es doppelt abgerechnet wird: die
+# Oberflaeche laeuft dort primaer, und die Fehler der letzten Wochen waren
+# Windows-Eigenheiten - Zeilenenden beim Schreiben, cp1252, Prozessstart.
+# Ein reines Linux-Gate haette keinen davon gefunden.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    strategy:
+      # Ohne das raeumt der erste rote Lauf die uebrigen ab, und deren
+      # Ergebnis bleibt unbekannt.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.12", "3.13"]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: uv einrichten
+        uses: astral-sh/setup-uv@v5
+        with:
+          # Setzt UV_PYTHON und schlaegt damit die .python-version des
+          # Repos - sonst liefe jede Zeile der Matrix auf 3.13.
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+
+      - name: Abhaengigkeiten aus uv.lock
+        run: uv sync --extra dev
+
+      - name: Lint (ruff)
+        run: uv run poe lint
+
+      - name: Typen (mypy strict)
+        run: uv run poe typecheck
+
+      - name: Tests (pytest)
+        run: uv run poe test
