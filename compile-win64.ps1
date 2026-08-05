@@ -23,15 +23,30 @@ function Invoke-Nativ {
         bricht das Skript dann schon bei einer Fortschrittsmeldung ab, und
         genau solche schreibt uv nach stderr ("Resolved 30 packages in 3ms").
         Innerhalb dieser Funktion gilt deshalb Continue - das wirkt nur hier.
+
+        KEIN param()-Block. Ein [Parameter()]-Attribut macht daraus eine
+        advanced function samt Common-Parametern, und danach bindet
+        PowerShell jedes Argument an SICH, das ein Praefix eines solchen
+        Parameters ist: "-e" bricht mit "nicht eindeutig" ab, "-v" wird still
+        als -Verbose geschluckt und kommt beim Programm nie an. Ueber $args
+        gibt es kein Binding. Dieselbe Funktion steht in bootstrap.ps1.
     #>
-    param(
-        [Parameter(Mandatory = $true)][string]$Datei,
-        [Parameter(ValueFromRemainingArguments = $true)][string[]]$Argumente
-    )
+    $liste = @($args)
+    if ($liste.Count -eq 0) {
+        throw "Invoke-Nativ ohne Programm aufgerufen"
+    }
+    $datei = $liste[0]
+    # Direkte Zuweisung mit @(...), kein if-Ausdruck: der packt ein
+    # einelementiges Array zu einem String aus, den @rest danach zeichenweise
+    # splattet.
+    $rest = @()
+    if ($liste.Count -gt 1) {
+        $rest = @($liste[1..($liste.Count - 1)])
+    }
     $ErrorActionPreference = "Continue"
-    & $Datei @Argumente
+    & $datei @rest
     if ($LASTEXITCODE -ne 0) {
-        throw "$Datei $($Argumente -join ' ') scheiterte (Exit $LASTEXITCODE)"
+        throw "$datei $($rest -join ' ') scheiterte (Exit $LASTEXITCODE)"
     }
 }
 

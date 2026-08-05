@@ -18,15 +18,37 @@ function Invoke-Nativ {
         CI-Umgebung ist sie das immer, und uv meldet seinen Fortschritt nach
         stderr - ohne diese Kapselung bricht das Skript dort bei einer
         blossen Statuszeile ab. Continue gilt nur innerhalb der Funktion.
+
+        KEIN param()-Block. Ein [Parameter()]-Attribut macht daraus eine
+        advanced function, und die bekommt die Common-Parameter dazu. Danach
+        bindet PowerShell jedes Argument an SICH, das ein Praefix eines
+        solchen Parameters ist, statt es durchzureichen:
+
+          uv pip install -e <pfad>   -> Abbruch, "-e" ist zwischen
+                                        -ErrorAction und -ErrorVariable
+                                        nicht eindeutig
+          uv -v run                  -> SCHLIMMER, "-v" wird still als
+                                        -Verbose geschluckt und kommt bei uv
+                                        nie an. Kein Fehler, keine Warnung.
+
+        Ueber $args gibt es kein Binding, alles geht unveraendert weiter.
     #>
-    param(
-        [Parameter(Mandatory = $true)][string]$Datei,
-        [Parameter(ValueFromRemainingArguments = $true)][string[]]$Argumente
-    )
+    $liste = @($args)
+    if ($liste.Count -eq 0) {
+        throw "Invoke-Nativ ohne Programm aufgerufen"
+    }
+    $datei = $liste[0]
+    # Direkte Zuweisung mit @(...), kein if-Ausdruck: der gibt ueber die
+    # Pipeline zurueck und packt ein einelementiges Array zu einem String
+    # aus - @rest wuerde ihn danach zeichenweise splatten.
+    $rest = @()
+    if ($liste.Count -gt 1) {
+        $rest = @($liste[1..($liste.Count - 1)])
+    }
     $ErrorActionPreference = "Continue"
-    & $Datei @Argumente
+    & $datei @rest
     if ($LASTEXITCODE -ne 0) {
-        throw "$Datei $($Argumente -join ' ') scheiterte (Exit $LASTEXITCODE)"
+        throw "$datei $($rest -join ' ') scheiterte (Exit $LASTEXITCODE)"
     }
 }
 
