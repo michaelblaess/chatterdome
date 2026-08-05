@@ -10,6 +10,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from claude_sanctuary.kern.gedaechtnis import (
     Recallbericht,
     lade_gedaechtnis,
@@ -205,6 +207,27 @@ class TestKennzahlen:
     def test_ohne_index_kein_teilen_durch_null(self, tmp_path: Path) -> None:
         _notiz(tmp_path, "project_a")
         assert lade_gedaechtnis(tmp_path).tokens_je_indexzeile == 0
+
+    def test_auslastung_folgt_der_engeren_grenze(self, tmp_path: Path) -> None:
+        # 180 kurze Zeilen: die Zeilengrenze ist bei 90 Prozent, die
+        # Bytegrenze noch weit weg. Entscheiden muss die engere von beiden -
+        # sonst meldet das Werkzeug Entwarnung, waehrend abgeschnitten wird.
+        _index(tmp_path, [f"- [N{i}](project_{i}.md) - x" for i in range(180)])
+
+        bestand = lade_gedaechtnis(tmp_path)
+        assert bestand.index_zeilen_anteil == pytest.approx(0.9)
+        assert bestand.index_bytes_anteil < 0.5
+        assert bestand.index_auslastung == pytest.approx(0.9)
+        assert bestand.index_warnt
+        assert bestand.index_zeilen_frei == 20
+
+    def test_kleiner_index_warnt_nicht(self, tmp_path: Path) -> None:
+        _notiz(tmp_path, "project_a")
+        _index(tmp_path, ["- [A](project_a.md) - Haken"])
+
+        bestand = lade_gedaechtnis(tmp_path)
+        assert not bestand.index_warnt
+        assert bestand.index_zeilen_frei == 199
 
     def test_groesste_zuerst(self, tmp_path: Path) -> None:
         _notiz(tmp_path, "project_klein", rumpf="kurz")

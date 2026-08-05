@@ -65,6 +65,12 @@ Press `m` in the interface. The tab reads the notes under `~/.claude/memory`
 and shows what Claude's memory actually costs. The path can be changed in the
 settings for anyone keeping a separate directory per project.
 
+The most urgent figure sits at the top: **how full the index is.** `MEMORY.md`
+has a hard limit of 200 lines or 25,000 characters, whichever bites first.
+Anything beyond that is **silently truncated** at session start, and it is the
+most recent entries that go. No setting lifts it. The tab shows both limits as
+bars and warns from 80 percent.
+
 Memory comes in two parts with very different costs:
 
 - **`MEMORY.md`** is the index and sits in context at **every** session start.

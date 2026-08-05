@@ -66,6 +66,12 @@ Taste `m` in der Oberfläche. Der Tab liest die Notizen unter `~/.claude/memory`
 und zeigt, was Claudes Gedächtnis wirklich kostet. Der Pfad lässt sich in den
 Einstellungen umstellen, wer je Projekt ein eigenes Verzeichnis führt.
 
+Ganz oben steht die dringlichste Zahl: **wie voll der Index ist.** `MEMORY.md`
+hat ein hartes Limit von 200 Zeilen oder 25.000 Zeichen, je nachdem was zuerst
+greift. Was darüber steht, wird beim Sitzungsstart **still abgeschnitten**, und
+zwar das zuletzt Angelegte. Es gibt keine Einstellung, die das hebt. Der Tab
+zeigt beide Grenzen als Balken und warnt ab 80 Prozent.
+
 Das Gedächtnis besteht aus zwei Teilen mit sehr verschiedenen Kosten:
 
 - **`MEMORY.md`** ist der Index und liegt bei **jedem** Sitzungsstart im

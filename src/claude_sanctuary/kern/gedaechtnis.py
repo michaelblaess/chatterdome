@@ -32,6 +32,20 @@ liegt der Wert erfahrungsgemaess bei rund 3,5 Zeichen je Token. Jede Anzeige,
 die darauf beruht, MUSS als Schaetzung beschriftet sein.
 """
 
+INDEX_ZEILEN_LIMIT = 200
+INDEX_BYTES_LIMIT = 25_000
+"""Harte Grenzen des Index, im CLI fest verdrahtet (byteCap, lineCap).
+
+Was darueber steht, wird beim Sitzungsstart STILL abgeschnitten - und zwar
+hinten, also das zuletzt Angelegte. Es gibt keine Einstellung, die das hebt.
+Die Warnung des CLI beginnt bei 80 Prozent, der Zielwert liegt bei 70.
+
+Das Limit gilt ausschliesslich fuer MEMORY.md. Die Einzelnotizen duerfen
+beliebig gross sein, sie werden nur bei Bedarf gelesen.
+"""
+
+INDEX_WARNSCHWELLE = 0.8
+
 BEKANNTE_TYPEN = ("user", "feedback", "project", "reference")
 """Die vier vorgesehenen Notizarten, in der Reihenfolge der Anleitung."""
 
@@ -237,6 +251,29 @@ class Gedaechtnis:
     def bestand_tokens(self) -> int:
         """Geschaetzte Last aller Notizen - faellt fast nie an."""
         return schaetze_tokens(self.zeichen_gesamt)
+
+    @property
+    def index_zeilen_anteil(self) -> float:
+        return self.index_zeilen / INDEX_ZEILEN_LIMIT
+
+    @property
+    def index_bytes_anteil(self) -> float:
+        return self.index_zeichen / INDEX_BYTES_LIMIT
+
+    @property
+    def index_auslastung(self) -> float:
+        """Der engere der beiden Grenzwerte - er entscheidet zuerst."""
+        return max(self.index_zeilen_anteil, self.index_bytes_anteil)
+
+    @property
+    def index_warnt(self) -> bool:
+        """Wahr, sobald das CLI selbst zu warnen beginnt."""
+        return self.index_auslastung >= INDEX_WARNSCHWELLE
+
+    @property
+    def index_zeilen_frei(self) -> int:
+        """Wie viele Zeilen noch passen, bevor still abgeschnitten wird."""
+        return max(0, INDEX_ZEILEN_LIMIT - self.index_zeilen)
 
     @property
     def tokens_je_indexzeile(self) -> int:

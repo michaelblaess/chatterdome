@@ -18,6 +18,8 @@ from textual.widgets import Static
 
 from claude_sanctuary.i18n import t
 from claude_sanctuary.kern.gedaechtnis import (
+    INDEX_BYTES_LIMIT,
+    INDEX_ZEILEN_LIMIT,
     ZEICHEN_JE_TOKEN,
     Gedaechtnis,
     Notiz,
@@ -107,6 +109,7 @@ class GedaechtnisDetail(VerticalScroll):
             f"[dim]{t('mem.lead')}[/]",
             "",
         ]
+        zeilen += self._auslastung(bestand)
         zeilen += self._kosten(bestand)
         zeilen += self._arten(bestand)
         zeilen += self._pruefungen(bestand)
@@ -114,6 +117,42 @@ class GedaechtnisDetail(VerticalScroll):
         zeilen += self._groesste(bestand)
         zeilen += self._diaet(bestand)
         return zeilen
+
+    def _auslastung(self, bestand: Gedaechtnis) -> list[str]:
+        """Die dringlichste Zahl, deshalb ganz oben.
+
+        Anders als die geschaetzten Token ist das ein HARTES Limit: was
+        darueber steht, wird beim Sitzungsstart still abgeschnitten, und zwar
+        das zuletzt Angelegte. Wer es nicht kennt, verliert Notizen, ohne dass
+        irgendwo etwas passiert.
+        """
+        farbe = "#e74c3c" if bestand.index_warnt else "#2ecc71"
+        return [
+            f"[bold]{t('mem.limit.title')}[/]",
+            "",
+            f"  [{farbe}]{_balken(bestand.index_zeilen_anteil, 24)}[/]  "
+            + t(
+                "mem.limit.lines",
+                zeilen=bestand.index_zeilen,
+                grenze=INDEX_ZEILEN_LIMIT,
+                prozent=round(bestand.index_zeilen_anteil * 100),
+            ),
+            f"  [dim]{_balken(bestand.index_bytes_anteil, 24)}[/]  "
+            + t(
+                "mem.limit.bytes",
+                bytes=_zahl(bestand.index_zeichen),
+                grenze=_zahl(INDEX_BYTES_LIMIT),
+                prozent=round(bestand.index_bytes_anteil * 100),
+            ),
+            "",
+            (
+                f"[bold #e74c3c]{t('mem.limit.warn', frei=bestand.index_zeilen_frei)}[/]"
+                if bestand.index_warnt
+                else f"[dim]{t('mem.limit.ok', frei=bestand.index_zeilen_frei)}[/]"
+            ),
+            f"[dim]{t('mem.limit.hint')}[/]",
+            "",
+        ]
 
     def _kosten(self, bestand: Gedaechtnis) -> list[str]:
         index = bestand.index_tokens
