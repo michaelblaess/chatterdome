@@ -189,7 +189,8 @@ statt einen zweiten Namen zu vergeben.
 
 Beide Wege oben vergeben einen Namen, aber **sichtbar** war er lange nur bei Weg 2. Wer
 einfach `claude` tippt, sah im Tab den KI-generierten Titel ("Im Bus nachschauen") und den
-Namen nirgends - Claude Code überschreibt den Tab-Titel ohnehin laufend mit diesem Titel.
+Namen nirgends - Claude Code überschrieb den Tab-Titel laufend mit diesem Titel. Seit dem
+03.08.2026 hält `titel.mjs` dagegen (eigener Abschnitt unten).
 
 Deshalb gibt es `statusline.mjs`: Claude Code schickt die Sitzungsdaten als JSON auf stdin
 und zeigt die Ausgabe in einer **eigenen Zeile über den eingebauten Badges** - die Zeile mit
@@ -209,6 +210,35 @@ unmaskierter Backslash die Trennzeichen - das Skript startet dann ohne sichtbare
 gar nicht. So bleibt derselbe Eintrag auf allen Rechnern gültig, was nötig ist, weil
 `settings.json` über claude-config auf alle synct.
 
+### Der Titel: Name und Aufgabe zugleich
+
+`titel.mjs` hängt als `UserPromptSubmit`-Hook (über `hooks/session-title.sh`) am Prompt und
+gibt `sessionTitle` aus. Claude speichert das als **zwei** Einträge in der Sitzungsdatei,
+`custom-title` und `agent-name`. In der Titel-Priorität `agentName || customTitle || aiTitle`
+gewinnt damit der eigene Titel - nur so klebt der Name stabil im Tab.
+
+Der Preis fiel beim Resume-Hinweis auf: `claude --resume "Luzie · claude-sanctuary"` sagte
+nicht mehr, woran die Sitzung sass, weil die automatische Zusammenfassung verdrängt wurde.
+Seit dem 05.08.2026 schlägt der Hook sie deshalb selbst nach. Sie steht als
+`{"type":"ai-title","aiTitle":"..."}` in derselben Datei und wird bei jedem Prompt neben dem
+`custom-title` fortgeschrieben, liegt also verlässlich am Dateiende. Der Titel lautet nun
+`<Name> · <Aufgabe>`, der Ordner entfällt (er steht in der Statuszeile).
+
+Drei Punkte, die den Bau bestimmt haben:
+
+- **Nicht die ganze Datei lesen.** Sitzungsdateien werden zweistellig megabytegross (gemessen:
+  43 MB), und der Hook läuft bei jedem Prompt. Gelesen werden nur die letzten 64 KB
+  (`SCHWANZ_BYTES`) - 18 ms bei der 43-MB-Datei, unabhängig von der Länge. Der Aufschlag
+  gegenüber der Fassung ohne Nachschlagen liegt bei rund 11 ms pro Lauf und verschwindet im
+  Node-Prozessstart (~120 ms).
+- **Den Dateipfad nicht auf die Escaping-Regel stützen.** Claude verstümmelt den
+  Arbeitspfad zum Ordnernamen (`C:\ZusatzSW\x` wird `C--ZusatzSW-x`, auch der Unterstrich in
+  `BUERO_PC2` wird zum Bindestrich). Das ist nirgends zugesichert, also nur ein schneller
+  Versuch - danach werden die Projektordner abgesucht.
+- **Nicht jede Sitzung bekommt eine Zusammenfassung.** Gemessen am 05.08.2026 hatten nur 2 von
+  12 Sitzungen überhaupt einen `ai-title`. Woran das liegt, ist **unbelegt**. Fehlt er, fällt
+  der Titel auf `<Name> · <Ordner>` zurück, also auf das bisherige Verhalten.
+
 ## Was der Operator kann und was nicht
 
 | Wunsch | Stand |
@@ -218,7 +248,7 @@ gar nicht. So bleibt derselbe Eintrag auf allen Rechnern gültig, was nötig ist
 | `status all` Detail für alle | geht: ein Sammellauf, dann jede Instanz nacheinander |
 | `watch` Live-Ansicht | geht |
 | `stop <Name>` | geht per Prozesssignal, fragt vorher nach |
-| Name im Tab-Titel | geht über `starte.mjs` |
+| Name im Tab-Titel | geht: `titel.mjs` setzt bei jedem Prompt `<Name> · <Aufgabe>`, unabhängig vom Start |
 | Name dauerhaft sichtbar | geht über die Statuszeile, unabhängig vom Start |
 | maschinenlesbare Ausgabe | geht: `--json`, mit `watch` als NDJSON-Strom |
 | rechnerübergreifende Sicht | geht: `--mesh`, Hosts in `mesh.json` |
