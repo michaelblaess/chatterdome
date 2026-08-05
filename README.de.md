@@ -20,6 +20,7 @@ keine Telemetrie. Was über Rechnergrenzen geht, geht über SSH im eigenen Tailn
 |---|---|
 | `skills/operator` | Übersicht aller laufenden Instanzen: Name, Status, Ordner, Modell, Laufzeit, Kontext. Detailansicht, Live-Ansicht, Beenden, rechnerübergreifende Sicht |
 | `skills/claude-bus` | Aufträge zwischen Instanzen, mit Zustand und Quittungen. SQLite, append-only Ereignisse |
+| `kern/gedaechtnis.py` | Analyse der Gedächtnisnotizen: Index gegen Bestand, Verweise, Prüfungen, tatsächliche Abrufe aus den Transkripten |
 | `kern/` | UI-freier Python-Kern - eine Quelle für beide Oberflächen |
 | `tui/` | Textual-Oberfläche fürs Terminal |
 | `web/` | FastHTML-Oberfläche, gedacht für den Dauerläufer im Tailnet |
@@ -58,6 +59,35 @@ sanctuary hilfe               # alle Befehle
 
 Die Skripte lassen sich weiterhin direkt aufrufen
 (`node ~/.claude/skills/operator/operator.mjs status`), das braucht man aber nur zum Debuggen.
+
+## Der Gedächtnis-Tab
+
+Taste `m` in der Oberfläche. Der Tab liest die Notizen unter `~/.claude/memory`
+und zeigt, was Claudes Gedächtnis wirklich kostet. Der Pfad lässt sich in den
+Einstellungen umstellen, wer je Projekt ein eigenes Verzeichnis führt.
+
+Das Gedächtnis besteht aus zwei Teilen mit sehr verschiedenen Kosten:
+
+- **`MEMORY.md`** ist der Index und liegt bei **jedem** Sitzungsstart im
+  Kontext. Jede Zeile darin kostet in jeder künftigen Sitzung.
+- **Die Einzelnotizen** kosten nur beim Abruf etwas, und der ist selten.
+
+Genau diese beiden Zahlen stellt die Übersicht nebeneinander, samt der
+Hochrechnung des Index über die gemessenen Sitzungen. Daraus folgt die
+praktische Lehre: eine Notiz zu löschen spart am Kontext fast nichts, eine
+Zeile weniger im Index dagegen schon. Bündeln schlägt Löschen.
+
+Dazu kommen die Prüfungen, die nachweisbare Mängel finden statt Meinungen
+abzugeben: Notizen ohne Eintrag im Index, Index-Einträge ohne Datei, Verweise
+ins Leere, fehlende Typangaben.
+
+Wie oft eine Notiz **tatsächlich** abgerufen wurde, liest der Tab aus den
+Transkripten. Gezählt wird ausschliesslich der Abrufhinweis, den Claude Code
+vor einen geladenen Eintrag setzt. Eine blosse Suche nach dem Dateinamen wäre
+wertlos, denn der steht auch in jeder Ausgabe von `git diff`. Die Zahl ist eine
+Untergrenze: gezählt wird nur, was in den noch vorhandenen Transkripten steht.
+
+Der Tab ist rein lesend. Er ändert und löscht nichts.
 
 ## Zwei Klassen von Agenten
 

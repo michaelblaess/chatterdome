@@ -116,3 +116,36 @@ Screen {
     max-height: 30;
     background: $surface;
 }
+
+/* -- Gedaechtnis-Tab ---------------------------------------------------- */
+
+#gedaechtnis-raum {
+    height: 1fr;
+    layout: horizontal;
+}
+
+#notizen {
+    width: 62%;
+    height: 1fr;
+}
+
+/* Wie bei der Agententabelle: die Suchleiste braucht ihre drei Zeilen,
+   eine Hoehenvorgabe wuerde das Feld zerquetschen. */
+#notizen SearchInputWithHistory {
+    padding: 0 1;
+}
+
+#notizen #notizen-daten {
+    height: 1fr;
+}
+
+#gedaechtnis-detail {
+    width: 1fr;
+    height: 1fr;
+    padding: 1 2;
+    background: $surface;
+}
+
+#gedaechtnis-inhalt {
+    height: auto;
+}

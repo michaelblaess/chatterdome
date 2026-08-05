@@ -32,12 +32,22 @@ from claude_sanctuary import __author__, __version__, __year__
 from claude_sanctuary.i18n import current_language, t
 from claude_sanctuary.kern import absturz
 from claude_sanctuary.kern.einstellungen import ZUSTIMMUNG, Einstellungen
+from claude_sanctuary.kern.gedaechtnis import (
+    Gedaechtnis,
+    Notiz,
+    Recallbericht,
+    lade_gedaechtnis,
+    uebernimm_recalls,
+    zaehle_recalls,
+)
 from claude_sanctuary.kern.lokale_quelle import LokaleQuelle
 from claude_sanctuary.kern.modelle import Agent, Bestand, Namenspool
 from claude_sanctuary.kern.protokolle import Quelle
 from claude_sanctuary.tui.starter import oeffne_ordner
 from claude_sanctuary.tui.widgets.agenten_tabelle import AgentenTabelle
+from claude_sanctuary.tui.widgets.gedaechtnis_detail import GedaechtnisDetail
 from claude_sanctuary.tui.widgets.kopf_panel import KopfPanel
+from claude_sanctuary.tui.widgets.notizen_tabelle import NotizenTabelle
 from claude_sanctuary.tui.widgets.status_zeile import StatusZeile
 from claude_sanctuary.tui.widgets.verlauf_panel import VerlaufPanel
 
@@ -85,6 +95,7 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         Binding("v,V", "show_usage", "usage", key_display="v"),
         Binding("b,B", "broadcast", "broadcast", key_display="b"),
         Binding("r,R", "restart_agent", "restart", key_display="r"),
+        Binding("m,M", "show_memory", "memory", key_display="m"),
         # NICHT "screenshot": diesen Aktionsnamen belegt Textual selbst, dort
         # speichert er ein SVG der Oberflaeche. Hier geht es um ein Foto des
         # ganzen Bildschirms - zwei verschiedene Dinge.
@@ -106,6 +117,7 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         "show_usage": "usage",
         "broadcast": "broadcast",
         "restart_agent": "restart",
+        "show_memory": "memory",
         "bildschirmfoto": "screenshot",
         "focus_filter": "filter",
     }
@@ -134,6 +146,11 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
 
         self._reserviert: list[str] = []
         """Namen aus dem Pool, die vorab vergeben sind - fuer den Rundruf."""
+
+        self._gedaechtnis: Gedaechtnis | None = None
+        """Der Notizbestand. None, solange der Tab nie geoeffnet wurde."""
+
+        self._notiz: Notiz | None = None
 
         self._neustart_kandidat: Agent | None = None
         self._gemeldete_systeme: dict[str, str] = {}
@@ -178,6 +195,13 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
                 yield Static(t("tab.empty"), classes="platzhalter")
             with TabPane(t("tab.stats"), id="tab-statistik"):
                 yield Static(t("tab.empty"), classes="platzhalter")
+            with (
+                TabPane(t("tab.memory"), id="tab-gedaechtnis"),
+                Horizontal(id="gedaechtnis-raum"),
+            ):
+                yield NotizenTabelle(id="notizen")
+                yield VerticalSplitter(target_id="notizen", min_size=40, id="notizen-splitter")
+                yield GedaechtnisDetail(id="gedaechtnis-detail")
         yield StatusZeile(id="status")
         yield HorizontalSplitter(target_id="bereiche", min_size=8, id="log-splitter")
         yield LogPanel(lang=current_language(), export_name="claude-sanctuary", id="log")
@@ -274,6 +298,75 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
             for meldung in bestand.fehler:
                 self._schreibe_log(t("log.refresh_failed", fehler=meldung), "warning")
             self._letzte_fehler = list(bestand.fehler)
+
+    # -- Gedaechtnis ----------------------------------------------------
+
+    @work(thread=True, exclusive=True, group="gedaechtnis")
+    def gedaechtnis_laden(self, mit_abrufen: bool = True) -> None:
+        """Liest die Notizen und danach die Abrufe aus den Transkripten.
+
+        Beides im Thread: das Lesen der Notizen dauert bei kaltem
+        Zwischenspeicher rund zwei Sekunden, der Durchgang durch die
+        Transkripte je nach Bestand deutlich laenger. Die Tabelle steht
+        deshalb schon, bevor die Abrufe gezaehlt sind.
+        """
+        bestand = lade_gedaechtnis(self._gedaechtnis_pfad())
+        self.call_from_thread(self._gedaechtnis_uebernehmen, bestand)
+        if not mit_abrufen or not bestand.notizen:
+            return
+        bericht = zaehle_recalls(Path.home() / ".claude" / "projects", bestand.alle_namen())
+        self.call_from_thread(self._abrufe_uebernehmen, bericht)
+
+    def _gedaechtnis_pfad(self) -> Path:
+        eigen = str(self._einstellungen.laden().get("gedaechtnis_pfad", "")).strip()
+        return Path(eigen) if eigen else Path.home() / ".claude" / "memory"
+
+    def _gedaechtnis_uebernehmen(self, bestand: Gedaechtnis) -> None:
+        self._gedaechtnis = bestand
+        self.query_one("#notizen", NotizenTabelle).uebernehmen(bestand.notizen)
+        detail = self.query_one("#gedaechtnis-detail", GedaechtnisDetail)
+        detail.setze_bestand(bestand)
+        detail.setze_laeuft(bool(bestand.notizen))
+        if not bestand.notizen:
+            self._schreibe_log(
+                t("log.memory_missing", pfad=str(self._gedaechtnis_pfad())), "warning"
+            )
+            return
+        self._schreibe_log(
+            t("log.memory_loaded", anzahl=bestand.anzahl, zeilen=bestand.index_zeilen)
+        )
+
+    def _abrufe_uebernehmen(self, bericht: Recallbericht) -> None:
+        if self._gedaechtnis is None:
+            return
+        uebernimm_recalls(self._gedaechtnis, bericht)
+        detail = self.query_one("#gedaechtnis-detail", GedaechtnisDetail)
+        detail.setze_laeuft(False)
+        # Die Tabelle traegt die Abrufe in einer eigenen Spalte, sie muss also
+        # neu gebaut werden - die Auswahl bleibt dabei stehen.
+        self.query_one("#notizen", NotizenTabelle).uebernehmen(self._gedaechtnis.notizen)
+        detail.setze_bestand(self._gedaechtnis)
+        self._schreibe_log(
+            t("log.memory_recalls", zugeordnet=bericht.zugeordnet, dateien=bericht.dateien)
+        )
+
+    def on_notizen_tabelle_ausgewaehlt(self, ereignis: NotizenTabelle.Ausgewaehlt) -> None:
+        self._notiz = ereignis.notiz
+        self.query_one("#gedaechtnis-detail", GedaechtnisDetail).setze_notiz(ereignis.notiz)
+
+    def on_tabbed_content_tab_activated(self, ereignis: TabbedContent.TabActivated) -> None:
+        """Laedt das Gedaechtnis beim ersten Oeffnen des Tabs.
+
+        Wer den Tab nie oeffnet, zahlt den Durchgang durch die Transkripte
+        auch nicht.
+        """
+        if ereignis.pane.id == "tab-gedaechtnis" and self._gedaechtnis is None:
+            self.gedaechtnis_laden()
+
+    def action_show_memory(self) -> None:
+        """Zeigt den Gedaechtnis-Tab und liest den Bestand neu ein."""
+        self.query_one("#bereiche", TabbedContent).active = "tab-gedaechtnis"
+        self.gedaechtnis_laden()
 
     @work(thread=True, group="namen")
     def namen_laden(self) -> None:

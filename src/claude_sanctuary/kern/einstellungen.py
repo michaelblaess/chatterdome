@@ -34,6 +34,9 @@ VORGABEN: dict[str, Any] = {
     "terminal_skript": "",
     # Wie Claude Code auf einem Agenten-Rechner aktualisiert wird.
     "update_verfahren": "claude",
+    # Verzeichnis der Gedaechtnisnotizen. Leer heisst ~/.claude/memory. Wer
+    # je Projekt ein eigenes Verzeichnis fuehrt, traegt es hier ein.
+    "gedaechtnis_pfad": "",
 }
 
 

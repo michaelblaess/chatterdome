@@ -20,6 +20,7 @@ telemetry. What crosses machine boundaries goes over SSH inside your own Tailnet
 |---|---|
 | `skills/operator` | Overview of running sessions: name, status, folder, model, uptime, context. Detail view, live view, stop, cross-machine view |
 | `skills/claude-bus` | Tasks between sessions, with state and receipts. SQLite, append-only events |
+| `kern/gedaechtnis.py` | Memory analysis: index versus collection, links, checks, actual recalls from the transcripts |
 | `kern/` | UI-free Python core - one source for both frontends |
 | `tui/` | Textual interface for the terminal |
 | `web/` | FastHTML interface, meant for the always-on machine in the Tailnet |
@@ -57,6 +58,35 @@ sanctuary hilfe               # all commands
 
 The scripts can still be called directly
 (`node ~/.claude/skills/operator/operator.mjs status`), but that is only needed for debugging.
+
+## The memory tab
+
+Press `m` in the interface. The tab reads the notes under `~/.claude/memory`
+and shows what Claude's memory actually costs. The path can be changed in the
+settings for anyone keeping a separate directory per project.
+
+Memory comes in two parts with very different costs:
+
+- **`MEMORY.md`** is the index and sits in context at **every** session start.
+  Every line in it costs in every future session.
+- **The individual notes** only cost something when recalled, and that is rare.
+
+The overview puts those two numbers side by side, along with the index
+projected across the sessions measured. The practical lesson follows from
+that: deleting a note saves almost nothing, while one line less in the index
+does. Merging beats deleting.
+
+The checks look for demonstrable defects rather than offering opinions: notes
+missing from the index, index entries without a file, links pointing nowhere,
+missing type fields.
+
+How often a note was **actually** recalled is read from the transcripts. Only
+the recall marker Claude Code places before a loaded entry is counted. Simply
+searching for the file name would be worthless, since it also appears in every
+`git diff` output. The figure is a lower bound: only what the surviving
+transcripts contain is counted.
+
+The tab is strictly read-only. It changes and deletes nothing.
 
 ## SSH: interactive versus one-shot
 
