@@ -14,6 +14,9 @@ dependencies = [
     "rich>=13.0",
     "textual-themes @ git+https://github.com/michaelblaess/textual-themes.git",
     "textual-widgets[images] @ git+https://github.com/michaelblaess/textual-widgets.git",
+    # Diagramme im Terminal fuer den Statistik-Tab. MIT-lizenziert und damit
+    # vertraeglich mit Apache 2.0, in jira-timesheet bereits erprobt.
+    "textual-plotext>=1.0",
 ]
 
 [project.optional-dependencies]

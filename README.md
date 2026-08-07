@@ -22,6 +22,7 @@ telemetry. What crosses machine boundaries goes over SSH inside your own Tailnet
 | `skills/claude-bus` | Tasks between sessions, with state and receipts. SQLite, append-only events |
 | `kern/gedaechtnis.py` | Memory analysis: index versus collection, links, checks, actual recalls from the transcripts |
 | `kern/busansicht.py` | Selection and figures for the bus tab: period, state, address kind, free-text search |
+| `kern/statistik.py` | Analysis of transcripts and bus: fleet, spend by kind, session duration, early warning |
 | `kern/` | UI-free Python core - one source for both frontends |
 | `tui/` | Textual interface for the terminal |
 | `web/` | FastHTML interface, meant for the always-on machine in the Tailnet |
@@ -87,6 +88,40 @@ predicted the incident. Next to it the expiry deadline (24 hours by default,
 changed via `sanctuary config`) and the oldest task still open, with its age.
 
 This tab is read-only as well. Sending still happens in the agents tab.
+
+## The statistics tab
+
+Press `k`. A dashboard of six sections, drawn with plotext in the terminal.
+The numbers come from the transcripts under `~/.claude/projects` and from the
+bus - a full pass over 369 MB takes a measured 2.3 s, so the tab recomputes on
+every open rather than keeping a cache that can go stale.
+
+- **Fleet** - how many sessions were active at the same time on a given day,
+  at most, next to how many there were in total. Reconstructed retroactively
+  from the session intervals; nothing ever had to be recorded for it.
+- **Spend** - tokens per day, stacked by cache read, cache write, fresh reads
+  and output. That split is the whole point: a measured **96 to 98 percent of
+  all tokens are cache reads**. A single total mostly measures repetition.
+- **What length costs** - median spend per bucket of session duration. Median
+  rather than mean, because a single very long session would otherwise define
+  its bucket on its own.
+- **Where the work went** - tokens per working folder.
+- **Message bus** - tasks per day by outcome, plus how long the open ones have
+  been waiting.
+- **Early warning** - four numbers with a traffic light, among them the one
+  that would have predicted the incident of 07.08.2026: how many open messages
+  a later holder of the same name could still inherit.
+
+**Everything is aggregated per session, never per agent name.** A name is a
+lease - in the measured period four names had already served two different
+sessions each. A ranking by name would merge them, and that is the same
+mistake that delivered the bus task to the wrong Marga.
+
+Two limitations appear as a footnote in the tab, because they shape the
+figures: what is measured is the **active** span, first to last request - not
+how long a window stayed open. And **subagents do not appear in the
+transcripts** (`isSidechain` is false for 35,498 of 35,498 requests), so their
+share is not measurable and is not estimated.
 
 ## The memory tab
 

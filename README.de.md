@@ -22,6 +22,7 @@ keine Telemetrie. Was über Rechnergrenzen geht, geht über SSH im eigenen Tailn
 | `skills/claude-bus` | Aufträge zwischen Instanzen, mit Zustand und Quittungen. SQLite, append-only Ereignisse |
 | `kern/gedaechtnis.py` | Analyse der Gedächtnisnotizen: Index gegen Bestand, Verweise, Prüfungen, tatsächliche Abrufe aus den Transkripten |
 | `kern/busansicht.py` | Auswahl und Kennzahlen für den Bus-Tab: Zeitraum, Status, Adressart, Freitextsuche |
+| `kern/statistik.py` | Auswertung der Transkripte und des Bus: Flotte, Verbrauch nach Art, Sitzungsdauer, Frühwarnung |
 | `kern/` | UI-freier Python-Kern - eine Quelle für beide Oberflächen |
 | `tui/` | Textual-Oberfläche fürs Terminal |
 | `web/` | FastHTML-Oberfläche, gedacht für den Dauerläufer im Tailnet |
@@ -89,6 +90,44 @@ Genau diese Zahl hätte den Vorfall vorhergesagt. Dazu die Verfallsfrist
 offene Auftrag mit seinem Alter.
 
 Auch dieser Tab ist rein lesend. Gesendet wird weiterhin im Agenten-Tab.
+
+## Der Statistik-Tab
+
+Taste `k`. Ein Dashboard aus sechs Sektionen, gezeichnet mit plotext im
+Terminal. Die Zahlen kommen aus den Transkripten unter `~/.claude/projects`
+und aus dem Bus - ein voller Durchgang durch 369 MB dauert gemessen 2,3 s,
+deshalb rechnet der Tab bei jedem Öffnen frisch statt einen Zwischenspeicher
+zu pflegen, der veralten kann.
+
+- **Flotte** - wie viele Sitzungen an einem Tag höchstens gleichzeitig aktiv
+  waren, daneben wie viele es insgesamt waren. Rückwirkend aus den
+  Sitzungsintervallen rekonstruiert, es musste dafür nie etwas mitgeschrieben
+  werden.
+- **Verbrauch** - Token je Tag, gestapelt nach Cache-Lesung, Cache-Aufbau,
+  frisch Gelesenem und Ausgabe. Diese Trennung ist der Kern: gemessen sind
+  **96 bis 98 Prozent aller Token Cache-Lesungen**. Eine Summe über alles
+  misst hauptsächlich Wiederholung.
+- **Was Länge kostet** - Median-Verbrauch je Korb der Sitzungsdauer. Median
+  und nicht Mittelwert, weil eine einzelne sehr lange Sitzung ihren Korb
+  sonst allein bestimmt.
+- **Wohin die Arbeit ging** - Token je Arbeitsordner.
+- **Message-Bus** - Aufträge je Tag nach Ausgang, dazu die Liegezeit der noch
+  offenen.
+- **Frühwarnung** - vier Zahlen mit Ampel, darunter die, die den Vorfall vom
+  07.08.2026 vorhergesagt hätte: wie viele offene Nachrichten ein späterer
+  Träger desselben Namens noch erben kann.
+
+**Ausgewertet wird je Sitzung, nie je Agentenname.** Ein Name ist eine Pacht -
+gemessen trugen vier Namen im Auswertungszeitraum bereits je zwei
+verschiedene Sitzungen. Eine Rangliste je Name würde sie zusammenwerfen, und
+das ist derselbe Denkfehler, der den Busauftrag an die falsche Marga
+geliefert hat.
+
+Zwei Einschränkungen stehen als Fussnote im Tab, weil sie die Zahlen prägen:
+Gemessen wird die **aktive** Dauer, also erste bis letzte Anfrage - nicht, wie
+lange ein Fenster offen stand. Und **Subagenten tauchen in den Transkripten
+nicht auf** (`isSidechain` steht bei 35.498 von 35.498 Anfragen auf false),
+ihr Anteil ist deshalb nicht messbar und wird nicht geschätzt.
 
 ## Der Gedächtnis-Tab
 

@@ -12,7 +12,7 @@ from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import Horizontal, Vertical
-from textual.widgets import Button, Footer, Header, Input, Static, TabbedContent, TabPane
+from textual.widgets import Button, Footer, Header, Input, TabbedContent, TabPane
 from textual_themes import THEME_DISPLAY_NAMES, register_all
 from textual_widgets import (
     DISCLAIMER_VERSION,
@@ -43,6 +43,7 @@ from claude_sanctuary.kern.gedaechtnis import (
 from claude_sanctuary.kern.lokale_quelle import LokaleQuelle
 from claude_sanctuary.kern.modelle import Agent, Auftrag, Bestand, Busbestand, Namenspool
 from claude_sanctuary.kern.protokolle import Quelle
+from claude_sanctuary.kern.statistik import Statistik, lade_statistik
 from claude_sanctuary.tui.starter import oeffne_ordner
 from claude_sanctuary.tui.widgets.agenten_tabelle import AgentenTabelle
 from claude_sanctuary.tui.widgets.bus_detail import BusDetail
@@ -50,6 +51,7 @@ from claude_sanctuary.tui.widgets.bus_tabelle import BusTabelle
 from claude_sanctuary.tui.widgets.gedaechtnis_detail import GedaechtnisDetail
 from claude_sanctuary.tui.widgets.kopf_panel import KopfPanel
 from claude_sanctuary.tui.widgets.notizen_tabelle import NotizenTabelle
+from claude_sanctuary.tui.widgets.statistik_dashboard import StatistikDashboard
 from claude_sanctuary.tui.widgets.status_zeile import StatusZeile
 from claude_sanctuary.tui.widgets.verlauf_panel import VerlaufPanel
 
@@ -100,6 +102,8 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         Binding("m,M", "show_memory", "memory", key_display="m"),
         # "b" liegt beim Rundruf und "n" beim Starten - fuer den Bus bleibt "u".
         Binding("u,U", "show_bus", "bus", key_display="u"),
+        # "s" liegt bei den Einstellungen, "t" beim Thema - bleibt "k" fuer Kennzahlen.
+        Binding("k,K", "show_stats", "stats", key_display="k"),
         # NICHT "screenshot": diesen Aktionsnamen belegt Textual selbst, dort
         # speichert er ein SVG der Oberflaeche. Hier geht es um ein Foto des
         # ganzen Bildschirms - zwei verschiedene Dinge.
@@ -123,6 +127,7 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         "restart_agent": "restart",
         "show_memory": "memory",
         "show_bus": "bus",
+        "show_stats": "stats",
         "bildschirmfoto": "screenshot",
         "focus_filter": "filter",
     }
@@ -161,6 +166,9 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         """Was im Bus liegt. None, solange der Tab nie geoeffnet wurde."""
 
         self._auftrag: Auftrag | None = None
+
+        self._statistik: Statistik | None = None
+        """Die Auswertung. None, solange der Tab nie geoeffnet wurde."""
 
         self._neustart_kandidat: Agent | None = None
         self._gemeldete_systeme: dict[str, str] = {}
@@ -206,7 +214,7 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
                 yield VerticalSplitter(target_id="bus-liste", min_size=50, id="bus-splitter")
                 yield BusDetail(id="bus-detail")
             with TabPane(t("tab.stats"), id="tab-statistik"):
-                yield Static(t("tab.empty"), classes="platzhalter")
+                yield StatistikDashboard(id="statistik")
             with (
                 TabPane(t("tab.memory"), id="tab-gedaechtnis"),
                 Horizontal(id="gedaechtnis-raum"),
@@ -376,6 +384,9 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
             self.gedaechtnis_laden()
         elif ereignis.pane.id == "tab-bus" and self._busbestand is None:
             self.bus_laden()
+        elif ereignis.pane.id == "tab-statistik" and self._statistik is None:
+            self.query_one("#statistik", StatistikDashboard).setze_laeuft(True)
+            self.statistik_laden()
 
     def action_show_memory(self) -> None:
         """Zeigt den Gedaechtnis-Tab und liest den Bestand neu ein."""
@@ -420,6 +431,46 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         """Zeigt den Bus-Tab und liest den Bestand neu ein."""
         self.query_one("#bereiche", TabbedContent).active = "tab-bus"
         self.bus_laden()
+
+    # -- Statistik ------------------------------------------------------
+
+    @work(thread=True, exclusive=True, group="statistik")
+    def statistik_laden(self) -> None:
+        """Wertet Transkripte und Bus aus.
+
+        Im Thread, weil der Durchgang durch die Transkripte gemessen 2,3 s
+        dauert (369 MB). Der Busbestand kommt aus derselben Quelle wie im
+        Bus-Tab - er wird hier eigens geholt, damit der Statistik-Tab auch
+        ohne vorher geoeffneten Bus-Tab vollstaendig ist.
+        """
+        bus = self._quelle.bestandsverlauf()
+        # Die laufenden Sitzungen kommen aus dem zuletzt geholten Bestand statt
+        # aus einer eigenen Abfrage: die kostet eine Sekunde und die Zahl aendert
+        # sich in dieser Zeitspanne nicht.
+        laufend = {a.session_id for a in self._bestand.agenten if a.session_id}
+        ergebnis = lade_statistik(
+            Path.home() / ".claude" / "projects",
+            bus.auftraege,
+            laufende=laufend,
+        )
+        self.call_from_thread(self._statistik_uebernehmen, ergebnis)
+
+    def _statistik_uebernehmen(self, ergebnis: Statistik) -> None:
+        self._statistik = ergebnis
+        self.query_one("#statistik", StatistikDashboard).setze_statistik(ergebnis)
+        self._schreibe_log(
+            t(
+                "log.stats_loaded",
+                anfragen=ergebnis.anfragen_gesamt,
+                sekunden=f"{ergebnis.dauer_s:.1f}",
+            )
+        )
+
+    def action_show_stats(self) -> None:
+        """Zeigt den Statistik-Tab und rechnet neu."""
+        self.query_one("#bereiche", TabbedContent).active = "tab-statistik"
+        self.query_one("#statistik", StatistikDashboard).setze_laeuft(True)
+        self.statistik_laden()
 
     @work(thread=True, group="namen")
     def namen_laden(self) -> None:
