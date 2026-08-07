@@ -244,3 +244,21 @@ Screen {
     height: auto;
     padding-top: 1;
 }
+
+/* Die beiden Textbereiche bekommen denselben Rahmen wie die Diagramme.
+   plotext zeichnet seinen Kasten selbst - ohne Rahmen sehen die zwei
+   Textfelder daneben aus, als fehle ihnen etwas.
+
+   Der Rahmen sitzt am Scrollbereich, damit die Bildlaufleiste innerhalb des
+   Kastens erscheint statt daneben. */
+.stats-kasten {
+    height: 1fr;
+    border: solid $foreground 30%;
+    padding: 0 1;
+    scrollbar-size-vertical: 1;
+}
+
+#stats-ordner,
+#stats-warnung {
+    height: auto;
+}

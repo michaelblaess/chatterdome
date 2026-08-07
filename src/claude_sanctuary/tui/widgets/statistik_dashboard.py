@@ -58,14 +58,21 @@ class StatistikDashboard(VerticalScroll):
                 yield PlotextPlot(id="stats-dauer")
             with Vertical(classes="stats-feld"):
                 yield Static(t("stats.folders"), classes="stats-titel")
-                yield Static("", id="stats-ordner", markup=True)
+                # Der Rahmen sitzt am Scrollbereich, nicht am Text: so
+                # erscheint die Leiste INNERHALB des Kastens, sobald mehr
+                # Ordner da sind, als hineinpassen. Ohne das schnitte der
+                # Kasten still ab, und stilles Abschneiden ist der schlimmere
+                # Fehler - man sieht ihm nicht an, dass etwas fehlt.
+                with VerticalScroll(classes="stats-kasten"):
+                    yield Static("", id="stats-ordner", markup=True)
         with Horizontal(classes="stats-reihe"):
             with Vertical(classes="stats-feld"):
                 yield Static(t("stats.bus"), classes="stats-titel")
                 yield PlotextPlot(id="stats-bus")
             with Vertical(classes="stats-feld"):
                 yield Static(t("stats.warning"), classes="stats-titel")
-                yield Static("", id="stats-warnung", markup=True)
+                with VerticalScroll(classes="stats-kasten"):
+                    yield Static("", id="stats-warnung", markup=True)
         yield Static("", id="stats-fuss", markup=True)
 
     # -- Aussenseite ----------------------------------------------------
@@ -252,12 +259,14 @@ class StatistikDashboard(VerticalScroll):
         zeilen.append(
             f"  [dim]{t('stats.warn.names_known', n=s.namen_bekannt, gesamt=len(s.sitzungen))}[/]"
         )
-        if s.liegekoerbe and any(k.anzahl for k in s.liegekoerbe):
+        # Eine Zeile statt einer je Korb: der Kasten hat seit dem Rahmen zehn
+        # Zeilen Platz, und vier belegte Koerbe haetten ihn stumm abgeschnitten.
+        # Ein Kasten, der still abschneidet, ist schlimmer als eine dichte Zeile.
+        belegt = [k for k in s.liegekoerbe if k.anzahl]
+        if belegt:
+            werte = "  ".join(f"{k.label}: {k.anzahl}" for k in belegt)
             zeilen.append("")
-            zeilen.append(f"  [b]{t('stats.warn.waiting')}[/]")
-            for k in s.liegekoerbe:
-                if k.anzahl:
-                    zeilen.append(f"    {k.label:>8}  {k.anzahl}")
+            zeilen.append(f"  [b]{t('stats.warn.waiting')}[/]  {werte}")
         return "\n".join(zeilen)
 
     def _fusszeile(self, s: Statistik) -> str:
