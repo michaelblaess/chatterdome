@@ -95,9 +95,10 @@ Auch dieser Tab ist rein lesend. Gesendet wird weiterhin im Agenten-Tab.
 
 Taste `k`. Ein Dashboard aus sechs Sektionen, gezeichnet mit plotext im
 Terminal. Die Zahlen kommen aus den Transkripten unter `~/.claude/projects`
-und aus dem Bus - ein voller Durchgang durch 369 MB dauert gemessen 2,3 s,
-deshalb rechnet der Tab bei jedem Öffnen frisch statt einen Zwischenspeicher
-zu pflegen, der veralten kann.
+und aus dem Bus. Ein voller Durchgang durch 369 MB dauert gemessen 2,3 s bei
+warmem Dateicache, beim ersten Lauf nach dem Start rund 7,6 s. Beides ist
+schnell genug, dass der Tab bei jedem Öffnen frisch rechnet, statt einen
+Zwischenspeicher zu pflegen, der veralten kann.
 
 - **Gleichzeitigkeit** - wie viele Sitzungen an einem Tag höchstens parallel
   aktiv waren, daneben wie viele es insgesamt waren. Rückwirkend aus den
@@ -111,7 +112,10 @@ zu pflegen, der veralten kann.
 - **Was Länge kostet** - Median-Verbrauch je Korb der Sitzungsdauer. Median
   und nicht Mittelwert, weil eine einzelne sehr lange Sitzung ihren Korb
   sonst allein bestimmt.
-- **Wohin die Arbeit ging** - Token je Arbeitsordner.
+- **Verarbeitet je Ordner** - als Liste mit Textbalken, eine Zeile je Ordner.
+  Gezählt wird dasselbe Mass wie oben, also ohne die Cache-Lesung: mit ihr
+  stünden dort fast zwei Milliarden Token für einen einzigen Ordner, und zwei
+  Diagramme nebeneinander meinten zwei verschiedene Dinge.
 - **Message-Bus** - Aufträge je Tag nach Ausgang, dazu die Liegezeit der noch
   offenen.
 - **Frühwarnung** - vier Zahlen mit Ampel, darunter die, die den Vorfall vom

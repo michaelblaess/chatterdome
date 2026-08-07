@@ -50,6 +50,22 @@ def t(key: str, **kwargs: Any) -> str:
     return vorlage
 
 
+def format_number(wert: float, decimals: int = 1, lang: str | None = None) -> str:
+    """Formatiert eine Zahl kulturabhaengig.
+
+    Im Deutschen ist der Dezimaltrenner ein Komma und der Tausendertrenner ein
+    Punkt - "96.7 %" ist im Fenster schlicht falsch. Python formatiert
+    andersherum, deshalb der Umweg ueber ein Platzhalterzeichen: erst tauschen,
+    sonst ueberschreibt der zweite Ersetzungsschritt den ersten.
+    """
+    if lang is None:
+        lang = _current_lang
+    roh = f"{wert:,.{decimals}f}"
+    if lang != "de":
+        return roh
+    return roh.replace(",", "\x00").replace(".", ",").replace("\x00", ".")
+
+
 def format_datetime(zeitpunkt: str, lang: str | None = None) -> str:
     """Formatiert einen ISO-Zeitstempel kulturabhaengig."""
     if not zeitpunkt:

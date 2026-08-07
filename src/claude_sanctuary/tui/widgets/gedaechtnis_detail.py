@@ -25,9 +25,7 @@ from claude_sanctuary.kern.gedaechtnis import (
     Notiz,
     schaetze_tokens,
 )
-
-BALKEN_BREITE = 34
-"""Zellen fuer den laengsten Balken. Passt neben die Beschriftung."""
+from claude_sanctuary.tui.widgets.balken import balken
 
 
 def _zahl(wert: int) -> str:
@@ -35,16 +33,9 @@ def _zahl(wert: int) -> str:
     return f"{wert:,}".replace(",", ".")
 
 
-def _balken(anteil: float, breite: int = BALKEN_BREITE) -> str:
-    """Zeichnet einen Balken. Ein Wert ueber null bekommt immer ein Zeichen.
-
-    Sonst verschwindet der kleinere von zwei Werten ganz, und ein Balken der
-    Laenge null sieht aus wie "kostet nichts" statt "kostet wenig".
-    """
-    voll = round(max(0.0, min(1.0, anteil)) * breite)
-    if anteil > 0:
-        voll = max(1, voll)
-    return "█" * voll + "░" * (breite - voll)
+# Der Balken liegt seit dem 07.08.2026 in balken.py - der Statistik-Tab
+# braucht denselben, und zwei Fassungen laufen auseinander.
+_balken = balken
 
 
 class GedaechtnisDetail(VerticalScroll):

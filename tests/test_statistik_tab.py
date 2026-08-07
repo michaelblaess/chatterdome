@@ -133,14 +133,11 @@ class TestTab:
         async with app.run_test(size=(200, 60)) as pilot:
             await _oeffnen(pilot, app)
 
-            for kennung in (
-                "#stats-parallel",
-                "#stats-verbrauch",
-                "#stats-dauer",
-                "#stats-ordner",
-                "#stats-bus",
-            ):
+            for kennung in ("#stats-parallel", "#stats-verbrauch", "#stats-dauer", "#stats-bus"):
                 assert app.query_one(kennung, PlotextPlot).size.height > 0, kennung
+            # Ordner und Fruehwarnung sind Text, kein Diagramm - siehe
+            # statistik_dashboard._ordner.
+            assert str(app.query_one("#stats-ordner", Static).content).strip()
             assert app.query_one("#stats-warnung", Static)
 
     async def test_kopfzeile_nennt_cache_anteil_und_spitze(self, app: SanctuaryApp) -> None:

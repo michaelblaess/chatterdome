@@ -93,8 +93,9 @@ This tab is read-only as well. Sending still happens in the agents tab.
 
 Press `k`. A dashboard of six sections, drawn with plotext in the terminal.
 The numbers come from the transcripts under `~/.claude/projects` and from the
-bus - a full pass over 369 MB takes a measured 2.3 s, so the tab recomputes on
-every open rather than keeping a cache that can go stale.
+bus. A full pass over 369 MB takes a measured 2.3 s with a warm file cache,
+about 7.6 s on the first run after startup. Both are fast enough for the tab to
+recompute on every open rather than keep a cache that can go stale.
 
 - **Concurrency** - how many sessions were active at the same time on a given
   day, at most, next to how many there were in total. Reconstructed
@@ -106,7 +107,10 @@ every open rather than keeping a cache that can go stale.
 - **What length costs** - median spend per bucket of session duration. Median
   rather than mean, because a single very long session would otherwise define
   its bucket on its own.
-- **Where the work went** - tokens per working folder.
+- **Processed per folder** - a list with text bars, one row per folder. Same
+  measure as above, so cache reads excluded: with them one folder alone would
+  read almost two billion tokens, and two adjacent charts would mean two
+  different things.
 - **Message bus** - tasks per day by outcome, plus how long the open ones have
   been waiting.
 - **Early warning** - four numbers with a traffic light, among them the one

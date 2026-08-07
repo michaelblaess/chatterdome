@@ -13,6 +13,8 @@ from importlib import resources
 from pathlib import Path
 from string import Formatter
 
+from claude_sanctuary.i18n import format_number
+
 QUELLE = Path(__file__).resolve().parents[1] / "src" / "claude_sanctuary"
 
 ZUSAMMENGESETZT = (
@@ -133,6 +135,25 @@ class TestSprachdateien:
             and schluessel not in ALTLAST
         }
         assert not tot, f"Nie verwendet: {sorted(tot)}"
+
+    def test_deutsche_zahlen_haben_komma_und_punkt(self) -> None:
+        """Dezimaltrenner Komma, Tausendertrenner Punkt - genau andersherum
+        als Python es formatiert.
+
+        Im Fenster stand "96.7 % aus dem Cache", und das ist im Deutschen
+        schlicht falsch. Der Tauschschritt muss ueber ein Platzhalterzeichen
+        laufen, sonst ueberschreibt die zweite Ersetzung die erste und aus
+        1.234,5 wird 1,234,5.
+        """
+        assert format_number(96.7, 1, "de") == "96,7"
+        # Kein x.x5 als Pruefwert: 7194,15 liegt binaer knapp darunter und
+        # rundet ab. Der Testwert soll die Formatierung pruefen, nicht die
+        # Gleitkommadarstellung.
+        assert format_number(7194.16, 1, "de") == "7.194,2"
+        assert format_number(17861, 0, "de") == "17.861"
+
+    def test_englische_zahlen_bleiben_englisch(self) -> None:
+        assert format_number(7194.16, 1, "en") == "7,194.2"
 
     def test_deutsche_texte_haben_echte_umlaute(self) -> None:
         # Ersatzschreibung faellt hier auf, bevor sie im Fenster landet.

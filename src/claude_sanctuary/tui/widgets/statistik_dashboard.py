@@ -19,8 +19,9 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import Static
 from textual_plotext import PlotextPlot
 
-from claude_sanctuary.i18n import t
+from claude_sanctuary.i18n import format_number, t
 from claude_sanctuary.kern.statistik import LANGE_SITZUNG_STUNDEN, Statistik
+from claude_sanctuary.tui.widgets.balken import balken
 
 # Farben der Verbrauchsarten. plotext nimmt Namen aus seiner eigenen Palette,
 # nicht die Hexwerte der Oberflaeche.
@@ -32,14 +33,6 @@ FARBE_AUS = "cyan"
 FARBE_ERLEDIGT = "green"
 FARBE_GESCHEITERT = "red"
 FARBE_OFFEN = "orange"
-
-def _millionen(wert: int) -> str:
-    """Token in Millionen, deutsch formatiert. Rohe Zahlen sind hier unlesbar."""
-    return f"{wert / 1e6:,.1f}".replace(",", "#").replace(".", ",").replace("#", ".")
-
-
-def _zahl(wert: int) -> str:
-    return f"{wert:,}".replace(",", ".")
 
 
 class StatistikDashboard(VerticalScroll):
@@ -65,7 +58,7 @@ class StatistikDashboard(VerticalScroll):
                 yield PlotextPlot(id="stats-dauer")
             with Vertical(classes="stats-feld"):
                 yield Static(t("stats.folders"), classes="stats-titel")
-                yield PlotextPlot(id="stats-ordner")
+                yield Static("", id="stats-ordner", markup=True)
         with Horizontal(classes="stats-reihe"):
             with Vertical(classes="stats-feld"):
                 yield Static(t("stats.bus"), classes="stats-titel")
@@ -99,7 +92,7 @@ class StatistikDashboard(VerticalScroll):
         self._parallel(s)
         self._verbrauch(s)
         self._dauer(s)
-        self._ordner(s)
+        self.query_one("#stats-ordner", Static).update(self._ordner(s))
         self._bus(s)
         self.query_one("#stats-warnung", Static).update(self._warnung(s))
         self.query_one("#stats-fuss", Static).update(self._fusszeile(s))
@@ -108,9 +101,9 @@ class StatistikDashboard(VerticalScroll):
         zeitraum = f"{s.von:%d.%m.} - {s.bis:%d.%m.%Y}" if s.von and s.bis else ""
         return (
             f"[b]{escape(zeitraum)}[/]"
-            f"  ·  {t('stats.head.requests', n=_zahl(s.anfragen_gesamt))}"
-            f"  ·  {t('stats.head.tokens', n=_millionen(s.tokens_gesamt))}"
-            f"  ·  [#f1c40f]{t('stats.head.cache', p=f'{s.cache_anteil * 100:.1f}')}[/]"
+            f"  ·  {t('stats.head.requests', n=format_number(s.anfragen_gesamt, 0))}"
+            f"  ·  {t('stats.head.tokens', n=format_number(s.tokens_gesamt / 1e6, 1))}"
+            f"  ·  [#f1c40f]{t('stats.head.cache', p=format_number(s.cache_anteil * 100, 1))}[/]"
             f"  ·  {t('stats.head.sessions', n=len(s.sitzungen))}"
             f"  ·  {t('stats.head.peak', n=s.hoechste_gleichzeitig)}"
         )
@@ -173,7 +166,7 @@ class StatistikDashboard(VerticalScroll):
         plot.refresh()
 
     def _dauer(self, s: Statistik) -> None:
-        """Was Laenge kostet: Median-Verbrauch je Korb der Sitzungsdauer."""
+        """Median-Verbrauch je Korb der Sitzungsdauer."""
         plot = self.query_one("#stats-dauer", PlotextPlot)
         plot.plt.clear_figure()
         koerbe = [k for k in s.alterskoerbe if k.anzahl]
@@ -185,22 +178,36 @@ class StatistikDashboard(VerticalScroll):
             )
         plot.refresh()
 
-    def _ordner(self, s: Statistik) -> None:
-        plot = self.query_one("#stats-ordner", PlotextPlot)
-        plot.plt.clear_figure()
-        if s.ordner:
-            # Hoechstens sechs: bei acht Balken auf 16 Zeilen rutscht die
-            # Beschriftung neben ihren Balken statt daneben zu stehen.
-            # Umgedreht, weil plotext waagerechte Balken von unten aufbaut -
-            # ohne das steht der groesste Ordner ganz unten.
-            eintraege = list(reversed(s.ordner[:6]))
-            plot.plt.bar(
-                [o.ordner for o in eintraege],
-                [o.tokens / 1e6 for o in eintraege],
-                orientation="horizontal",
-                color=FARBE_FRISCH,
+    def _ordner(self, s: Statistik) -> str:
+        """Eine Zeile je Ordner, mit Textbalken statt Diagramm.
+
+        Zwei Gruende gegen plotext an dieser Stelle. Erstens verteilt es sechs
+        waagerechte Balken auf zwoelf Zeilen und beschriftet nur jede zweite -
+        das sieht aus wie sechs leere Balken zwischen den vollen, und genau so
+        hat Michael es gemeldet. Zweitens ist hier Platz fuer die Zahl neben
+        dem Balken, und die sagt mehr als eine Achse.
+
+        Gezaehlt wird das VERARBEITETE, nicht die Gesamtsumme - dasselbe Mass
+        wie im Verbrauchsdiagramm daneben. Vorher standen hier 1.965,7
+        Millionen fuer einen Ordner, also fast zwei Milliarden Token, wovon 97
+        Prozent wiederholt gelesener Kontext waren. Zwei Diagramme mit zwei
+        verschiedenen Bedeutungen von "Verbrauch" nebeneinander waren schlicht
+        ein Fehler.
+        """
+        if not s.ordner:
+            return f"[dim]{t('stats.no_data')}[/]"
+        eintraege = s.ordner[:6]
+        groesster = max(o.echt for o in eintraege) or 1
+        breite = max(len(o.ordner) for o in eintraege)
+        zeilen = []
+        for o in eintraege:
+            zahl = format_number(o.echt / 1e6, 1)
+            zeilen.append(
+                f"  {escape(o.ordner):<{breite}}  "
+                f"[#2ecc71]{balken(o.echt / groesster, 26)}[/]"
+                f"  {zahl:>8} M"
             )
-        plot.refresh()
+        return "\n".join(zeilen)
 
     def _bus(self, s: Statistik) -> None:
         plot = self.query_one("#stats-bus", PlotextPlot)
@@ -254,9 +261,9 @@ class StatistikDashboard(VerticalScroll):
         return "\n".join(zeilen)
 
     def _fusszeile(self, s: Statistik) -> str:
-        teile = [t("stats.foot.measured", s=f"{s.dauer_s:.1f}")]
+        teile = [t("stats.foot.measured", s=format_number(s.dauer_s, 1))]
         if s.durchlauf_median_h is not None:
-            teile.append(t("stats.foot.leadtime", h=f"{s.durchlauf_median_h:.1f}"))
+            teile.append(t("stats.foot.leadtime", h=format_number(s.durchlauf_median_h, 1)))
         if s.annahme_median_h is not None:
-            teile.append(t("stats.foot.accept", h=f"{s.annahme_median_h:.1f}"))
+            teile.append(t("stats.foot.accept", h=format_number(s.annahme_median_h, 1)))
         return f"[dim]{escape('  ·  '.join(teile))}[/]\n[dim]{t('stats.foot.caveat')}[/]"
