@@ -214,9 +214,13 @@ Screen {
 
 /* Drei Reihen zu zwei Feldern. Feste Hoehe je Reihe, weil ein Diagramm
    ohne Vorgabe auf eine Zeile zusammenfaellt - height: auto kennt seine
-   eigene Hoehe nicht. */
+   eigene Hoehe nicht.
+
+   16 statt 18: bei 18 blieb in einem 46-Zeilen-Fenster von der dritten Reihe
+   nur die obere Haelfte stehen, und ein halb abgeschnittenes Diagramm sieht
+   aus wie ein kaputtes. */
 .stats-reihe {
-    height: 18;
+    height: 16;
     padding-bottom: 1;
 }
 

@@ -99,14 +99,15 @@ und aus dem Bus - ein voller Durchgang durch 369 MB dauert gemessen 2,3 s,
 deshalb rechnet der Tab bei jedem Öffnen frisch statt einen Zwischenspeicher
 zu pflegen, der veralten kann.
 
-- **Flotte** - wie viele Sitzungen an einem Tag höchstens gleichzeitig aktiv
-  waren, daneben wie viele es insgesamt waren. Rückwirkend aus den
+- **Gleichzeitigkeit** - wie viele Sitzungen an einem Tag höchstens parallel
+  aktiv waren, daneben wie viele es insgesamt waren. Rückwirkend aus den
   Sitzungsintervallen rekonstruiert, es musste dafür nie etwas mitgeschrieben
   werden.
-- **Verbrauch** - Token je Tag, gestapelt nach Cache-Lesung, Cache-Aufbau,
-  frisch Gelesenem und Ausgabe. Diese Trennung ist der Kern: gemessen sind
-  **96 bis 98 Prozent aller Token Cache-Lesungen**. Eine Summe über alles
-  misst hauptsächlich Wiederholung.
+- **Verarbeitet je Tag** - Token nach Cache-Aufbau, frisch Gelesenem und
+  Ausgabe, gestapelt. Die Cache-Lesung fehlt hier mit Absicht: sie macht
+  gemessen **96 bis 98 Prozent** aus und würde das Diagramm zu einem
+  einfarbigen Balken machen. Als eine Zahl steht sie in der Kopfzeile, dort
+  sagt sie mehr.
 - **Was Länge kostet** - Median-Verbrauch je Korb der Sitzungsdauer. Median
   und nicht Mittelwert, weil eine einzelne sehr lange Sitzung ihren Korb
   sonst allein bestimmt.

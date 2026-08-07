@@ -96,12 +96,13 @@ The numbers come from the transcripts under `~/.claude/projects` and from the
 bus - a full pass over 369 MB takes a measured 2.3 s, so the tab recomputes on
 every open rather than keeping a cache that can go stale.
 
-- **Fleet** - how many sessions were active at the same time on a given day,
-  at most, next to how many there were in total. Reconstructed retroactively
-  from the session intervals; nothing ever had to be recorded for it.
-- **Spend** - tokens per day, stacked by cache read, cache write, fresh reads
-  and output. That split is the whole point: a measured **96 to 98 percent of
-  all tokens are cache reads**. A single total mostly measures repetition.
+- **Concurrency** - how many sessions were active at the same time on a given
+  day, at most, next to how many there were in total. Reconstructed
+  retroactively from the session intervals; nothing ever had to be recorded.
+- **Processed per day** - tokens by cache write, fresh reads and output,
+  stacked. Cache reads are deliberately absent: they account for a measured
+  **96 to 98 percent** and would turn the chart into a single-colour bar. As
+  one number they sit in the header, where they say more.
 - **What length costs** - median spend per bucket of session duration. Median
   rather than mean, because a single very long session would otherwise define
   its bucket on its own.

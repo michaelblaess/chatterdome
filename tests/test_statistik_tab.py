@@ -134,7 +134,7 @@ class TestTab:
             await _oeffnen(pilot, app)
 
             for kennung in (
-                "#stats-flotte",
+                "#stats-parallel",
                 "#stats-verbrauch",
                 "#stats-dauer",
                 "#stats-ordner",

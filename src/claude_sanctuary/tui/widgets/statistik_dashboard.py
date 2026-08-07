@@ -5,8 +5,8 @@ beide MIT-lizenziert und damit vertraeglich mit Apache 2.0.
 
 Zur Anordnung: drei Reihen zu zwei Sektionen. Ein einspaltiges Dashboard
 zwingt zum Scrollen, bevor die zweite Zahl sichtbar ist, und die Aussagen
-stehen hier paarweise - Flotte neben Verbrauch, Dauer neben Ordner, Bus neben
-Warnung.
+stehen hier paarweise - Parallelbetrieb neben Verbrauch, Dauer neben Ordner,
+Bus neben Warnung.
 """
 
 from __future__ import annotations
@@ -26,16 +26,12 @@ from claude_sanctuary.kern.statistik import LANGE_SITZUNG_STUNDEN, Statistik
 # nicht die Hexwerte der Oberflaeche.
 FARBE_FRISCH = "green"
 FARBE_CACHE_NEU = "orange"
-FARBE_CACHE_GELESEN = "gray"
+FARBE_GRAU = "gray"
 FARBE_AUS = "cyan"
 
 FARBE_ERLEDIGT = "green"
 FARBE_GESCHEITERT = "red"
 FARBE_OFFEN = "orange"
-
-DIAGRAMM_HOEHE = 14
-"""Zeilen je Diagramm. Weniger macht die Achsenbeschriftung unleserlich."""
-
 
 def _millionen(wert: int) -> str:
     """Token in Millionen, deutsch formatiert. Rohe Zahlen sind hier unlesbar."""
@@ -58,8 +54,8 @@ class StatistikDashboard(VerticalScroll):
         yield Static(t("stats.loading"), id="stats-kopf", markup=True)
         with Horizontal(classes="stats-reihe"):
             with Vertical(classes="stats-feld"):
-                yield Static(t("stats.fleet"), classes="stats-titel")
-                yield PlotextPlot(id="stats-flotte")
+                yield Static(t("stats.parallel"), classes="stats-titel")
+                yield PlotextPlot(id="stats-parallel")
             with Vertical(classes="stats-feld"):
                 yield Static(t("stats.spend"), classes="stats-titel")
                 yield PlotextPlot(id="stats-verbrauch")
@@ -100,7 +96,7 @@ class StatistikDashboard(VerticalScroll):
             kopf.update(t("stats.no_data"))
             return
         kopf.update(self._kopfzeile(s))
-        self._flotte(s)
+        self._parallel(s)
         self._verbrauch(s)
         self._dauer(s)
         self._ordner(s)
@@ -123,8 +119,8 @@ class StatistikDashboard(VerticalScroll):
         """Tagesbeschriftung ohne Jahr - sonst ueberlappen vierzehn Balken."""
         return [f"{w.tag:%d.%m}" for w in s.tage]
 
-    def _flotte(self, s: Statistik) -> None:
-        plot = self.query_one("#stats-flotte", PlotextPlot)
+    def _parallel(self, s: Statistik) -> None:
+        plot = self.query_one("#stats-parallel", PlotextPlot)
         plot.plt.clear_figure()
         if s.tage:
             plot.plt.multiple_bar(  # type: ignore[call-arg]
@@ -133,43 +129,46 @@ class StatistikDashboard(VerticalScroll):
                     [w.hoechste_gleichzeitig for w in s.tage],
                     [w.sitzungen for w in s.tage],
                 ],
-                labels=[t("stats.fleet.peak"), t("stats.fleet.sessions")],
-                color=[FARBE_AUS, FARBE_CACHE_GELESEN],  # type: ignore[arg-type]
+                labels=[t("stats.parallel.peak"), t("stats.parallel.sessions")],
+                color=[FARBE_AUS, FARBE_GRAU],  # type: ignore[arg-type]
             )
         plot.refresh()
 
     def _verbrauch(self, s: Statistik) -> None:
-        """Vier Arten gestapelt - die Cache-Lesung ist der graue Riese.
+        """Der Verbrauch OHNE die Cache-Lesung.
 
-        Ohne die Trennung waere das Diagramm eine einzige Aussage ueber
-        Wiederholung: gemessen sind 96 bis 98 Prozent Cache.
+        Der erste Entwurf stapelte alle vier Arten. Am echten Bestand war das
+        Diagramm danach zu 97 Prozent grau: die Cache-Lesung erdrueckt die
+        drei anderen so vollstaendig, dass von der Trennung nichts mehr zu
+        sehen war - ein Balken in einer Farbe, also dieselbe Aussage wie eine
+        blosse Summe.
+
+        Hier stehen deshalb die drei Arten, die tatsaechlich verarbeitet
+        wurden. Sie sind der Teil, den man beeinflussen kann. Die Cache-Quote
+        selbst steht als eine Zahl in der Kopfzeile - dort ist sie besser
+        aufgehoben als in einem Balken, der jeden Tag gleich aussieht.
         """
         plot = self.query_one("#stats-verbrauch", PlotextPlot)
         plot.plt.clear_figure()
         if s.tage:
             # In Millionen, nicht roh: eine Achsenbeschriftung wie
             # "1365219938.0" ist nicht lesbar und schiebt das Diagramm nach
-            # rechts aus dem Feld.
+            # rechts aus dem Feld. NICHT runden - die Achsenbeschriftung baut
+            # plotext ohnehin aus dem Wertebereich, und ein gerundeter Wert
+            # laesst einen kleinen Tag ganz verschwinden.
             plot.plt.stacked_bar(  # type: ignore[call-arg]
                 self._kurz(s),
                 [
-                    [round(w.cache_gelesen / 1e6, 1) for w in s.tage],
-                    [round(w.cache_neu / 1e6, 1) for w in s.tage],
-                    [round(w.frisch / 1e6, 1) for w in s.tage],
-                    [round(w.aus / 1e6, 1) for w in s.tage],
+                    [w.cache_neu / 1e6 for w in s.tage],
+                    [w.frisch / 1e6 for w in s.tage],
+                    [w.aus / 1e6 for w in s.tage],
                 ],
                 labels=[
-                    t("stats.spend.cache_read"),
                     t("stats.spend.cache_new"),
                     t("stats.spend.fresh"),
                     t("stats.spend.out"),
                 ],
-                color=[  # type: ignore[arg-type]
-                    FARBE_CACHE_GELESEN,
-                    FARBE_CACHE_NEU,
-                    FARBE_FRISCH,
-                    FARBE_AUS,
-                ],
+                color=[FARBE_CACHE_NEU, FARBE_FRISCH, FARBE_AUS],  # type: ignore[arg-type]
             )
         plot.refresh()
 
@@ -181,7 +180,7 @@ class StatistikDashboard(VerticalScroll):
         if koerbe:
             plot.plt.bar(
                 [f"{k.label} ({k.anzahl})" for k in koerbe],
-                [round(k.tokens_median / 1e6, 1) for k in koerbe],
+                [k.tokens_median / 1e6 for k in koerbe],
                 color=FARBE_CACHE_NEU,
             )
         plot.refresh()
@@ -190,12 +189,14 @@ class StatistikDashboard(VerticalScroll):
         plot = self.query_one("#stats-ordner", PlotextPlot)
         plot.plt.clear_figure()
         if s.ordner:
+            # Hoechstens sechs: bei acht Balken auf 16 Zeilen rutscht die
+            # Beschriftung neben ihren Balken statt daneben zu stehen.
             # Umgedreht, weil plotext waagerechte Balken von unten aufbaut -
             # ohne das steht der groesste Ordner ganz unten.
-            eintraege = list(reversed(s.ordner))
+            eintraege = list(reversed(s.ordner[:6]))
             plot.plt.bar(
                 [o.ordner for o in eintraege],
-                [round(o.tokens / 1e6, 1) for o in eintraege],
+                [o.tokens / 1e6 for o in eintraege],
                 orientation="horizontal",
                 color=FARBE_FRISCH,
             )
