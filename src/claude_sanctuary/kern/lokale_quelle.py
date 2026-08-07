@@ -21,7 +21,14 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from claude_sanctuary.kern.modelle import Agent, Auftrag, Bestand, Ereignis, Namenspool
+from claude_sanctuary.kern.modelle import (
+    Agent,
+    Auftrag,
+    Bestand,
+    Busbestand,
+    Ereignis,
+    Namenspool,
+)
 
 ZEITGRENZE = 25.0
 """Sekunden. Eine Mesh-Abfrage ueber SSH braucht spuerbar laenger als eine lokale."""
@@ -157,6 +164,26 @@ class LokaleQuelle:
         if roh is None:
             return []
         return [self._auftrag(e) for e in roh.get("auftraege", [])]
+
+    def bestandsverlauf(self, grenze: int = 0) -> Busbestand:
+        """Alles, was im Bus dieses Rechners liegt.
+
+        Bewusst ein eigener Befehl und nicht ``verlauf`` mit leerem Namen: die
+        Frage "was liegt ueberhaupt im Bus" beantwortet keine Sicht, die vorher
+        einen Gespraechspartner verlangt.
+        """
+        befehl = ["log", "--json"]
+        if grenze > 0:
+            befehl += ["--limit", str(grenze)]
+        roh, fehler = self._json(befehl)
+        if roh is None:
+            return Busbestand(fehler=fehler or "")
+        return Busbestand(
+            rechner=str(roh.get("rechner", "")),
+            zeit=str(roh.get("zeit", "")),
+            verfall_stunden=int(roh.get("verfall_stunden") or 0),
+            auftraege=[self._auftrag(e) for e in roh.get("auftraege", [])],
+        )
 
     def senden(
         self,
@@ -361,6 +388,12 @@ class LokaleQuelle:
             geaendert=str(e.get("geaendert", "")),
             quittung_erwartet=bool(e.get("quittung_erwartet")),
             verlauf=verlauf,
+            # or "" statt str(): die Spalten stehen als null in der Datenbank,
+            # und str(None) waere die Zeichenkette "None".
+            an_session=str(e.get("an_session") or ""),
+            bindung=str(e.get("bindung") or ""),
+            host=ziel_host,
+            von_host=ab_host,
         )
 
 

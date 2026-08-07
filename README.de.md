@@ -21,6 +21,7 @@ keine Telemetrie. Was über Rechnergrenzen geht, geht über SSH im eigenen Tailn
 | `skills/operator` | Übersicht aller laufenden Instanzen: Name, Status, Ordner, Modell, Laufzeit, Kontext. Detailansicht, Live-Ansicht, Beenden, rechnerübergreifende Sicht |
 | `skills/claude-bus` | Aufträge zwischen Instanzen, mit Zustand und Quittungen. SQLite, append-only Ereignisse |
 | `kern/gedaechtnis.py` | Analyse der Gedächtnisnotizen: Index gegen Bestand, Verweise, Prüfungen, tatsächliche Abrufe aus den Transkripten |
+| `kern/busansicht.py` | Auswahl und Kennzahlen für den Bus-Tab: Zeitraum, Status, Adressart, Freitextsuche |
 | `kern/` | UI-freier Python-Kern - eine Quelle für beide Oberflächen |
 | `tui/` | Textual-Oberfläche fürs Terminal |
 | `web/` | FastHTML-Oberfläche, gedacht für den Dauerläufer im Tailnet |
@@ -59,6 +60,35 @@ sanctuary hilfe               # alle Befehle
 
 Die Skripte lassen sich weiterhin direkt aufrufen
 (`node ~/.claude/skills/operator/operator.mjs status`), das braucht man aber nur zum Debuggen.
+
+## Der Message-Bus-Tab
+
+Taste `u` in der Oberfläche. Links eine Tabelle aller Nachrichten im Bus dieses
+Rechners, rechts entweder die Übersicht oder die gewählte Nachricht samt allen
+Quittungen. Gefiltert wird über drei Auswahlfelder - Zeitraum, Status und
+Adressart - dazu ein Suchfeld über Agenten, Thema, Inhalt und Quittungsnotizen.
+Die Kopfzeile sortiert per Klick, `Esc` führt aus der Detailansicht zurück.
+
+Die Spalte **Adresse** ist die interessanteste, und sie hat einen Anlass. Am
+07.08.2026 legte die Oberfläche einen Auftrag an eine Instanz namens Marga ab.
+Marga holte ihn nie ab, ihre Sitzung endete, der Name ging zurück in den Pool -
+und vier Tage später bekam eine völlig andere Sitzung denselben Namen und
+arbeitete den Auftrag ab. Ein Name ist eine Pacht, keine Person.
+
+Seitdem unterscheidet der Bus zwei Adressarten:
+
+- **Person** - der Auftrag ist an die Sitzung gebunden, die den Namen beim
+  Absenden trug. Ein späterer Träger bekommt ihn nicht.
+- **Rolle** - der Auftrag meint den Namen, wer immer ihn trägt. Ausdrücklich zu
+  wählen (`--rolle`), und nur zusammen mit dem Verfall zu verantworten.
+
+Die Übersicht rechts nennt deshalb nicht nur offen, erledigt und gescheitert,
+sondern auch **wie viele offene Nachrichten überhaupt noch vererbbar sind**.
+Genau diese Zahl hätte den Vorfall vorhergesagt. Dazu die Verfallsfrist
+(Vorgabe 24 Stunden, über `sanctuary config` zu ändern) und der älteste noch
+offene Auftrag mit seinem Alter.
+
+Auch dieser Tab ist rein lesend. Gesendet wird weiterhin im Agenten-Tab.
 
 ## Der Gedächtnis-Tab
 

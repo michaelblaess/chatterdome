@@ -21,6 +21,7 @@ telemetry. What crosses machine boundaries goes over SSH inside your own Tailnet
 | `skills/operator` | Overview of running sessions: name, status, folder, model, uptime, context. Detail view, live view, stop, cross-machine view |
 | `skills/claude-bus` | Tasks between sessions, with state and receipts. SQLite, append-only events |
 | `kern/gedaechtnis.py` | Memory analysis: index versus collection, links, checks, actual recalls from the transcripts |
+| `kern/busansicht.py` | Selection and figures for the bus tab: period, state, address kind, free-text search |
 | `kern/` | UI-free Python core - one source for both frontends |
 | `tui/` | Textual interface for the terminal |
 | `web/` | FastHTML interface, meant for the always-on machine in the Tailnet |
@@ -58,6 +59,34 @@ sanctuary hilfe               # all commands
 
 The scripts can still be called directly
 (`node ~/.claude/skills/operator/operator.mjs status`), but that is only needed for debugging.
+
+## The message bus tab
+
+Press `u` in the interface. On the left a table of every message in this
+machine's bus, on the right either the overview or the selected message with all
+its receipts. Three dropdowns filter by period, state and address kind, plus a
+search field covering agents, topic, body and receipt notes. Clicking a header
+sorts, `Esc` leaves the detail view.
+
+The **address** column is the interesting one, and it has a reason. On
+07.08.2026 the interface posted a task to an instance called Marga. That Marga
+never picked it up, its session ended, the name went back into the pool - and
+four days later a completely different session received the same name and worked
+the task. A name is a lease, not a person.
+
+Since then the bus distinguishes two kinds of address:
+
+- **Person** - the task is bound to the session that held the name when it was
+  sent. A later holder does not receive it.
+- **Role** - the task means the name, whoever holds it. Chosen explicitly
+  (`--rolle`), and defensible only together with expiry.
+
+So the overview does not just count open, done and failed, it also states **how
+many open messages can still be inherited at all**. That number would have
+predicted the incident. Next to it the expiry deadline (24 hours by default,
+changed via `sanctuary config`) and the oldest task still open, with its age.
+
+This tab is read-only as well. Sending still happens in the agents tab.
 
 ## The memory tab
 

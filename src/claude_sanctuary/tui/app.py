@@ -41,10 +41,12 @@ from claude_sanctuary.kern.gedaechtnis import (
     zaehle_recalls,
 )
 from claude_sanctuary.kern.lokale_quelle import LokaleQuelle
-from claude_sanctuary.kern.modelle import Agent, Bestand, Namenspool
+from claude_sanctuary.kern.modelle import Agent, Auftrag, Bestand, Busbestand, Namenspool
 from claude_sanctuary.kern.protokolle import Quelle
 from claude_sanctuary.tui.starter import oeffne_ordner
 from claude_sanctuary.tui.widgets.agenten_tabelle import AgentenTabelle
+from claude_sanctuary.tui.widgets.bus_detail import BusDetail
+from claude_sanctuary.tui.widgets.bus_tabelle import BusTabelle
 from claude_sanctuary.tui.widgets.gedaechtnis_detail import GedaechtnisDetail
 from claude_sanctuary.tui.widgets.kopf_panel import KopfPanel
 from claude_sanctuary.tui.widgets.notizen_tabelle import NotizenTabelle
@@ -96,6 +98,8 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         Binding("b,B", "broadcast", "broadcast", key_display="b"),
         Binding("r,R", "restart_agent", "restart", key_display="r"),
         Binding("m,M", "show_memory", "memory", key_display="m"),
+        # "b" liegt beim Rundruf und "n" beim Starten - fuer den Bus bleibt "u".
+        Binding("u,U", "show_bus", "bus", key_display="u"),
         # NICHT "screenshot": diesen Aktionsnamen belegt Textual selbst, dort
         # speichert er ein SVG der Oberflaeche. Hier geht es um ein Foto des
         # ganzen Bildschirms - zwei verschiedene Dinge.
@@ -118,6 +122,7 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         "broadcast": "broadcast",
         "restart_agent": "restart",
         "show_memory": "memory",
+        "show_bus": "bus",
         "bildschirmfoto": "screenshot",
         "focus_filter": "filter",
     }
@@ -151,6 +156,11 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         """Der Notizbestand. None, solange der Tab nie geoeffnet wurde."""
 
         self._notiz: Notiz | None = None
+
+        self._busbestand: Busbestand | None = None
+        """Was im Bus liegt. None, solange der Tab nie geoeffnet wurde."""
+
+        self._auftrag: Auftrag | None = None
 
         self._neustart_kandidat: Agent | None = None
         self._gemeldete_systeme: dict[str, str] = {}
@@ -191,8 +201,10 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
                                     id=f"quick-{schluessel}",
                                     classes="schnell",
                                 )
-            with TabPane(t("tab.bus"), id="tab-bus"):
-                yield Static(t("tab.empty"), classes="platzhalter")
+            with TabPane(t("tab.bus"), id="tab-bus"), Horizontal(id="bus-raum"):
+                yield BusTabelle(id="bus-liste")
+                yield VerticalSplitter(target_id="bus-liste", min_size=50, id="bus-splitter")
+                yield BusDetail(id="bus-detail")
             with TabPane(t("tab.stats"), id="tab-statistik"):
                 yield Static(t("tab.empty"), classes="platzhalter")
             with (
@@ -355,18 +367,59 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         self.query_one("#gedaechtnis-detail", GedaechtnisDetail).setze_notiz(ereignis.notiz)
 
     def on_tabbed_content_tab_activated(self, ereignis: TabbedContent.TabActivated) -> None:
-        """Laedt das Gedaechtnis beim ersten Oeffnen des Tabs.
+        """Laedt einen Tab beim ersten Oeffnen.
 
         Wer den Tab nie oeffnet, zahlt den Durchgang durch die Transkripte
         auch nicht.
         """
         if ereignis.pane.id == "tab-gedaechtnis" and self._gedaechtnis is None:
             self.gedaechtnis_laden()
+        elif ereignis.pane.id == "tab-bus" and self._busbestand is None:
+            self.bus_laden()
 
     def action_show_memory(self) -> None:
         """Zeigt den Gedaechtnis-Tab und liest den Bestand neu ein."""
         self.query_one("#bereiche", TabbedContent).active = "tab-gedaechtnis"
         self.gedaechtnis_laden()
+
+    # -- Message-Bus ----------------------------------------------------
+
+    @work(thread=True, exclusive=True, group="busbestand")
+    def bus_laden(self) -> None:
+        """Liest den gesamten Busbestand.
+
+        Im Thread, weil dahinter ein Prozessstart steckt - unter Windows
+        allein dafuer 70 bis 105 ms, dazu das Lesen der Datenbank.
+        """
+        bestand = self._quelle.bestandsverlauf()
+        self.call_from_thread(self._bus_uebernehmen, bestand)
+
+    def _bus_uebernehmen(self, bestand: Busbestand) -> None:
+        self._busbestand = bestand
+        detail = self.query_one("#bus-detail", BusDetail)
+        detail.setze_laeuft(False)
+        detail.setze_bestand(bestand)
+        # Nach dem Detail: die Tabelle meldet ihren gefilterten Ausschnitt
+        # zurueck, und der soll den soeben gesetzten Gesamtbestand ueberschreiben.
+        self.query_one("#bus-liste", BusTabelle).uebernehmen(bestand.auftraege)
+        if bestand.fehler:
+            self._schreibe_log(t("log.bus_failed", fehler=bestand.fehler), "error")
+            return
+        self._schreibe_log(t("log.bus_loaded", anzahl=len(bestand.auftraege)))
+
+    def on_bus_tabelle_ausgewaehlt(self, ereignis: BusTabelle.Ausgewaehlt) -> None:
+        self._auftrag = ereignis.auftrag
+        self.query_one("#bus-detail", BusDetail).setze_auftrag(ereignis.auftrag)
+
+    def on_bus_tabelle_filter_geaendert(self, ereignis: BusTabelle.FilterGeaendert) -> None:
+        # Die Kennzahlen rechts zeigen den SICHTBAREN Ausschnitt. Wer filtert,
+        # will wissen, was in diesem Ausschnitt offen ist - nicht im Ganzen.
+        self.query_one("#bus-detail", BusDetail).setze_sichtbar(ereignis.sichtbar)
+
+    def action_show_bus(self) -> None:
+        """Zeigt den Bus-Tab und liest den Bestand neu ein."""
+        self.query_one("#bereiche", TabbedContent).active = "tab-bus"
+        self.bus_laden()
 
     @work(thread=True, group="namen")
     def namen_laden(self) -> None:

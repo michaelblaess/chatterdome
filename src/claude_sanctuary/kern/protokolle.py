@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from claude_sanctuary.kern.modelle import Auftrag, Bestand, Namenspool
+from claude_sanctuary.kern.modelle import Auftrag, Bestand, Busbestand, Namenspool
 
 
 class Quelle(Protocol):
@@ -29,6 +29,13 @@ class Quelle(Protocol):
 
     def verlauf(self, name: str) -> list[Auftrag]:
         """Auftraege und Quittungen mit einem bestimmten Agenten."""
+        ...
+
+    def bestandsverlauf(self, grenze: int = 0) -> Busbestand:
+        """Der gesamte Bus, nicht auf einen Agenten eingeschraenkt.
+
+        :param grenze: hoechstens so viele Auftraege, die neuesten. 0 heisst alle.
+        """
         ...
 
     def senden(

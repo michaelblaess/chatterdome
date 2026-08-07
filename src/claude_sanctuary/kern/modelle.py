@@ -118,12 +118,19 @@ class Ereignis:
         return f"{name}@{self.host.upper()}" if self.host else name
 
 
+OFFENE_ZUSTAENDE = frozenset({"submitted", "working", "input_required"})
+"""Zustaende, in denen ein Auftrag noch auf Bearbeitung wartet."""
+
+GESCHEITERTE_ZUSTAENDE = frozenset({"failed", "cancelled", "expired"})
+
+
 @dataclass(slots=True)
 class Auftrag:
     """Ein Auftrag mit Zustand, wie ihn der Bus fuehrt.
 
     Die Zustaende folgen dem A2A-Vokabular: submitted, working,
-    input_required, completed, failed, cancelled.
+    input_required, completed, failed, cancelled - dazu ``expired`` als
+    einzige Ergaenzung, siehe speicher.mjs.
     """
 
     auftrag_id: str
@@ -136,6 +143,44 @@ class Auftrag:
     geaendert: str = ""
     quittung_erwartet: bool = False
     verlauf: list[Ereignis] = field(default_factory=list)
+
+    an_session: str = ""
+    """Sitzung, an die der Auftrag gebunden ist. Leer bei Rollenadressierung."""
+
+    bindung: str = ""
+    """``session``, ``rolle`` oder ``offen``.
+
+    Ein Name ist eine Pacht: er wird freigegeben und neu vergeben. Ein Auftrag
+    ohne Bindung an die Sitzung erreicht deshalb auch einen spaeteren Traeger
+    desselben Namens - am 07.08.2026 genau so geschehen. Leer bedeutet
+    Altbestand von vor dieser Unterscheidung.
+    """
+
+    host: str = ""
+    """Rechner des Empfaengers."""
+
+    von_host: str = ""
+    """Rechner des Absenders."""
+
+    @property
+    def offen(self) -> bool:
+        return self.zustand in OFFENE_ZUSTAENDE
+
+    @property
+    def an_person(self) -> bool:
+        """Wahr, wenn eine bestimmte Sitzung gemeint war und nicht der Name."""
+        return bool(self.an_session)
+
+
+@dataclass(slots=True)
+class Busbestand:
+    """Alles, was auf einem Rechner im Bus liegt."""
+
+    rechner: str = ""
+    zeit: str = ""
+    verfall_stunden: int = 0
+    auftraege: list[Auftrag] = field(default_factory=list)
+    fehler: str = ""
 
 
 @dataclass(slots=True)

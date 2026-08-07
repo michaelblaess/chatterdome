@@ -15,7 +15,19 @@ from string import Formatter
 
 QUELLE = Path(__file__).resolve().parents[1] / "src" / "claude_sanctuary"
 
-ZUSAMMENGESETZT = ("binding.", "tooltip.", "state.", "quick.", "settings.update_", "mem.health.")
+ZUSAMMENGESETZT = (
+    "binding.",
+    "tooltip.",
+    "state.",
+    "quick.",
+    "settings.update_",
+    "mem.health.",
+    # Die drei Filterlisten des Bus-Tabs bauen ihre Beschriftungen aus den
+    # Schluesseln in busansicht.py zusammen.
+    "bus.range.",
+    "bus.group.",
+    "bus.bind.",
+)
 """Praefixe, deren Schluessel zur Laufzeit gebaut werden.
 
 Ermittelt aus allen ``t(f"...")``-Aufrufen im Quelltext. Wer einen neuen

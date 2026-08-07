@@ -149,3 +149,53 @@ Screen {
 #gedaechtnis-inhalt {
     height: auto;
 }
+
+/* ---- Message-Bus ------------------------------------------------- */
+
+#bus-raum {
+    height: 1fr;
+    layout: horizontal;
+}
+
+#bus-liste {
+    width: 64%;
+    height: 1fr;
+}
+
+/* Die drei Auswahlfelder nebeneinander. height: auto, sonst zieht die
+   Zeile sich auf die halbe Tabelle. */
+#bus-filter {
+    height: auto;
+    padding: 0 1;
+}
+
+#bus-filter Select {
+    width: 1fr;
+    margin: 0 1 0 0;
+}
+
+/* Wie bei der Agententabelle: die Suchleiste braucht ihre drei Zeilen,
+   eine Hoehenvorgabe wuerde das Feld zerquetschen. */
+#bus-liste SearchInputWithHistory {
+    padding: 0 1;
+}
+
+#bus-liste #bus-daten {
+    height: 1fr;
+}
+
+#bus-leer {
+    padding: 1 2;
+    color: $text-muted;
+}
+
+#bus-detail {
+    width: 1fr;
+    height: 1fr;
+    padding: 1 2;
+    background: $surface;
+}
+
+#bus-inhalt {
+    height: auto;
+}
