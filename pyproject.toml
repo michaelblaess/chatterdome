@@ -62,3 +62,9 @@ lint = "ruff check src tests"
 format = "ruff format src tests"
 typecheck = "mypy src"
 test = "pytest"
+
+# Die Skripte unter skills/ sind Node und werden von pytest nicht erfasst. Sie
+# tragen aber die Adressierung des Bus, und dort sass der Fehler vom
+# 07.08.2026 - deshalb ein eigenes Tor statt gar keins.
+test-js = "node --test skills/claude-bus/pacht.test.mjs skills/claude-bus/bus.test.mjs"
+alles = ["lint", "typecheck", "test", "test-js"]

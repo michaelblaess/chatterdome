@@ -154,6 +154,23 @@ aus `operator.mjs` holen, ohne dessen CLI-Teil mitzuladen.
 
 Die Zuordnung Session-ID zu Name liegt in `~/.claude/message bus/<RECHNER>/namen.json`.
 
+**Mit dem Namen geht das Postfach - seit dem 07.08.2026.** Ein Name ist eine Pacht: er wird
+freigegeben und neu vergeben. Wird die Zuordnung gelöst, ohne dass die offene Post mitgeht,
+erbt sie der nächste Träger. Genau das ist passiert - eine neue Marga arbeitete einen vier
+Tage alten Auftrag an ihre Vorgängerin ab. Deshalb ruft **jede** Stelle, die einen Namen
+freigibt, `pachtEndet()` aus `claude-bus/pacht.mjs` auf:
+
+- `operator.mjs reset-names` über `postfachSchliessen()`
+- `werde-operator`, wenn es den Namen einer beendeten Sitzung abnimmt
+- Stufe 2 der Namenssuche in `whoami.mjs` (die Sammelliste `freigegeben`)
+
+Betroffen sind nur Aufträge, die an die **Sitzung** gebunden waren. Ausdrückliche
+Rollenaufträge überleben und verfallen stattdessen nach Frist. Gegenstück beim Antritt:
+`whoami.mjs` setzt für eine frisch benannte Sitzung den Lesezeiger ans Ende des
+Busprotokolls (`pachtBeginnt()`) - sonst gilt die gesamte Historie des geerbten Namens als
+neu. Ein vorhandener Zeiger wird nie angefasst, `claude --resume` behält die Session-ID.
+Details im Skill `claude-bus`, Abschnitt "Der Name ist eine Pacht".
+
 **Geht der Pool zur Neige, sucht der Hook in drei Stufen weiter** - Michaels Vorgabe: erst
 den Pool zu Ende abarbeiten, erst dann aufräumen.
 

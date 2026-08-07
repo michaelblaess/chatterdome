@@ -36,6 +36,7 @@ const ZIELE = {
   update: UPDATE,
   send: BUS, read: BUS, ack: BUS, doctor: BUS, pending: BUS,
   open: BUS, tasks: BUS, task: BUS, history: BUS, receive: BUS,
+  log: BUS, bestand: BUS, config: BUS, einstellungen: BUS,
   offen: BUS, auftraege: BUS, auftrag: BUS, verlauf: BUS, uebernehmen: BUS,
   cost: KOSTEN, kosten: KOSTEN,
 };
@@ -68,12 +69,16 @@ function hilfe() {
 
   Auftraege
     sanctuary send <Name|all> "Text" [--topic t] [--expect-receipt]
-                                   [--host RECHNER] [--from Name]
+                                   [--host RECHNER] [--from Name] [--rolle]
+                                   ohne --rolle an die Sitzung, die den Namen
+                                   GERADE traegt - siehe Skill claude-bus
     sanctuary tasks [--all]        Warteschlange (mit --json maschinenlesbar)
     sanctuary history <Name>       Auftraege und Quittungen mit einem Agenten
     sanctuary read [--all]         neue Nachrichten holen
     sanctuary ack <id> <Code> ["Notiz"]
     sanctuary open                 Stand der eigenen Auftraege
+    sanctuary log [--limit N]      gesamter Bestand ohne Namensfilter
+    sanctuary config [name wert]   Einstellungen, z.B. verfall_stunden
     sanctuary doctor               Bus pruefen
     sanctuary cost                 was die Zustellung gekostet hat
 

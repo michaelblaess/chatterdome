@@ -22,8 +22,10 @@
 import { readFileSync, writeFileSync, appendFileSync, existsSync, mkdirSync, statSync, lstatSync, realpathSync } from 'node:fs';
 import {
   oeffne, schreibe, ereignisseAb, cursorLesen, cursorSetzen, letzteId,
-  auftraege, auftrag, quittungenZu, zahlen, zustandAusCode, importiereJsonl,
+  auftraege, auftrag, quittungenZu, zahlen, zustandAusCode, importiereJsonl, OFFEN,
 } from './speicher.mjs';
+import { verfallen, fehlgeleitete, VERFALLEN, EMPFAENGER_WEG } from './pacht.mjs';
+import { einstellung, alleEinstellungen, setzeEinstellung, einstellungsDatei } from './einstellungen.mjs';
 import { homedir, hostname } from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { join, dirname } from 'node:path';
@@ -42,11 +44,19 @@ export const CODES = {
   400: 'Nachricht unverstaendlich',
   403: 'darf ich nicht ohne Michaels Freigabe',
   404: 'Ziel nicht gefunden',
+  408: 'verfallen - lag zu lange offen',
   409: 'geht gerade nicht, stecke in etwas anderem',
+  410: 'Empfaenger gibt es nicht mehr',
   500: 'bei der Ausfuehrung schiefgegangen',
   501: 'verstanden, kann ich aber nicht',
   503: 'beschaeftigt, spaeter nochmal',
 };
+
+/**
+ * Codes, die der Bus selbst vergibt. Sie stehen in CODES, damit die Anzeige sie
+ * benennen kann - von Hand quittiert werden sollen sie aber nicht.
+ */
+const SELBSTCODES = new Set([VERFALLEN, EMPFAENGER_WEG]);
 
 // ---------------------------------------------------------------------------
 // Pfade und Schutz
@@ -147,6 +157,12 @@ function db() {
   try {
     importiereJsonl(dbHandle, d);
   } catch { /* Import ist Komfort, der Betrieb haengt nicht daran */ }
+  // Der Kehrbesen laeuft bei JEDEM Oeffnen, damit kein Aufrufer ihn vergessen
+  // kann. Er liest zuerst und schreibt nur, wenn wirklich etwas abgelaufen ist -
+  // sonst zoege der Stop-Hook nach jeder Antwort die Schreibsperre.
+  try {
+    verfallen(dbHandle);
+  } catch { /* Ein Kehrbesen, der stolpert, darf den Bus nicht anhalten */ }
   return dbHandle;
 }
 
@@ -161,6 +177,7 @@ function alsNachricht(z) {
   return {
     id: z.auftrag_id, ts: z.ts, host: z.host,
     from: z.von, fromSession: z.von_session, to: z.an,
+    toSession: z.an_session, bindung: z.bindung,
     topic: z.topic, text: z.text, quittung: Boolean(z.quittung_erwartet),
     zustand: z.zustand, ereignis: z.id,
   };
@@ -185,32 +202,58 @@ function selbstId() {
   return process.env.CLAUDE_CODE_SESSION_ID || '';
 }
 
-/** Instanzname aus der Operator-Namenstabelle, sonst Kurzform der Session-ID. */
-export function selbstName(sid = selbstId()) {
+/**
+ * Die Zuordnung Session-ID zu Name, wie der SessionStart-Hook sie fuehrt.
+ *
+ * Eine Stelle, die diese Datei liest - vorher stand der Lesevorgang zweimal
+ * hier und ein drittes Mal im Operator.
+ */
+export function namenstabelle() {
   try {
     const t = JSON.parse(readFileSync(join(hostDir(), 'namen.json'), 'utf8'));
-    if (t[sid]) return t[sid];
-  } catch { /* Notnagel unten */ }
+    return t && typeof t === 'object' ? t : {};
+  } catch {
+    return {};
+  }
+}
+
+/** Instanzname aus der Operator-Namenstabelle, sonst Kurzform der Session-ID. */
+export function selbstName(sid = selbstId()) {
+  const t = namenstabelle();
+  if (t[sid]) return t[sid];
   return sid ? sid.slice(0, 8) : 'unbekannt';
 }
 
-function nameZuSession(name) {
-  try {
-    const t = JSON.parse(readFileSync(join(hostDir(), 'namen.json'), 'utf8'));
-    for (const [sid, n] of Object.entries(t)) {
-      if (n.toLowerCase() === String(name).toLowerCase()) return sid;
-    }
-  } catch { /* nichts */ }
+/** Welche Sitzung traegt diesen Namen GERADE? null, wenn niemand. */
+export function nameZuSession(name) {
+  for (const [sid, n] of Object.entries(namenstabelle())) {
+    if (String(n).toLowerCase() === String(name).toLowerCase()) return sid;
+  }
   return null;
 }
 
 /**
  * Ist die Nachricht fuer mich?
- * 'alle' geht an jeden ausser den Absender, sonst muss Name oder Session-ID passen.
+ *
+ * ZWEI ADRESSARTEN, und die Unterscheidung ist der Kern des Umbaus vom
+ * 07.08.2026:
+ *
+ *   Person - der Auftrag traegt an_session. Dann zaehlt AUSSCHLIESSLICH die
+ *            Session-ID. Der Name daneben ist Beschriftung, kein Kriterium.
+ *            Wer spaeter denselben Namen aus dem Pool bekommt, bekommt den
+ *            Auftrag NICHT.
+ *   Rolle  - der Auftrag traegt keine an_session (Rundruf, --rolle, fremder
+ *            Rechner, Altbestand). Dann entscheidet der Name, wer immer ihn
+ *            gerade traegt. Das ist gewollt, aber nur zusammen mit dem Verfall
+ *            zu verantworten.
+ *
+ * Vorher gab es nur den zweiten Fall - deshalb hat eine neue Marga den vier
+ * Tage alten Auftrag an eine laengst beendete Marga abgearbeitet.
  */
 function fuerMich(m, sid, name) {
   if (m.host !== rechner()) return false;
   if (m.fromSession === sid) return false;
+  if (m.toSession) return m.toSession === sid;
   const to = String(m.to || 'alle').toLowerCase();
   return to === 'alle' || to === 'all' || to === String(name).toLowerCase() || to === sid;
 }
@@ -245,7 +288,7 @@ export function offeneNachrichten(sessionId = selbstId(), name = null) {
 export function offeneAuftraege(sessionId = selbstId(), name = null) {
   const wer = name || selbstName(sessionId);
   return auftraege(db(), {})
-    .filter((a) => ['submitted', 'working', 'input_required'].includes(a.zustand))
+    .filter((a) => OFFEN.includes(a.zustand))
     .map(alsNachricht)
     .filter((m) => fuerMich(m, sessionId, wer));
 }
@@ -323,11 +366,7 @@ export function zustellenAn(host, ereignis) {
  * @returns {string|null} Rechnername in Grossbuchstaben, oder null.
  */
 export function findeRechner(name) {
-  const ziel = String(name).toLowerCase();
-  try {
-    const t = JSON.parse(readFileSync(join(hostDir(), 'namen.json'), 'utf8'));
-    if (Object.values(t).some((n) => String(n).toLowerCase() === ziel)) return rechner();
-  } catch { /* keine Namenstabelle, dann eben ueber das Mesh */ }
+  if (nameZuSession(name)) return rechner();
 
   try {
     // fileURLToPath statt URL.pathname: unter Windows liefert pathname
@@ -386,6 +425,18 @@ function cmdUebernehmen() {
     return;
   }
 
+  // Die Bindung an die Sitzung wird HIER nachgeholt. Der ferne Absender konnte
+  // den Namen nicht aufloesen - die Namenstabelle des Empfaengerrechners liegt
+  // auf diesem Rechner, und das ist genau der hier. Ohne diesen Schritt bliebe
+  // jeder Auftrag ueber Rechnergrenzen namensadressiert und damit vererbbar.
+  if (ereignis.art === 'auftrag' && !ereignis.an_session && ereignis.bindung === 'offen' && ereignis.an) {
+    const sitzung = nameZuSession(ereignis.an);
+    if (sitzung) {
+      ereignis.an_session = sitzung;
+      ereignis.bindung = 'session';
+    }
+  }
+
   schreibe(d, ereignis);
 
   // AUCH in die JSONL schreiben, nicht nur in die Datenbank. Der Stop-Hook
@@ -420,7 +471,7 @@ function cmdSend(argv) {
   const text = worte.join(' ');
 
   if (!to || !text) {
-    console.error('Nutzung: bus.mjs send <Name|alle> "Text" [--topic thema] [--host RECHNER] [--von Name] [--erwartet-quittung]');
+    console.error('Nutzung: bus.mjs send <Name|alle> "Text" [--topic thema] [--host RECHNER] [--von Name] [--rolle] [--erwartet-quittung]');
     process.exit(1);
   }
   const wert = (name) => {
@@ -441,6 +492,31 @@ function cmdSend(argv) {
     ? rechner()
     : String(wert('--host') || findeRechner(to) || rechner()).toUpperCase();
 
+  // WEN genau: einen Namen aufloesen wir hier auf die Sitzung, die ihn GERADE
+  // traegt. Ein Name ist eine Pacht - ohne diese Aufloesung erbt der naechste
+  // Inhaber die Post seines Vorgaengers (am 07.08.2026 genau so passiert).
+  //
+  // Nicht aufgeloest wird beim Rundruf, bei --rolle und bei einem Ziel auf
+  // einem anderen Rechner. Der ferne Fall holt es beim Eintreffen nach, siehe
+  // cmdUebernehmen - dort ist die Namenstabelle die richtige.
+  const alsRolle = argv.includes('--rolle') || argv.includes('--role');
+  const lokal = zielHost === rechner();
+  let zielSession = null;
+  if (!rundruf && !alsRolle && lokal) {
+    zielSession = nameZuSession(to);
+    if (!zielSession) {
+      console.error(`${ROT}'${to}' traegt gerade niemand auf ${rechner()}.${R}`);
+      console.error(`${GRAU}Laufende Instanzen: node ~/.claude/skills/operator/operator.mjs status${R}`);
+      console.error(`${GRAU}An den Namen adressieren, wer immer ihn traegt: --rolle${R}`);
+      process.exit(1);
+    }
+  }
+  // Drei Werte, weil zwei zu wenig sind: 'rolle' heisst "an den Namen, mit
+  // Absicht", 'offen' heisst "an eine Person, hier aber nicht aufloesbar".
+  // Nur 'offen' darf der Empfaengerrechner beim Eintreffen nachbinden - waeren
+  // beide Faelle derselbe Wert, wuerde er auch Rollenauftraege festnageln.
+  const bindung = zielSession ? 'session' : (rundruf || alsRolle) ? 'rolle' : 'offen';
+
   const topicIdx = argv.indexOf('--topic');
   const nachricht = {
     id: randomBytes(5).toString('hex'),
@@ -451,6 +527,8 @@ function cmdSend(argv) {
     fromSession: selbstId(),
     cwd: process.cwd(),
     to,
+    toSession: zielSession,
+    bindung,
     topic: topicIdx >= 0 ? argv[topicIdx + 1] : 'allgemein',
     text,
     quittung: argv.includes('--expect-receipt') || argv.includes('--erwartet-quittung'),
@@ -459,6 +537,7 @@ function cmdSend(argv) {
     auftrag_id: nachricht.id, ts: nachricht.ts, art: 'auftrag',
     host: zielHost, von_host: nachricht.vonHost,
     von: nachricht.from, von_session: nachricht.fromSession, an: to,
+    an_session: zielSession, bindung,
     zustand: 'submitted', topic: nachricht.topic, text,
     quittung_erwartet: nachricht.quittung, cwd: nachricht.cwd,
   };
@@ -482,6 +561,12 @@ function cmdSend(argv) {
   } else {
     console.log(`${GRUEN}Gesendet an ${to}${R}  ${GRAU}(id ${nachricht.id})${R}`);
   }
+  const frist = einstellung('verfall_stunden');
+  console.log(zielSession
+    ? `${GRAU}Gebunden an die Sitzung ${zielSession.slice(0, 8)} - ein spaeterer Traeger des Namens bekommt ihn nicht.${R}`
+    : bindung === 'rolle'
+      ? `${GRAU}An den Namen adressiert, nicht an eine Sitzung${frist ? `. Verfaellt nach ${frist} h` : ''}.${R}`
+      : `${GRAU}Bindung holt ${zielHost} beim Eintreffen nach${frist ? `, sonst Verfall nach ${frist} h` : ''}.${R}`);
   if (nachricht.quittung) console.log(`${GRAU}Quittung erwartet - Stand mit: bus.mjs open${R}`);
 }
 
@@ -525,6 +610,9 @@ function cmdAck(argv) {
   if (!zeile) {
     console.error(`${ROT}Keine Nachricht mit ID ${msgId}.${R}`);
     process.exit(1);
+  }
+  if (SELBSTCODES.has(code)) {
+    console.log(`${GELB}${code} vergibt sonst der Bus selbst (Verfall, verschwundener Empfaenger).${R}`);
   }
   const nachricht = alsNachricht(zeile);
   const quittung = {
@@ -622,12 +710,13 @@ function cmdAuftraege(argv) {
     return;
   }
 
-  const farbeZustand = (z) => (z === 'completed' ? GRUEN : z === 'failed' || z === 'cancelled' ? ROT : GELB);
+  const farbeZustand = (z) => (z === 'completed' ? GRUEN : ['failed', 'cancelled', 'expired'].includes(z) ? ROT : GELB);
   const zeigen = (titel, eintraege) => {
     if (!eintraege.length) return;
     console.log(`\n${CYAN}${titel}${R}\n`);
     for (const a of eintraege) {
-      console.log(`  ${farbeZustand(a.zustand)}${a.zustand.padEnd(15)}${R}${GRAU}${zeit(a.erstellt)}  ${a.von} -> ${a.an}  (${a.topic}, id ${a.auftrag_id})${R}`);
+      const wie = a.bindung === 'session' ? '' : ' [Rolle]';
+      console.log(`  ${farbeZustand(a.zustand)}${a.zustand.padEnd(15)}${R}${GRAU}${zeit(a.erstellt)}  ${a.von} -> ${a.an}${wie}  (${a.topic}, id ${a.auftrag_id})${R}`);
       console.log(`  ${String(a.text || '').slice(0, 100)}`);
     }
   };
@@ -651,21 +740,67 @@ function cmdAuftraege(argv) {
  * @param {string[]} argv
  * Name des Agenten, dazu optional --json.
  */
+/**
+ * Baut die Auftragsliste mit allen Quittungen auf.
+ *
+ * @param {string|null} name
+ * Auf einen Agenten einschraenken, oder null fuer den gesamten Bestand.
+ */
+function verlaufListe(d, name = null) {
+  return auftraege(d, {})
+    .filter((a) => !name || a.an === name || a.von === name)
+    .sort((x, y) => String(x.erstellt).localeCompare(String(y.erstellt)))
+    .map((a) => ({ ...a, quittungen: quittungenZu(d, a.auftrag_id) }));
+}
+
+/**
+ * Der gesamte Bestand, nicht auf einen Gespraechspartner eingeschraenkt.
+ *
+ * Gedacht als Datenquelle fuer die Bus-Ansicht der Oberflaeche: dort steht die
+ * Frage "was liegt ueberhaupt im Bus", und die beantwortet keine Sicht, die
+ * vorher einen Namen verlangt.
+ */
+function cmdLog(argv) {
+  sicherstellen();
+  const d = db();
+  const grenzeIdx = argv.indexOf('--limit');
+  const grenze = grenzeIdx >= 0 ? parseInt(argv[grenzeIdx + 1], 10) : 0;
+  let liste = verlaufListe(d);
+  // Von hinten abschneiden: bei einer Obergrenze will man das Neueste sehen,
+  // nicht den Anfang der Zeitrechnung.
+  if (Number.isFinite(grenze) && grenze > 0 && liste.length > grenze) {
+    liste = liste.slice(-grenze);
+  }
+
+  if (argv.includes('--json')) {
+    console.log(JSON.stringify({
+      rechner: rechner(), ich: selbstName(), zeit: new Date().toISOString(),
+      verfall_stunden: einstellung('verfall_stunden'),
+      auftraege: liste,
+    }, null, 1));
+    return;
+  }
+  console.log(`\n${CYAN}${liste.length} Auftrag/Auftraege im Bus auf ${rechner()}${R}\n`);
+  for (const a of liste) {
+    console.log(`  ${GRAU}${zeit(a.erstellt)}  ${a.von} -> ${a.an}${R}  ${a.zustand}  ${GRAU}(${a.topic}, id ${a.auftrag_id})${R}`);
+    console.log(`  ${String(a.text || '').slice(0, 100)}`);
+  }
+  console.log('');
+}
+
 function cmdVerlauf(argv) {
   sicherstellen();
   const alsJson = argv.includes('--json');
   const name = argv.find((a) => !a.startsWith('--'));
   if (!name) {
     console.error('Aufruf: bus.mjs history <Name> [--json]');
+    console.error('Der gesamte Bestand ohne Namen: bus.mjs log [--json] [--limit N]');
     process.exitCode = 1;
     return;
   }
 
   const d = db();
-  const liste = auftraege(d, {})
-    .filter((a) => a.an === name || a.von === name)
-    .sort((x, y) => String(x.erstellt).localeCompare(String(y.erstellt)))
-    .map((a) => ({ ...a, quittungen: quittungenZu(d, a.auftrag_id) }));
+  const liste = verlaufListe(d, name);
 
   if (alsJson) {
     console.log(JSON.stringify({
@@ -679,7 +814,7 @@ function cmdVerlauf(argv) {
     console.log(`${GRAU}Kein Verlauf mit ${name}.${R}`);
     return;
   }
-  const farbeZustand = (z) => (z === 'completed' ? GRUEN : z === 'failed' || z === 'cancelled' ? ROT : GELB);
+  const farbeZustand = (z) => (z === 'completed' ? GRUEN : ['failed', 'cancelled', 'expired'].includes(z) ? ROT : GELB);
   console.log(`\n${CYAN}Verlauf mit ${name}${R}\n`);
   for (const a of liste) {
     console.log(`  ${GRAU}${zeit(a.erstellt)}  ${a.von} -> ${a.an}${R}  ${farbeZustand(a.zustand)}${a.zustand}${R}`);
@@ -703,13 +838,56 @@ function cmdDoctor() {
     ? `  Isolation    ${ROT}BLOCKIERT${R}\n${probleme.map((p) => `               ${GELB}- ${p}${R}`).join('\n')}`
     : `  Isolation    ${GRUEN}OK - der Pfad wird nicht synchronisiert${R}`);
   if (!probleme.length) {
-    const z = zahlen(db());
+    const d = db();
+    const z = zahlen(d);
+    const frist = einstellung('verfall_stunden');
     console.log(`  Datenbank    ${join(hostDir(), 'bus.db')}`);
     console.log(`  Ereignisse   ${z.ereignisse}`);
     console.log(`  Auftraege    ${z.auftraege}, davon offen ${z.offen}`);
+    console.log(`  Verfall      ${frist ? `${frist} h` : `${GELB}abgeschaltet${R}`}`);
+
+    // Ein Auftrag, dessen Empfaengername inzwischen einer anderen Sitzung
+    // gehoert, ist genau der Vorfall vom 07.08.2026 - nur bekommt ihn dank der
+    // Bindung niemand mehr faelschlich zugestellt. Hier steht er trotzdem,
+    // damit die Verwechslung sichtbar bleibt statt still zu verschwinden.
+    const namen = namenstabelle();
+    const irre = fehlgeleitete(d, namen);
+    console.log(irre.length
+      ? `  Namenswechsel ${GELB}${irre.length} Auftrag/Auftraege an einen inzwischen neu vergebenen Namen${R}`
+      : `  Namenswechsel ${GRUEN}keine${R}`);
+    for (const a of irre.slice(0, 5)) {
+      console.log(`               ${GRAU}${a.auftrag_id}  an ${a.an} (${String(a.an_session).slice(0, 8)}), Name gehoert jetzt einer anderen Sitzung${R}`);
+    }
     console.log(`  Altbestand   ${zeilen(pfadMessages()).length} Nachrichten / ${zeilen(pfadReceipts()).length} Quittungen in JSONL`);
   }
   console.log('');
+}
+
+/**
+ * Zeigt oder setzt die Einstellungen des Bus.
+ *
+ * Ohne Argumente die Uebersicht mitsamt Herkunft - der haeufigste Grund fuer
+ * "der Wert wirkt nicht" ist eine gesetzte Umgebungsvariable, und die sieht man
+ * sonst nirgends.
+ */
+function cmdConfig(argv) {
+  const [schluessel, ...rest] = argv;
+  if (schluessel) {
+    const fehler = setzeEinstellung(schluessel, rest.join(' '));
+    if (fehler) {
+      console.error(`${ROT}${fehler}${R}`);
+      process.exitCode = 1;
+      return;
+    }
+  }
+  console.log(`\n${CYAN}Bus-Einstellungen${R}  ${GRAU}${einstellungsDatei()}${R}\n`);
+  for (const e of alleEinstellungen()) {
+    const farbe = e.herkunft === 'Vorgabe' ? GRAU : GRUEN;
+    console.log(`  ${e.schluessel.padEnd(18)} ${farbe}${String(e.wert).padEnd(8)}${R}${GRAU}aus ${e.herkunft}${R}`);
+    console.log(`  ${GRAU}${' '.repeat(18)} ${e.text}${R}`);
+    console.log(`  ${GRAU}${' '.repeat(18)} Umgebung: ${e.umgebung}${R}\n`);
+  }
+  console.log(`${GRAU}Setzen: bus.mjs config <schluessel> <wert>${R}\n`);
 }
 
 /** Wird vom Stop-Hook benutzt: nur die Anzahl offener Nachrichten, sonst nichts. */
@@ -755,12 +933,14 @@ function hilfe() {
   console.log(`
   Bus - Nachrichten zwischen Claude-Instanzen auf diesem Rechner
 
-    send <Name|all> "Text" [--topic t] [--expect-receipt]
+    send <Name|all> "Text" [--topic t] [--rolle] [--expect-receipt]
     read [--all]                  neue Nachrichten holen (schiebt den Lesezeiger)
     tasks [--all] [--json]        Warteschlange - was liegt an, unabhaengig vom Lesezeiger
     history <Name> [--json]       Auftraege und Quittungen mit einem Agenten
+    log [--json] [--limit N]      der gesamte Bestand, ohne Namensfilter
     ack <msgId> <Code> ["Notiz"]  quittieren, setzt zugleich den Auftragszustand
     open                          Stand der eigenen Nachrichten
+    config [schluessel wert]      Einstellungen zeigen oder setzen
     doctor                        Pfad-Isolation und Datenbank pruefen
     pending                       nur fuer den Stop-Hook
     receive                       Nutzlast von einem anderen Rechner uebernehmen
@@ -768,8 +948,16 @@ function hilfe() {
   Die frueheren deutschen Namen (auftraege, verlauf, offen, uebernehmen) und
   Flags (--alle, --erwartet-quittung, --von) funktionieren weiterhin.
 
+  An WEN adressiert wird
+    send Marga "..."          an die Sitzung, die den Namen GERADE traegt.
+                               Ein spaeterer Traeger bekommt den Auftrag nicht.
+                               Traegt den Namen niemand, bricht der Befehl ab.
+    send Marga "..." --rolle  an den Namen, wer immer ihn traegt. Ueberlebt
+                               den Namenswechsel - deshalb nur mit Verfall.
+
   Zustaende: submitted -> working (202) -> completed (2xx) | failed (4xx/5xx)
              409 und 503 setzen zurueck auf submitted, der Auftrag bleibt liegen
+             expired (408) und cancelled (410) vergibt der Bus selbst
 
   Quittungscodes
 ${Object.entries(CODES).map(([c, t]) => `    ${c}  ${t}`).join('\n')}
@@ -807,7 +995,9 @@ if (direktAufgerufen) {
     case 'tasks': case 'task':
     case 'auftraege': case 'auftrag': cmdAuftraege(argv.slice(1)); break;
     case 'history': case 'verlauf': cmdVerlauf(argv.slice(1)); break;
+    case 'log': case 'bestand': cmdLog(argv.slice(1)); break;
     case 'open': case 'offen': cmdOffen(); break;
+    case 'config': case 'einstellungen': cmdConfig(argv.slice(1)); break;
     case 'doctor': cmdDoctor(); break;
     case 'pending': cmdPending(); break;
     default: hilfe();

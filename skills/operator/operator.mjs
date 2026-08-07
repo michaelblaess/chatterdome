@@ -28,6 +28,8 @@ import { ladePool, aktivesMotiv, alleMotive, setzeMotiv } from './pool.mjs';
 import { ladeInstanzen } from './instanzen.mjs';
 // Nur zum Anzeigen wartender Post. bus.mjs fuehrt beim Import nichts aus.
 import { offeneNachrichten } from '../claude-bus/bus.mjs';
+import { oeffne as oeffneBus } from '../claude-bus/speicher.mjs';
+import { pachtEndet } from '../claude-bus/pacht.mjs';
 
 const R = '\x1b[0m', FETT = '\x1b[1m', GRAU = '\x1b[38;5;244m';
 const GRUEN = '\x1b[38;5;77m', GELB = '\x1b[38;5;221m', ROT = '\x1b[38;5;203m';
@@ -670,6 +672,9 @@ function werdeOperator() {
       process.exitCode = 1;
       return;
     }
+    // Dieselbe Regel wie beim Aufraeumen: mit dem Namen geht das Postfach.
+    // Sonst faende ich hier gleich die Auftraege meines Vorgaengers vor.
+    postfachSchliessen([[inhaber[0], ziel]]);
     delete namen[inhaber[0]];
   }
 
@@ -960,12 +965,45 @@ function raeumeNamen() {
   const namen = ladeNamen();
   const aktiv = new Set(ladeInstanzen().map((i) => i.sessionId));
   const neu = {};
+  const beendet = [];
   for (const [sid, name] of Object.entries(namen)) {
     if (aktiv.has(sid)) neu[sid] = name;
+    else beendet.push([sid, name]);
   }
-  const weg = Object.keys(namen).length - Object.keys(neu).length;
   speichereNamen(neu);
-  console.log(`\n  ${GRUEN}${weg} Zuordnung(en) beendeter Sitzungen entfernt, ${Object.keys(neu).length} aktiv.${R}\n`);
+  const zurueck = postfachSchliessen(beendet);
+  console.log(`\n  ${GRUEN}${beendet.length} Zuordnung(en) beendeter Sitzungen entfernt, ${Object.keys(neu).length} aktiv.${R}`);
+  console.log(zurueck.length
+    ? `  ${GELB}${zurueck.length} offene(r) Auftrag/Auftraege an diese Sitzungen zurueckgenommen.${R}\n`
+    : '\n');
+}
+
+/**
+ * Nimmt die offenen Auftraege beendeter Sitzungen zurueck.
+ *
+ * Der Name ist eine Pacht, und das Postfach gehoert dazu. Wird der Name
+ * freigegeben, ohne dass seine Post mitgeht, erbt sie der naechste Inhaber -
+ * am 07.08.2026 hat eine neue Marga so einen vier Tage alten Auftrag an ihre
+ * Vorgaengerin abgearbeitet. Betroffen sind nur Auftraege, die an die SITZUNG
+ * gebunden waren; ausdrueckliche Rollenauftraege ueberleben und verfallen
+ * stattdessen nach Frist.
+ *
+ * @param {Array<[string,string]>} beendet
+ * Paare aus Session-ID und Name.
+ * @returns {string[]} IDs der zurueckgenommenen Auftraege.
+ */
+function postfachSchliessen(beendet) {
+  if (!beendet.length) return [];
+  try {
+    const db = oeffneBus(datenDir());
+    const ids = beendet.flatMap(([sid, name]) => pachtEndet(db, sid, name));
+    db.close();
+    return ids;
+  } catch {
+    // Ein blockierter Bus (Pfad nicht isoliert) darf das Aufraeumen der
+    // Namenstabelle nicht verhindern - die ist davon unabhaengig.
+    return [];
+  }
 }
 
 async function beobachte(sekunden, voll, json = false) {

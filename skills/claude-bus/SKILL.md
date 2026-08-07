@@ -15,12 +15,15 @@ BUS=~/.claude/skills/claude-bus/bus.mjs
 node $BUS send Patrick "Bitte Tests laufen lassen" --topic auftrag --expect-receipt
 node $BUS send Franko "..." --host SENZA    # Zielrechner spart die Mesh-Suche
 node $BUS send all "Ich fasse gleich claude-config an"    # NUR dieser Rechner, s. u.
+node $BUS send Marga "..." --rolle     # an den NAMEN statt an die Sitzung, siehe unten
 node $BUS read                          # neue Nachrichten holen (schiebt den Lesezeiger)
 node $BUS tasks                         # Warteschlange - unabhängig vom Lesezeiger
 node $BUS tasks --all                   # auch erledigte
 node $BUS history <Name>                # Aufträge und Quittungen mit einem Agenten
 node $BUS ack <msgId> 202 "mache ich"   # quittieren, setzt zugleich den Zustand
 node $BUS open                          # Stand der eigenen Nachrichten
+node $BUS log --json --limit 200        # gesamter Bestand, ohne Namensfilter
+node $BUS config                        # Einstellungen zeigen, z.B. die Verfallsfrist
 node $BUS doctor                        # Pfad-Isolation und Datenbank prüfen
 
 node ~/.claude/skills/claude-bus/kosten.mjs   # was das Messaging gekostet hat
@@ -45,6 +48,7 @@ statt selbst erfunden:
 submitted -> working (202) -> completed (2xx)
                            -> failed (4xx/5xx)
 409 und 503 setzen zurück auf submitted - der Auftrag bleibt liegen
+expired (408) und cancelled (410) vergibt der Bus selbst, siehe pacht.mjs
 ```
 
 Die Quittungscodes steuern die Übergänge, es gibt also **kein zweites Vokabular** zu lernen.
@@ -54,6 +58,75 @@ Die Quittungscodes steuern die Übergänge, es gibt also **kein zweites Vokabula
 was seit dem letzten Mal ankam - das ist die Postfach-Sicht. `auftraege` hängt an keinem
 Zeiger und zeigt, was noch offen ist - das ist die Arbeitssicht. Ein Auftrag verschwindet dort
 erst, wenn er quittiert wurde.
+
+## Der Name ist eine Pacht - an wen ein Auftrag wirklich geht
+
+**Der Vorfall vom 07.08.2026.** Sanctuary legte am 03.08. um 12:10 einen Auftrag "gib mir das
+aktuelle Datum" an Marga ab. Diese Marga holte ihn nie ab, ihre Sitzung endete, der
+Aufräumschritt gab den Namen frei - und vier Tage später bekam eine völlig andere Sitzung
+denselben Namen aus dem Pool und arbeitete den Auftrag ab. In der Datenbank nachgesehen: der
+Auftrag stand von `2026-08-03T12:10:02Z` bis `2026-08-07T09:19:51Z` auf `submitted`, und die
+erste Marga hatte nicht einmal einen Eintrag in der `cursor`-Tabelle.
+
+Drei Schichten haben gleichzeitig versagt, jede hätte allein gereicht:
+
+1. **Die Adresse war ein gepachteter Name.** Der Auftrag hielt die Sitzung des ABSENDERS exakt
+   fest (`von_session`), den Empfänger dagegen nur als Spitznamen.
+2. **Aufträge alterten nicht.** Kein Verfall, kein Übergang "Empfänger ist weg".
+3. **Lesezeiger und Adresse hatten verschiedene Körnung.** Der Zeiger hängt an der Session-ID,
+   die Adresse am Namen. Eine frische Sitzung startet ohne Zeiger, also bei 0, und bekommt die
+   gesamte Historie ihres geerbten Namens als "neu" vorgesetzt.
+
+**Seitdem gibt es zwei Adressarten, und die Wahl ist ausdrücklich:**
+
+```bash
+node $BUS send Marga "..."           # an die PERSON: die Sitzung, die den Namen GERADE traegt
+node $BUS send Marga "..." --rolle   # an die ROLLE: wer immer den Namen traegt
+```
+
+- Beim Senden löst der Bus den Namen über `namen.json` auf und legt die Session-ID als
+  `an_session` mit ab. Danach entscheidet in `fuerMich()` **ausschliesslich die Session-ID**,
+  der Name daneben ist Beschriftung.
+- **Trägt den Namen gerade niemand, bricht `send` ab** statt einen Auftrag ins Leere zu legen.
+  Genau solcher Bestand trifft später jemanden. Wer das trotzdem will, nimmt `--rolle`.
+- Über Rechnergrenzen kann der Absender den Namen nicht auflösen - die Namenstabelle liegt beim
+  Empfänger. Deshalb holt `receive` die Bindung beim Eintreffen nach (`bindung: 'offen'`).
+  Ein ausdrücklicher Rollenauftrag (`bindung: 'rolle'`) wird dabei NICHT festgenagelt.
+- Der Rundruf (`send all`) ist immer eine Rolle.
+
+**Und das Postfach gehört zur Pacht.** Wird ein Name freigegeben, weil die Sitzung beendet ist,
+gehen seine offenen personengebundenen Aufträge im selben Zug auf `cancelled` mit Quittung
+**410**. Das passiert an allen drei Stellen, an denen ein Name zurück in den Pool geht:
+`operator.mjs reset-names`, `werde-operator` und Stufe 2 der Namensvergabe im
+SessionStart-Hook. Die Logik liegt einmal in `pacht.mjs`, nicht dreimal.
+
+**Der Lesezeiger einer frischen Sitzung beginnt am Ende des Protokolls**, gesetzt beim
+Sitzungsstart in `whoami.mjs`. Nicht beim ersten Buszugriff: zwischen Sitzungsstart und erstem
+Zugriff kann ein Auftrag eintreffen, den man sonst überspringt. Ein vorhandener Zeiger wird nie
+angefasst - `claude --resume` behält die Session-ID, und die Sitzung soll ihre ungelesenen
+Nachrichten behalten.
+
+## Verfall - konfigurierbar, Vorgabe 24 Stunden
+
+Der Kehrbesen für alles, was die Bindung nicht fängt: Rollenaufträge, Aufträge von fremden
+Rechnern und den Altbestand ohne Bindung. Ein offener Auftrag, der länger als die Frist liegt,
+geht auf `expired` mit Quittung **408**.
+
+```bash
+node $BUS config                      # Werte samt Herkunft (Umgebung/Datei/Vorgabe)
+node $BUS config verfall_stunden 48   # setzen
+```
+
+- Reihenfolge: `CLAUDE_BUS_VERFALL_STUNDEN` > `einstellungen.json` (neben `bus.mjs`, wandert
+  über git auf alle Rechner) > Vorgabe 24.
+- **0 schaltet den Verfall ab.** Dann bleibt jeder liegengebliebene Auftrag dauerhaft im
+  Bestand - die Übersicht im Bus-Tab weist das rot aus.
+- Der Kehrbesen läuft bei **jedem** Öffnen der Datenbank, damit kein Aufrufer ihn vergessen
+  kann. Er liest zuerst und schreibt nur bei echten Treffern, sonst zöge der Stop-Hook nach
+  jeder Antwort die Schreibsperre.
+- Belegt am 07.08.2026 auf dem echten Bus: der zweite Auftrag desselben Tages, der noch offen an
+  `Schmid` lag, ging beim ersten Lauf auf `expired`. Ohne das hätte ihn die nächste Instanz
+  mit diesem Namen bekommen - dieselbe Falle ein zweites Mal.
 
 ## Warum SQLite und nicht mehr JSONL
 
@@ -95,6 +168,11 @@ Zustand ist eine Projektion":
   nachgezogen.
 - **`cursor`** - Lesezeiger je Sitzung.
 
+Beide Ereignistabellen tragen seit dem 07.08.2026 `an_session` und `bindung`
+(`session` / `rolle` / `offen`). Neue Spalten kommen über `nachruesten()` in `speicher.mjs`
+dazu - `CREATE TABLE IF NOT EXISTS` lässt eine vorhandene Tabelle unangetastet, und auf jedem
+Rechner, der den Bus schon benutzt hat, fehlte die Spalte sonst still.
+
 **Übergangsphase:** `send` und `ack` schreiben zusätzlich weiter in die alten JSONL-Dateien,
 gelesen wird ausschliesslich aus der Datenbank. Der Import der Altbestände läuft bei jedem
 Start mit und ist idempotent (geprüft: zweimal `doctor` hintereinander ändert die Zahlen
@@ -115,7 +193,9 @@ statt eines Protokolls.
 | `400` | Nachricht unverständlich |
 | `403` | **darf ich nicht ohne Michaels Freigabe** |
 | `404` | Ziel nicht gefunden |
+| `408` | verfallen - lag zu lange offen (vergibt der Bus selbst) |
 | `409` | geht gerade nicht, stecke in etwas anderem |
+| `410` | Empfänger gibt es nicht mehr (vergibt der Bus selbst) |
 | `500` | bei der Ausführung schiefgegangen |
 | `501` | verstanden, kann ich aber nicht |
 | `503` | beschäftigt, später nochmal |
@@ -267,6 +347,13 @@ seinen Adressaten. Den Rückweg der Quittung hält `von_host` fest.
 - **Keine Anführungszeichen im Hook-Text.** Die JSON-Ausgabe wird per `printf` gebaut, weil
   `jq` nicht auf allen Rechnern vorhanden ist. Ein einzelnes `"` zerlegt sie. Der Hook prüft
   das zusätzlich ab.
+- **`send <Name>` bricht ab, wenn den Namen gerade niemand trägt.** Das ist Absicht und kein
+  Fehler: ein Auftrag an einen unbesetzten Namen bleibt liegen, bis irgendwann jemand diesen
+  Namen aus dem Pool bekommt - und trifft dann den Falschen. Wer wirklich die Rolle meint,
+  schreibt `--rolle` dazu.
+- **Ein Test darf nicht gegen den echten Bus laufen.** `CLAUDE_BUS_DIR` auf ein
+  Wegwerf-Verzeichnis setzen (siehe `bus.test.mjs`), sonst hängt das Ergebnis daran, wer den
+  Test gerade startet, und der Verfall greift mitten in die Prüfung.
 - **Keine Zustellgarantie.** Wer nicht liest, verpasst. Der Lesezeiger wird auch dann
   weitergesetzt, wenn nichts für die Sitzung dabei war.
 - **Keine Sperren.** Gleichzeitiges Anhängen zweier Instanzen ist praktisch, aber nicht

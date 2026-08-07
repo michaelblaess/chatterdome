@@ -53,6 +53,8 @@ export function oeffne(verzeichnis) {
       von         TEXT,
       von_session TEXT,
       an          TEXT,
+      an_session  TEXT,
+      bindung     TEXT,
       zustand     TEXT,
       topic       TEXT,
       text        TEXT,
@@ -72,6 +74,8 @@ export function oeffne(verzeichnis) {
       von               TEXT,
       von_session       TEXT,
       an                TEXT,
+      an_session        TEXT,
+      bindung           TEXT,
       topic             TEXT,
       text              TEXT,
       quittung_erwartet INTEGER NOT NULL DEFAULT 0,
@@ -91,6 +95,12 @@ export function oeffne(verzeichnis) {
 }
 
 /**
+ * Spalten, die es in beiden Tabellen geben muss. Reihenfolge egal, der Name
+ * entscheidet.
+ */
+const NACHZURUESTEN = ['von_host', 'an_session', 'bindung'];
+
+/**
  * Ergaenzt Spalten, die spaeter dazugekommen sind.
  *
  * NOETIG, WEIL "CREATE TABLE IF NOT EXISTS" eine bereits vorhandene Tabelle
@@ -100,11 +110,10 @@ export function oeffne(verzeichnis) {
  * @param {import('node:sqlite').DatabaseSync} db
  */
 function nachruesten(db) {
-  const spalten = (tabelle) =>
-    new Set(db.prepare(`PRAGMA table_info(${tabelle})`).all().map((s) => s.name));
   for (const tabelle of ['ereignis', 'auftrag']) {
-    if (!spalten(tabelle).has('von_host')) {
-      db.exec(`ALTER TABLE ${tabelle} ADD COLUMN von_host TEXT`);
+    const vorhanden = new Set(db.prepare(`PRAGMA table_info(${tabelle})`).all().map((s) => s.name));
+    for (const spalte of NACHZURUESTEN) {
+      if (!vorhanden.has(spalte)) db.exec(`ALTER TABLE ${tabelle} ADD COLUMN ${spalte} TEXT`);
     }
   }
 }
@@ -114,8 +123,16 @@ function nachruesten(db) {
  *
  * Uebernommen aus dem A2A-Vokabular statt selbst erfunden - dieselben Begriffe
  * benutzen CrewAI und verwandte Systeme, das erspart spaeter Uebersetzungen.
+ *
+ * 'expired' ist die EINZIGE Ergaenzung ueber A2A hinaus, und zwar bewusst: als
+ * 'cancelled' waere nicht mehr zu erkennen, ob jemand den Auftrag
+ * zurueckgezogen hat oder ob er schlicht zu lange lag. Genau diese
+ * Unterscheidung ist der Anlass des Umbaus.
  */
-export const ZUSTAENDE = ['submitted', 'working', 'input_required', 'completed', 'failed', 'cancelled'];
+export const ZUSTAENDE = ['submitted', 'working', 'input_required', 'completed', 'failed', 'cancelled', 'expired'];
+
+/** Zustaende, in denen ein Auftrag noch auf Bearbeitung wartet. */
+export const OFFEN = ['submitted', 'working', 'input_required'];
 
 /** Aus welchem Quittungscode welcher Folgezustand wird. */
 export function zustandAusCode(code) {
@@ -146,12 +163,13 @@ export function schreibe(db, e) {
   db.exec('BEGIN IMMEDIATE');
   try {
     const einfuegen = db.prepare(`
-      INSERT INTO ereignis (auftrag_id, ts, art, host, von_host, von, von_session, an, zustand, topic, text, status, notiz, cwd, nutzlast)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO ereignis (auftrag_id, ts, art, host, von_host, von, von_session, an, an_session, bindung, zustand, topic, text, status, notiz, cwd, nutzlast)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const r = einfuegen.run(
       e.auftrag_id, e.ts || jetzt, e.art, e.host, e.von_host ?? null,
-      e.von ?? null, e.von_session ?? null, e.an ?? null, e.zustand ?? null,
+      e.von ?? null, e.von_session ?? null, e.an ?? null,
+      e.an_session ?? null, e.bindung ?? null, e.zustand ?? null,
       e.topic ?? null, e.text ?? null, e.status ?? null, e.notiz ?? null,
       e.cwd ?? null, e.nutzlast ? JSON.stringify(e.nutzlast) : null,
     );
@@ -159,12 +177,13 @@ export function schreibe(db, e) {
 
     if (e.art === 'auftrag') {
       db.prepare(`
-        INSERT INTO auftrag (auftrag_id, zustand, host, von_host, von, von_session, an, topic, text, quittung_erwartet, erstellt, geaendert, letztes_ereignis)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO auftrag (auftrag_id, zustand, host, von_host, von, von_session, an, an_session, bindung, topic, text, quittung_erwartet, erstellt, geaendert, letztes_ereignis)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(auftrag_id) DO UPDATE SET zustand = excluded.zustand, geaendert = excluded.geaendert, letztes_ereignis = excluded.letztes_ereignis
       `).run(
         e.auftrag_id, e.zustand || 'submitted', e.host, e.von_host ?? null,
         e.von ?? null, e.von_session ?? null, e.an ?? null,
+        e.an_session ?? null, e.bindung ?? null,
         e.topic ?? null, e.text ?? null, e.quittung_erwartet ? 1 : 0,
         e.ts || jetzt, e.ts || jetzt, id,
       );
@@ -219,6 +238,27 @@ export function auftrag(db, id) {
   return db.prepare('SELECT * FROM auftrag WHERE auftrag_id = ?').get(id);
 }
 
+/**
+ * Offene Auftraege, die vor einem Zeitpunkt erstellt wurden.
+ *
+ * Bewusst ein Lesevorgang: der Verfall laeuft bei jedem Oeffnen der Datenbank
+ * an, und ein UPDATE ohne Treffer wuerde trotzdem jedes Mal die Schreibsperre
+ * ziehen. Erst wenn hier etwas zurueckkommt, wird geschrieben.
+ */
+export function offeneAelterAls(db, isoZeit) {
+  return db.prepare(
+    `SELECT * FROM auftrag WHERE zustand IN (${OFFEN.map(() => '?').join(',')}) AND erstellt < ? ORDER BY erstellt`,
+  ).all(...OFFEN, isoZeit);
+}
+
+/** Offene Auftraege, die an eine bestimmte Sitzung gebunden sind. */
+export function offeneAnSession(db, sessionId) {
+  if (!sessionId) return [];
+  return db.prepare(
+    `SELECT * FROM auftrag WHERE zustand IN (${OFFEN.map(() => '?').join(',')}) AND an_session = ? ORDER BY erstellt`,
+  ).all(...OFFEN, sessionId);
+}
+
 /** Alle Quittungen zu einem Auftrag, aelteste zuerst. */
 export function quittungenZu(db, auftragId) {
   return db.prepare("SELECT * FROM ereignis WHERE art = 'quittung' AND auftrag_id = ? ORDER BY id").all(auftragId);
@@ -230,7 +270,7 @@ export function zahlen(db) {
   return {
     ereignisse: eine('SELECT COUNT(*) AS n FROM ereignis'),
     auftraege: eine('SELECT COUNT(*) AS n FROM auftrag'),
-    offen: eine("SELECT COUNT(*) AS n FROM auftrag WHERE zustand IN ('submitted','working','input_required')"),
+    offen: eine(`SELECT COUNT(*) AS n FROM auftrag WHERE zustand IN (${OFFEN.map((z) => `'${z}'`).join(',')})`),
   };
 }
 
