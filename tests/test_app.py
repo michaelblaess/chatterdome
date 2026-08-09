@@ -684,3 +684,62 @@ class TestDialoge:
             # Klara ist da, die eigene Sitzung Lino nicht.
             assert "Klara" in text
             assert "Lino" not in text
+
+
+class ZweiPetrasQuelle(FakeQuelle):
+    """Zwei Sitzungen mit demselben Namen auf verschiedenen Rechnern.
+
+    Nachgestellt nach Michaels Screenshot vom 09.08.2026: die alte Petra auf
+    RAINBOW hat offene Post und steht deshalb bei der Vorgabesortierung
+    (Post absteigend) ganz oben.
+    """
+
+    def bestand(self, *, mesh: bool = False, tokens: bool = False) -> Bestand:
+        self.mit_tokens.append(tokens)
+        return Bestand(
+            rechner="RAINBOW",
+            zeit="2026-08-09T04:50:00.000Z",
+            agenten=[
+                Agent(name="Petra", status="idle", rechner="RAINBOW", post=3),
+                Agent(name="Petra", status="idle", rechner="SENZA", post=0),
+            ],
+        )
+
+
+class TestAuswahlBeiGleichemNamen:
+    """Der gemeldete Fehler: die Markierung sprang auf den falschen Petra.
+
+    Ohne den Fix wird die Auswahl ueber den blossen Namen wiederhergestellt.
+    Der erste Treffer ist Petra@RAINBOW - und der naechste Auftrag ging
+    dorthin statt an das gewaehlte Petra@SENZA.
+    """
+
+    async def test_markierung_bleibt_nach_neuaufbau_auf_dem_gewaehlten(self) -> None:
+        from claude_sanctuary.tui.widgets.agenten_tabelle import AgentenTabelle
+
+        quelle = ZweiPetrasQuelle()
+        app = SanctuaryApp(quelle=quelle)
+        app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
+        async with app.run_test(size=(200, 50)) as pilot:
+            daten = await _gefuellt(app, pilot)
+            widget = app.query_one("#agenten", AgentenTabelle)
+
+            # Auf Petra@SENZA stellen - nicht auf die erste Zeile.
+            senza = next(
+                i for i, a in enumerate(widget._sichtbar) if a.rechner == "SENZA"
+            )
+            assert senza != 0, "der Aufbau soll den zweiten Petra treffen"
+            daten.move_cursor(row=senza)
+            await pilot.pause()
+            assert widget.markierter is not None
+            assert widget.markierter.rechner == "SENZA"
+
+            # Genau das, was die Taktabfrage tut.
+            widget.uebernehmen(quelle.bestand().agenten)
+            await pilot.pause()
+
+            assert widget.markierter is not None
+            assert widget.markierter.rechner == "SENZA", (
+                "die Markierung ist auf den gleichnamigen Agenten des anderen "
+                "Rechners gesprungen"
+            )

@@ -272,6 +272,29 @@ class Bestand:
         return sum(a.kontext for a in self.agenten)
 
 
+def kennung(a: Agent) -> str:
+    """Eindeutige Kennung eines Agenten im ganzen Mesh.
+
+    Der Name allein genuegt NICHT. Er ist eine Pacht pro Rechner, dieselbe
+    Pacht kann auf zwei Rechnern gleichzeitig laufen - "Petra" lief am
+    09.08.2026 auf RAINBOW und SENZA. Wer einen Agenten ueber den blossen
+    Namen wiederfindet, trifft den ERSTEN und damit unter Umstaenden den
+    falschen.
+
+    Genau so ist es in der Oberflaeche passiert: die Tabelle stellte den
+    Cursor nach jedem Neuaufbau ueber den Namen wieder her, landete auf
+    Petra@RAINBOW statt auf der gewaehlten Petra@SENZA - und der naechste
+    Auftrag ging an die falsche Sitzung. Der Fehler verstaerkte sich selbst,
+    weil die Liste nach offener Post sortiert ist und die falsch belieferte
+    Sitzung dadurch weiter nach oben rutschte.
+
+    Bewusst NICHT die Session-ID: die aendert sich beim Fortsetzen einer
+    Sitzung, und dann verloere die Oberflaeche bei jedem Neustart ihre
+    Auswahl. Rechner plus Name ist genau so stabil wie die Pacht selbst.
+    """
+    return f"{a.rechner.upper()}/{a.name.casefold()}"
+
+
 def geteilte_namen(agenten: Iterable[Agent]) -> set[str]:
     """Namen, die auf mehr als einem Rechner leben.
 

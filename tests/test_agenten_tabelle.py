@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from claude_sanctuary.kern.modelle import Agent
+from claude_sanctuary.kern.modelle import Agent, kennung
 from claude_sanctuary.tui.widgets.agenten_tabelle import AgentenTabelle
 
 
@@ -77,3 +77,39 @@ class TestVerwaistMarkiert:
         alt = self._alt(5 * 24)
         alt.erreichbar = False
         assert "⚠" not in _zeile(alt)[ZEIT]
+
+
+class TestAuswahlBleibtBeimRichtigen:
+    """Der gemeldete Fehler vom 09.08.2026.
+
+    Michael waehlte Petra@SENZA, schickte einen Auftrag - und beim naechsten
+    Neuaufbau sprang die Markierung auf Petra@RAINBOW. Der naechste Auftrag
+    ging damit an die falsche Sitzung. Der Fehler verstaerkte sich selbst,
+    weil die Liste nach offener Post sortiert ist und die falsch belieferte
+    Sitzung dadurch weiter nach oben rutschte.
+
+    Ursache: die Tabelle merkte sich die Auswahl ueber den blossen NAMEN und
+    nahm beim Wiederherstellen den ersten Treffer.
+    """
+
+    def test_kennung_trennt_gleiche_namen_auf_verschiedenen_rechnern(self) -> None:
+        a = _agent(name="Petra", rechner="RAINBOW")
+        b = _agent(name="Petra", rechner="SENZA")
+        assert kennung(a) != kennung(b)
+
+    def test_kennung_ist_unabhaengig_von_der_schreibweise(self) -> None:
+        """Sonst verliert die Auswahl ihren Halt, sobald eine Quelle den
+        Rechner klein schreibt."""
+        assert kennung(_agent(name="Petra", rechner="senza")) == kennung(
+            _agent(name="petra", rechner="SENZA")
+        )
+
+    def test_kennung_haengt_nicht_an_der_session_id(self) -> None:
+        """Die aendert sich beim Fortsetzen - die Auswahl darf das nicht."""
+        vorher = _agent(session_id="alt-1")
+        nachher = _agent(session_id="neu-2")
+        assert kennung(vorher) == kennung(nachher)
+
+    def test_kennung_ueberlebt_die_veraenderlichen_felder(self) -> None:
+        """Post und Kontext aendern sich im Sekundentakt."""
+        assert kennung(_agent(post=0, kontext=1)) == kennung(_agent(post=3, kontext=99))

@@ -493,9 +493,20 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         self.call_from_thread(self._verlauf_zeigen, name, auftraege)
 
     def _verlauf_zeigen(self, name: str, auftraege: list[Any]) -> None:
+        # Verglichen wird der NAME, und das genuegt hier auch: der Verlauf
+        # haengt am Namen, nicht am Rechner. Der Bus fuehrt beim Absender eine
+        # Kopie jedes Auftrags, also stuende ein Auftrag an Petra@SENZA auch
+        # dann in diesem Bestand, wenn man ihn nach Rechner filtern wollte.
+        #
+        # WICHTIG war der zweite Teil der Bedingung: bis zum 09.08.2026 hiess
+        # es hier nur "!= name", und beim Sprung von Petra@SENZA auf
+        # Petra@RAINBOW griff die Sperre nicht - der Verlauf des einen blieb
+        # neben der Zeile des anderen stehen. Michael hat das an zwei
+        # Bildschirmfotos gezeigt.
         if self._gewaehlt is None or self._gewaehlt.name != name:
             return  # Auswahl hat sich waehrenddessen geaendert
-        self.query_one("#verlauf", VerlaufPanel).zeigen(name, auftraege)
+        titel = self.query_one("#agenten", AgentenTabelle).beschriftung(self._gewaehlt)
+        self.query_one("#verlauf", VerlaufPanel).zeigen(titel, auftraege)
 
     # -- Ereignisse -----------------------------------------------------
 
@@ -516,9 +527,13 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
             eingabe.placeholder = t("chat.placeholder_none")
             self.query_one("#verlauf", VerlaufPanel).leeren(t("chat.none_selected"))
         else:
+            # Beschriftung statt blossem Namen: bei zwei gleichnamigen Agenten
+            # steht hier "Petra@SENZA", sonst saehe das Feld fuer beide gleich
+            # aus - und man wuesste beim Tippen nicht, wen man anschreibt.
+            beschriftung = self.query_one("#agenten", AgentenTabelle).beschriftung(agent)
             eingabe.placeholder = (
                 t("chat.placeholder_self") if agent.selbst
-                else t("chat.placeholder", name=agent.name)
+                else t("chat.placeholder", name=beschriftung)
             )
             self.verlauf_laden(agent.name)
         self.refresh_bindings()

@@ -16,7 +16,7 @@ from textual.widgets import DataTable
 from textual_widgets import SearchInputWithHistory
 
 from claude_sanctuary.i18n import format_datetime, t
-from claude_sanctuary.kern.modelle import Agent, Ampel, geteilte_namen
+from claude_sanctuary.kern.modelle import Agent, Ampel, geteilte_namen, kennung
 
 # Feste Ampelfarben statt Theme-Variablen oder benannter ANSI-Farben: eine
 # Ampel hat rot, gelb und gruen, und die muessen auf jedem Theme genau so
@@ -260,11 +260,25 @@ class AgentenTabelle(Vertical):
         """Ersetzt den Bestand und baut die Tabelle neu."""
         vorher = self.markierter
         self._agenten = agenten
-        self._neu_aufbauen(merke=vorher.name if vorher else "")
+        self._neu_aufbauen(merke=kennung(vorher) if vorher else "")
 
     def setze_filter(self, text: str) -> None:
         self._filter = text.strip().casefold()
         self._neu_aufbauen()
+
+    def beschriftung(self, a: Agent) -> str:
+        """Wie dieser Agent angeschrieben wird - qualifiziert, wenn noetig.
+
+        Lebt der Name auf mehreren Rechnern, steht hier ``Petra@SENZA``, also
+        genau die Form, mit der man ihn auch adressiert. Sonst der blosse Name.
+
+        Die eine Stelle fuer diese Entscheidung: Tabelle, Eingabefeld und
+        Verlaufsueberschrift muessen dieselbe Beschriftung zeigen, sonst
+        steht ueber zwei verschiedenen Gespraechen dieselbe Zeile.
+        """
+        if a.name.lower() in self._geteilt:
+            return f"{a.name}@{a.rechner.upper()}"
+        return a.name
 
     @property
     def markierter(self) -> Agent | None:
@@ -285,7 +299,8 @@ class AgentenTabelle(Vertical):
 
     def _neu_aufbauen(self, merke: str = "") -> None:
         tabelle = self.query_one("#agenten-daten", DataTable)
-        gemerkt = merke or (self.markierter.name if self.markierter else "")
+        markiert = self.markierter
+        gemerkt = merke or (kennung(markiert) if markiert else "")
 
         # Ueber ALLE Agenten, nicht nur die sichtbaren: filtert man auf einen
         # Rechner, waere der Name dort scheinbar eindeutig - und genau dann
@@ -305,7 +320,7 @@ class AgentenTabelle(Vertical):
         tabelle.clear()
         hinweise: dict[tuple[int, int], str] = {}
         for zeile, a in enumerate(sichtbar):
-            tabelle.add_row(*self._zeile(a), key=f"{a.rechner}/{a.name}")
+            tabelle.add_row(*self._zeile(a), key=kennung(a))
             # Nur wo wirklich gekuerzt wurde - sonst haengt an jeder Zelle ein
             # Hinweis, der dasselbe sagt wie die Zelle selbst.
             if a.cwd and len(a.cwd) > ORDNER_BREITE:
@@ -320,7 +335,7 @@ class AgentenTabelle(Vertical):
 
         if gemerkt:
             for i, a in enumerate(sichtbar):
-                if a.name == gemerkt:
+                if kennung(a) == gemerkt:
                     tabelle.move_cursor(row=i)
                     break
         self.post_message(self.Ausgewaehlt(self.markierter))
@@ -330,10 +345,8 @@ class AgentenTabelle(Vertical):
         # dieselbe Form, mit der man ihn dann auch adressiert
         # ("sanctuary send Petra@SENZA"). Der Rechner hat zwar eine eigene
         # Spalte, aber die beantwortet nicht die Frage, WIE man ihn anspricht.
-        geteilt = a.name.lower() in self._geteilt
-        beschriftung = f"{a.name}@{a.rechner.upper()}" if geteilt else a.name
         name = Text(
-            beschriftung + (" *" if a.selbst else ""),
+            self.beschriftung(a) + (" *" if a.selbst else ""),
             style="bold" if a.selbst else "",
         )
         # Verwaist: laeuft, aber seit einem Tag ruehrt sich nichts. Die Ampel
