@@ -76,19 +76,23 @@ Screen {
 
 .blase {
     height: auto;
-    margin: 0 0 1 0;
     padding: 0 1;
 }
 
+/* Der Abstand steht in JEDER Regel vollstaendig, nicht als margin-left neben
+   einem margin in der Basisregel. Textual fuehrt "margin" als EINE
+   Eigenschaft: die spezifischere Regel ersetzt den ganzen Wert, und der
+   untere Abstand aus der Basisregel ging dabei verloren. Gemessen am
+   09.08.2026 - die Blasen kamen mit bottom=0 heraus und klebten aneinander. */
 .blase.eigen {
     background: $primary 25%;
-    margin-left: 8;
+    margin: 0 0 1 8;
     border-left: solid $primary;
 }
 
 .blase.fremd {
     background: $panel;
-    margin-right: 8;
+    margin: 0 8 1 0;
     border-left: solid $accent;
 }
 
