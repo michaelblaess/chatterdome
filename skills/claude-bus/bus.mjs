@@ -1035,6 +1035,11 @@ function hilfe() {
 
     Setzen mit: config zustellung socket
 
+    Voraussetzung fuer die Sofortzustellung: in ~/.claude/settings.json muss
+    "crossSessionInbound": "accept" stehen. Fehlt der Wert, zeigt die
+    Zielsitzung stattdessen "Held message from another session" und wartet auf
+    eine Freigabe - dann kommt der Auftrag zwar an, aber nicht von allein.
+
   Zwei Fallen beim Inbox-Socket (Stand 09.08.2026, Claude Code 2.1.226)
     Die ERSTE Sitzung nach einem Claude-Code-Update bekommt das Feature nicht.
     Die Feature-Flags sind dann noch nicht abgerufen, die Sitzung bindet keinen

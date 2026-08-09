@@ -234,6 +234,10 @@ Controlled by the `zustellung` setting:
 sanctuary bus config zustellung socket
 ```
 
+**Prerequisite:** `~/.claude/settings.json` needs `"crossSessionInbound": "accept"`. Without it
+a session running in bypass mode holds every outside injection for approval and shows a dialog
+instead. On Windows the setting does nothing and does no harm.
+
 Across machines the route is unchanged: ssh inside the tailnet. Only the last metre on the
 target machine becomes instant, because that is where the socket lives - the sender cannot
 know it.

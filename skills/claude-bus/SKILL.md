@@ -314,10 +314,35 @@ Zustellweg, wo ihn niemand mehr als Tippfehler erkennt.
 - **`bus.mjs receive`** versucht sie ebenfalls. Das ist der **letzte Meter** bei einem Auftrag
   über Rechnergrenzen: der Absender kann den Socket nicht kennen, er liegt auf dem
   Zielrechner. Der Weg dorthin bleibt unverändert ssh im Tailnet.
-- **`starte.mjs`** gibt frisch gestarteten Agenten auf macOS/Linux
-  `--settings <datei>` mit `crossSessionInbound: accept` mit. Ohne das hält eine Sitzung im
-  Bypass-Modus - Michaels Normalfall - eine Einspeisung von aussen zur Freigabe zurück, weil
-  der Absender keinen Berechtigungsmodus mitteilt.
+### Voraussetzung: `crossSessionInbound: accept`
+
+**Ohne diese Einstellung kommt nichts an.** Eine Einspeisung von aussen teilt keinen
+Berechtigungsmodus mit, und eine Sitzung im Bypass-Modus - Michaels Normalfall - hält so eine
+Nachricht dann zur Freigabe zurück. Sie erscheint als Dialog "Held message from another
+session", und genau das sollte die Sofortzustellung ja ersparen.
+
+Der Wert gehört in die **Benutzer-Einstellungen** (`~/.claude/settings.json`), nicht an den
+Start einzelner Agenten:
+
+```json
+{
+  "crossSessionInbound": "accept"
+}
+```
+
+Am 09.08.2026 stand er zuerst nur in `starte.mjs`, also nur für Sitzungen, die Sanctuary
+selbst startet. Ein selbst geöffnetes Fenster bekam den Auftrag weiterhin als Rückfrage -
+belegt an einer Sitzung namens Berit auf senza. Ein Wert an einer Stelle deckt beide Fälle,
+zwei Mechanismen laufen auseinander.
+
+Auf **Windows** ist die Einstellung wirkungslos und schadet nicht - dort gibt es den Socket
+nicht.
+
+⚠ **Was das bedeutet:** Peer-Nachrichten von Michaels eigenen Sitzungen werden ohne Rückfrage
+zugestellt. Sie bekommen dadurch **keine** neuen Rechte: laut Anthropics Doku kann eine solche
+Nachricht keine Freigabe erteilen, keine Konfiguration ändern, ein `/befehl` darin wird nicht
+ausgeführt, und Berechtigungsabfragen für alles, was sie verlangt, erscheinen weiterhin.
+Wer das enger haben will, setzt `hold` und bestätigt jede Nachricht von Hand.
 
 ### Das Protokoll
 

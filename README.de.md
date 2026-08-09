@@ -206,6 +206,10 @@ zu bleiben. Gesteuert über die Einstellung `zustellung`:
 sanctuary bus config zustellung socket
 ```
 
+**Voraussetzung:** In `~/.claude/settings.json` muss `"crossSessionInbound": "accept"` stehen.
+Ohne das hält eine Sitzung im Bypass-Modus jede Einspeisung von außen zur Freigabe zurück und
+zeigt stattdessen einen Dialog. Auf Windows ist die Einstellung wirkungslos und schadet nicht.
+
 Über Rechnergrenzen bleibt der Weg unverändert ssh im Tailnet. Nur der letzte Meter auf dem
 Zielrechner wird sofort - dort kennt der Bus den Socket, der Absender kann ihn nicht kennen.
 
