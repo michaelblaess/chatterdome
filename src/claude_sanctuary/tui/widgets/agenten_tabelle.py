@@ -16,7 +16,7 @@ from textual.widgets import DataTable
 from textual_widgets import SearchInputWithHistory
 
 from claude_sanctuary.i18n import format_datetime, t
-from claude_sanctuary.kern.modelle import Agent, Ampel
+from claude_sanctuary.kern.modelle import Agent, Ampel, geteilte_namen
 
 # Feste Ampelfarben statt Theme-Variablen oder benannter ANSI-Farben: eine
 # Ampel hat rot, gelb und gruen, und die muessen auf jedem Theme genau so
@@ -221,6 +221,9 @@ class AgentenTabelle(Vertical):
         super().__init__(**kwargs)
         self._agenten: list[Agent] = []
         self._sichtbar: list[Agent] = []
+        self._geteilt: set[str] = set()
+        """Namen, die auf mehreren Rechnern leben - klein geschrieben."""
+
         self._filter = ""
         self._sortiert_nach: int | None = 6  # Post - dort steht der Handlungsbedarf
         self._absteigend = True
@@ -284,6 +287,11 @@ class AgentenTabelle(Vertical):
         tabelle = self.query_one("#agenten-daten", DataTable)
         gemerkt = merke or (self.markierter.name if self.markierter else "")
 
+        # Ueber ALLE Agenten, nicht nur die sichtbaren: filtert man auf einen
+        # Rechner, waere der Name dort scheinbar eindeutig - und genau dann
+        # braucht man den Hinweis am dringendsten.
+        self._geteilt = geteilte_namen(self._agenten)
+
         sichtbar = [a for a in self._agenten if self._passt(a)]
         if self._sortiert_nach is not None:
             schluessel = self._SORTIER.get(self._sortiert_nach)
@@ -318,7 +326,26 @@ class AgentenTabelle(Vertical):
         self.post_message(self.Ausgewaehlt(self.markierter))
 
     def _zeile(self, a: Agent) -> list[Text]:
-        name = Text(a.name + (" *" if a.selbst else ""), style="bold" if a.selbst else "")
+        # Lebt der Name auf mehreren Rechnern, steht er hier qualifiziert -
+        # dieselbe Form, mit der man ihn dann auch adressiert
+        # ("sanctuary send Petra@SENZA"). Der Rechner hat zwar eine eigene
+        # Spalte, aber die beantwortet nicht die Frage, WIE man ihn anspricht.
+        geteilt = a.name.lower() in self._geteilt
+        beschriftung = f"{a.name}@{a.rechner.upper()}" if geteilt else a.name
+        name = Text(
+            beschriftung + (" *" if a.selbst else ""),
+            style="bold" if a.selbst else "",
+        )
+        # Verwaist: laeuft, aber seit einem Tag ruehrt sich nichts. Die Ampel
+        # bleibt bewusst gruen - die Sitzung KANN Auftraege annehmen, sie tut
+        # nur nichts. Markiert wird deshalb das Alter, denn genau das ist der
+        # Befund, und dort steht auch der Beleg dafuer.
+        verwaist = a.verwaist()
+        alter = Text(
+            ("⚠ " if verwaist else "") + _alter(a.letzte_zeit),
+            justify="right",
+            style="bold #e74c3c" if verwaist else "dim",
+        )
         kontext = Text(
             _tokens(a.kontext),
             style="bold red" if a.kontext_kritisch else ("yellow" if a.kontext_eng else "dim"),
@@ -335,7 +362,7 @@ class AgentenTabelle(Vertical):
             name,
             Text(a.rechner, style="dim"),
             Text(_aufgabe(a.aufgabe) if a.aufgabe else "-", style="" if a.aufgabe else "dim"),
-            Text(_alter(a.letzte_zeit), justify="right", style="dim"),
+            alter,
             kontext,
             post,
             laufzeit,

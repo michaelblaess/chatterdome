@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from enum import Enum
 
 # Kontext-Schwellen. Bewusst ABSOLUT und nicht in Prozent: das Kontextfenster
@@ -12,6 +14,14 @@ from enum import Enum
 # Kontext und ID ohne Marker). Ein Prozentwert waere damit geraten.
 KONTEXT_ENG = 600_000
 KONTEXT_KRITISCH = 800_000
+
+VERWAIST_STUNDEN = 24
+"""Ab wann eine laufende Sitzung als verwaist gilt.
+
+Dieselbe Frist wie der Verfall eines unangenommenen Auftrags im Bus. Das ist
+kein Zufall, sondern dieselbe Aussage aus zwei Richtungen: was einen Tag lang
+niemand angefasst hat, wartet nicht mehr, sondern liegt.
+"""
 
 
 class Ampel(Enum):
@@ -81,6 +91,30 @@ class Agent:
     def kontext_kritisch(self) -> bool:
         """Wahr, wenn der Kontext kritisch voll ist."""
         return self.kontext >= KONTEXT_KRITISCH
+
+    def verwaist(self, jetzt: datetime | None = None) -> bool:
+        """Wahr, wenn die Sitzung zwar laeuft, aber laengst nichts mehr tut.
+
+        Anlass ist eine Petra auf RAINBOW, die am 09.08.2026 seit 151 Stunden
+        lief und zuletzt vor fuenf Tagen aktiv war - sie belegte einen Namen
+        und 86k Kontext, ohne dass es jemandem auffiel.
+
+        Bewusst KEINE Aussage darueber, ob der Prozess noch lebt: das sagt
+        schon die Ampel. Hier geht es allein darum, dass seit
+        ``VERWAIST_STUNDEN`` nichts mehr passiert ist.
+
+        Fehlt der Zeitstempel oder ist er unlesbar, ist die Antwort **nein**.
+        Eine frisch gestartete Sitzung hat noch keinen Transkript-Eintrag, und
+        die als tot zu markieren waere schlimmer als gar keine Markierung.
+        """
+        if not self.erreichbar or not self.letzte_zeit:
+            return False
+        try:
+            wert = datetime.fromisoformat(self.letzte_zeit.replace("Z", "+00:00")).astimezone()
+        except (ValueError, TypeError):
+            return False
+        bezug = jetzt.astimezone() if jetzt is not None else datetime.now().astimezone()
+        return (bezug - wert) >= timedelta(hours=VERWAIST_STUNDEN)
 
 
 @dataclass(slots=True)
@@ -236,3 +270,28 @@ class Bestand:
     def kontext(self) -> int:
         """Summe der belegten Kontexte. Steht in jeder Abfrage."""
         return sum(a.kontext for a in self.agenten)
+
+
+def geteilte_namen(agenten: Iterable[Agent]) -> set[str]:
+    """Namen, die auf mehr als einem Rechner leben.
+
+    Der Name ist eine Pacht PRO Rechner - dass "Petra" gleichzeitig auf
+    RAINBOW und SENZA laeuft, ist kein Fehler, die Sitzungen haben eigene IDs.
+    Michaels Vorgabe vom 09.08.2026: ein mesh-weit eindeutiger Pool waere die
+    falsche Medizin, weil er mit jedem weiteren Rechner schneller leer laeuft.
+    Eindeutig sein muss die ADRESSE, und die Oberflaeche muss zeigen, wann der
+    blosse Name dafuer nicht reicht.
+
+    Verglichen wird ohne Ruecksicht auf Gross- und Kleinschreibung, weil die
+    Namenstabelle des Bus es genauso haelt. Zurueck kommen die Namen in
+    Kleinschreibung - der Aufrufer vergleicht damit, er zeigt sie nicht an.
+
+    Zwei Sitzungen auf DEMSELBEN Rechner zaehlen NICHT: dort verhindert der
+    Pool die Dopplung bereits, und ein Treffer waere ein anderer Fehler.
+    """
+    rechner_je_name: dict[str, set[str]] = {}
+    for a in agenten:
+        if not a.name:
+            continue
+        rechner_je_name.setdefault(a.name.lower(), set()).add(a.rechner.upper())
+    return {name for name, hosts in rechner_je_name.items() if len(hosts) > 1}

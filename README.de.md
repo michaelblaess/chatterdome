@@ -213,6 +213,26 @@ zeigt stattdessen einen Dialog. Auf Windows ist die Einstellung wirkungslos und 
 Über Rechnergrenzen bleibt der Weg unverändert ssh im Tailnet. Nur der letzte Meter auf dem
 Zielrechner wird sofort - dort kennt der Bus den Socket, der Absender kann ihn nicht kennen.
 
+### Derselbe Name auf zwei Rechnern
+
+Der Name ist eine Pacht **pro Rechner**. `Petra` kann gleichzeitig auf RAINBOW und SENZA
+laufen - beide Sitzungen sind echt und haben eigene IDs. Eindeutig sein muss nicht der Name,
+sondern die Adresse:
+
+```bash
+sanctuary send Petra@SENZA "..."
+```
+
+Ist der Name im Mesh eindeutig, bleibt `send Petra` wie bisher. Ist er doppelt, bricht der Bus
+ab und nennt beide Fassungen, statt still eine zu wählen. Die Tabelle zeigt solche Namen als
+`Petra@RAINBOW`, und `sanctuary bus doctor` listet sie auf.
+
+### Verwaiste Sitzungen
+
+Eine Sitzung, die läuft, aber seit 24 Stunden nichts mehr getan hat, bekommt in der
+Aktiv-Spalte ein rotes `⚠`. Die Ampel bleibt grün - die Sitzung **kann** Aufträge annehmen,
+sie tut nur nichts. Markiert wird dort, wo auch der Beleg steht.
+
 ### Zwei Fallen
 
 ⚠ **Die erste Sitzung nach einem Claude-Code-Update bekommt das Feature nicht.** Die

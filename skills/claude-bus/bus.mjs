@@ -357,17 +357,48 @@ export function zustellenAn(host, ereignis) {
 }
 
 /**
- * Auf welchem Rechner laeuft dieser Agent?
+ * Zerlegt eine Adresse der Form "Name@RECHNER".
  *
- * Erst die lokale Namenstabelle - das ist der haeufige Fall und kostet keinen
- * Prozess. Erst wenn der Name hier unbekannt ist, wird das Mesh befragt, und
- * das dauert (ssh an jeden Rechner). Wer den Rechner schon kennt, gibt ihn
- * mit --host mit und spart die Suche ganz.
+ * Der Name ist eine Pacht PRO RECHNER - dieselbe Pacht kann auf zwei Rechnern
+ * gleichzeitig laufen, ohne dass etwas kaputt ist (die Sitzungen haben
+ * verschiedene IDs, und jedes Ereignis traegt host UND an_session). Eindeutig
+ * sein muss deshalb nicht der Name, sondern die ADRESSE. "Petra@SENZA" leistet
+ * genau das, wie ein Benutzer auf einem Host.
  *
- * @returns {string|null} Rechnername in Grossbuchstaben, oder null.
+ * Ein mesh-weit eindeutiger Namenspool waere die falsche Medizin: er kostet
+ * eine Mesh-Abfrage je Sitzungsstart (gemessen 910 ms) und leert den Pool umso
+ * schneller, je mehr Rechner dazukommen.
+ *
+ * @param {string} adresse
+ * "Name" oder "Name@RECHNER".
+ * @returns {{name: string, host: string|null}}
+ * host ist null, wenn die Adresse keinen Rechner nennt.
  */
-export function findeRechner(name) {
-  if (nameZuSession(name)) return rechner();
+export function zerlegeAdresse(adresse) {
+  const roh = String(adresse ?? '');
+  const at = roh.lastIndexOf('@');
+  if (at <= 0 || at === roh.length - 1) return { name: roh, host: null };
+  return { name: roh.slice(0, at), host: roh.slice(at + 1).toUpperCase() };
+}
+
+/**
+ * Auf welchen Rechnern laeuft dieser Name?
+ *
+ * Liefert ALLE Treffer, nicht den ersten. Der erste Treffer waere eine stille
+ * Entscheidung zwischen zwei gleichnamigen Sitzungen - und genau so kam am
+ * 07.08.2026 ein vier Tage alter Auftrag bei der falschen Instanz an.
+ *
+ * Der lokale Rechner steht vorn, wenn er den Namen traegt. Die Mesh-Abfrage
+ * laeuft trotzdem, denn erst sie zeigt, ob der Name auch woanders lebt.
+ *
+ * @param {string} name
+ * Blosser Name, ohne "@RECHNER".
+ * @returns {string[]}
+ * Rechnernamen in Grossbuchstaben, ohne Dopplung. Leer, wenn unbekannt.
+ */
+export function findeRechnerAlle(name) {
+  const treffer = [];
+  if (nameZuSession(name)) treffer.push(rechner());
 
   try {
     // fileURLToPath statt URL.pathname: unter Windows liefert pathname
@@ -386,13 +417,63 @@ export function findeRechner(name) {
     const ziel = String(name).toLowerCase();
     for (const zweig of JSON.parse(roh).rechner || []) {
       for (const i of zweig.instanzen || []) {
-        if (String(i.name).toLowerCase() === ziel) {
-          return String(zweig.rechner || zweig.host).toUpperCase();
-        }
+        if (String(i.name).toLowerCase() !== ziel) continue;
+        const host = String(zweig.rechner || zweig.host).toUpperCase();
+        if (!treffer.includes(host)) treffer.push(host);
       }
     }
   } catch { /* Mesh nicht verfuegbar - der Aufrufer entscheidet */ }
-  return null;
+  return treffer;
+}
+
+/**
+ * Namen, die im Mesh auf mehr als einem Rechner leben.
+ *
+ * Reine Diagnose fuer "doctor". Kein Fehler, sondern ein Hinweis: die Adresse
+ * braucht dann den Rechner dazu.
+ *
+ * @returns {Array<[string, string[]]>}
+ * Paare aus Name und den Rechnern, sortiert. Leer, wenn das Mesh nicht
+ * erreichbar ist - eine unbeantwortbare Frage wird nicht geraten.
+ */
+function geteilteNamen() {
+  try {
+    const operator = join(dirname(fileURLToPath(import.meta.url)), '..', 'operator', 'operator.mjs');
+    const roh = execFileSync(
+      process.execPath,
+      [operator, 'status', '--mesh', '--json'],
+      { encoding: 'utf8', timeout: 40000, maxBuffer: 8 * 1024 * 1024 },
+    );
+    const je = new Map();
+    for (const zweig of JSON.parse(roh).rechner || []) {
+      const host = String(zweig.rechner || zweig.host).toUpperCase();
+      for (const i of zweig.instanzen || []) {
+        if (!i.name) continue;
+        const schluessel = String(i.name);
+        if (!je.has(schluessel)) je.set(schluessel, new Set());
+        je.get(schluessel).add(host);
+      }
+    }
+    return [...je.entries()]
+      .filter(([, hosts]) => hosts.size > 1)
+      .map(([name, hosts]) => [name, [...hosts].sort()])
+      .sort((a, b) => a[0].localeCompare(b[0]));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Auf welchem Rechner laeuft dieser Agent?
+ *
+ * Nur noch fuer den eindeutigen Fall. Traegt der Name mehr als ein Rechner,
+ * gibt es null - der Aufrufer muss dann entscheiden, statt zu raten.
+ *
+ * @returns {string|null} Rechnername in Grossbuchstaben, oder null.
+ */
+export function findeRechner(name) {
+  const alle = findeRechnerAlle(name);
+  return alle.length === 1 ? alle[0] : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -483,7 +564,7 @@ async function cmdUebernehmen() {
 
 async function cmdSend(argv) {
   sicherstellen();
-  const to = argv[0];
+  const adresse = argv[0];
 
   // Flags MIT Wert muessen samt Wert uebersprungen werden, sonst landet der
   // Wert im Nachrichtentext (genau so beim ersten Test passiert).
@@ -496,8 +577,8 @@ async function cmdSend(argv) {
   }
   const text = worte.join(' ');
 
-  if (!to || !text) {
-    console.error('Nutzung: bus.mjs send <Name|alle> "Text" [--topic thema] [--host RECHNER] [--von Name] [--rolle] [--erwartet-quittung]');
+  if (!adresse || !text) {
+    console.error('Nutzung: bus.mjs send <Name[@RECHNER]|alle> "Text" [--topic thema] [--host RECHNER] [--von Name] [--rolle] [--erwartet-quittung]');
     process.exit(1);
   }
   const wert = (name) => {
@@ -509,14 +590,25 @@ async function cmdSend(argv) {
   // ohne eigene Claude-Sitzung - die TUI etwa lief bisher als "unbekannt",
   // weil CLAUDE_CODE_SESSION_ID dort nicht gesetzt ist.
   const vonName = wert('--from') || wert('--von') || selbstName();
-  const rundruf = ['alle', 'all'].includes(String(to).toLowerCase());
+  const rundruf = ['alle', 'all'].includes(String(adresse).toLowerCase());
 
-  // Wohin: --host spart die Suche. Der Rundruf bleibt bewusst lokal - "alle"
-  // ueber alle Rechner waere ein anderer Vorgang und braucht eine eigene
-  // Entscheidung, keine stille Ausweitung.
-  const zielHost = rundruf
-    ? rechner()
-    : String(wert('--host') || findeRechner(to) || rechner()).toUpperCase();
+  // "Name@RECHNER" ist gleichwertig zu --host, nur kuerzer und lesbar. Beides
+  // zugleich mit verschiedenen Rechnern waere ein Widerspruch, den zu erraten
+  // niemandem hilft.
+  const { name: to, host: ausAdresse } = rundruf
+    ? { name: adresse, host: null }
+    : zerlegeAdresse(adresse);
+  const ausFlag = wert('--host') ? String(wert('--host')).toUpperCase() : null;
+  if (ausAdresse && ausFlag && ausAdresse !== ausFlag) {
+    console.error(`${ROT}Widerspruch: '${adresse}' nennt ${ausAdresse}, --host nennt ${ausFlag}.${R}`);
+    process.exit(1);
+  }
+
+  // Wohin: ein genannter Rechner spart die Suche. Der Rundruf bleibt bewusst
+  // lokal - "alle" ueber alle Rechner waere ein anderer Vorgang und braucht
+  // eine eigene Entscheidung, keine stille Ausweitung.
+  const genannt = ausAdresse || ausFlag;
+  const zielHost = rundruf ? rechner() : (genannt || _zielRechnerErmitteln(to));
 
   // WEN genau: einen Namen aufloesen wir hier auf die Sitzung, die ihn GERADE
   // traegt. Ein Name ist eine Pacht - ohne diese Aufloesung erbt der naechste
@@ -600,6 +692,34 @@ async function cmdSend(argv) {
       ? `${GRAU}An den Namen adressiert, nicht an eine Sitzung${frist ? `. Verfaellt nach ${frist} h` : ''}.${R}`
       : `${GRAU}Bindung holt ${zielHost} beim Eintreffen nach${frist ? `, sonst Verfall nach ${frist} h` : ''}.${R}`);
   if (nachricht.quittung) console.log(`${GRAU}Quittung erwartet - Stand mit: bus.mjs open${R}`);
+}
+
+/**
+ * Sucht den Zielrechner und bricht ab, wenn der Name mehrdeutig ist.
+ *
+ * FAIL-CLOSED. Traegt den Namen mehr als ein Rechner, waere jede Wahl geraten -
+ * und eine an die falsche Sitzung zugestellte Nachricht ist der teurere Fehler.
+ * Genau diese Sorte Verwechslung hat am 07.08.2026 einen vier Tage alten
+ * Auftrag bei der falschen Instanz landen lassen.
+ *
+ * Kein Treffer ist dagegen KEIN Abbruch: der Name kann lokal in namen.json
+ * stehen, ohne dass das Mesh erreichbar ist. Dann bleibt es beim eigenen
+ * Rechner, und die Bindung weiter unten meldet sauber, wenn ihn dort niemand
+ * traegt.
+ *
+ * @param {string} name
+ * Blosser Name, ohne "@RECHNER".
+ * @returns {string} Rechnername in Grossbuchstaben.
+ */
+function _zielRechnerErmitteln(name) {
+  const alle = findeRechnerAlle(name);
+  if (alle.length <= 1) return String(alle[0] || rechner()).toUpperCase();
+
+  console.error(`${ROT}'${name}' gibt es auf ${alle.length} Rechnern: ${alle.join(', ')}.${R}`);
+  console.error(`${GRAU}Der Name ist eine Pacht pro Rechner - beide sind echt, mit eigener Sitzung.${R}`);
+  console.error(`${GRAU}Bitte die Adresse eindeutig machen:${R}`);
+  for (const host of alle) console.error(`${GRAU}    send ${name}@${host} "..."${R}`);
+  process.exit(1);
 }
 
 /**
@@ -929,6 +1049,15 @@ function cmdDoctor() {
     for (const a of irre.slice(0, 5)) {
       console.log(`               ${GRAU}${a.auftrag_id}  an ${a.an} (${String(a.an_session).slice(0, 8)}), Name gehoert jetzt einer anderen Sitzung${R}`);
     }
+    // Namen, die auf mehreren Rechnern leben. KEIN Fehler - der Name ist eine
+    // Pacht pro Rechner, beide Sitzungen sind echt. Nur die Adresse "Petra"
+    // allein reicht dann nicht mehr, und genau das soll hier stehen, bevor es
+    // beim Senden auffaellt.
+    for (const [name, hosts] of geteilteNamen()) {
+      console.log(`  Geteilt      ${GELB}${name} lebt auf ${hosts.join(' und ')}${R}`);
+      console.log(`               ${GRAU}eindeutig adressieren: send ${name}@${hosts[0]} "..."${R}`);
+    }
+
     console.log(`  Altbestand   ${zeilen(pfadMessages()).length} Nachrichten / ${zeilen(pfadReceipts()).length} Quittungen in JSONL`);
   }
   console.log('');
@@ -1023,8 +1152,20 @@ function hilfe() {
     send Marga "..."          an die Sitzung, die den Namen GERADE traegt.
                                Ein spaeterer Traeger bekommt den Auftrag nicht.
                                Traegt den Namen niemand, bricht der Befehl ab.
+    send Marga@SENZA "..."    dieselbe Sitzung, aber mit Rechner. Gleichwertig
+                               zu --host, nur kuerzer.
     send Marga "..." --rolle  an den Namen, wer immer ihn traegt. Ueberlebt
                                den Namenswechsel - deshalb nur mit Verfall.
+
+  Derselbe Name auf zwei Rechnern
+    Der Name ist eine Pacht PRO RECHNER. "Petra" kann gleichzeitig auf RAINBOW
+    und SENZA laufen, ohne dass etwas kaputt ist - die Sitzungen haben eigene
+    IDs, und jedes Ereignis traegt host und an_session.
+
+    Eindeutig sein muss deshalb nicht der Name, sondern die ADRESSE. Traegt
+    ihn mehr als ein Rechner, bricht "send" ab und nennt beide Fassungen,
+    statt still eine davon zu waehlen. "doctor" zeigt solche Namen von sich
+    aus an.
 
   Wie ein Auftrag ankommt - Einstellung "zustellung"
     auto        Vorgabe. Sofort ueber den Inbox-Socket der Zielsitzung, wo es

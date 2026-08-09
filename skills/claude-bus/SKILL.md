@@ -380,6 +380,47 @@ ss -xlp | grep cc-socks
 **Retest geplant für Ende August 2026:** ob Anthropic den `/list-agents`-Test brauchbar macht
 und ob natives Windows dazukommt. Bis dahin bleibt es bei den beiden Prüfungen oben.
 
+## Derselbe Name auf zwei Rechnern - erlaubt, aber zu qualifizieren
+
+Am 09.08.2026 lief `Petra` gleichzeitig auf RAINBOW und SENZA. **Das ist kein Fehler.** Der
+Name ist eine Pacht **pro Rechner**, die Sitzungen haben eigene IDs, und jedes Ereignis trägt
+`host` **und** `an_session`. Im Datenmodell sind das längst zwei verschiedene Empfänger.
+
+Mehrdeutig war nur die **Adresse** `send Petra`. Sie nahm still den ersten Treffer.
+
+```bash
+sanctuary send Petra@SENZA "..."     # gleichwertig zu --host SENZA, nur kürzer
+```
+
+Drei Regeln:
+
+1. Ist der Name im Mesh eindeutig, bleibt `send Petra` wie bisher.
+2. Ist er doppelt, **bricht der Bus ab** und nennt beide qualifizierten Adressen. Fail-closed -
+   eine still an die falsche Sitzung zugestellte Nachricht ist der teurere Fehler, siehe den
+   Vorfall vom 07.08.2026.
+3. `doctor` meldet geteilte Namen von sich aus, die TUI zeigt sie als `Petra@RAINBOW`.
+
+**Warum kein mesh-weit eindeutiger Namenspool:** Michaels Entscheidung vom 09.08.2026. Er
+kostete eine Mesh-Abfrage bei jedem Sitzungsstart (gemessen **910 ms**, zweimal, mit einem
+offline Rechner) und liefe umso schneller leer, je mehr Rechner dazukommen. Die Adresse zu
+qualifizieren kostet nichts und skaliert richtig herum.
+
+Die Schreibweise `Name@RECHNER` gab es im Code schon - `Ereignis.absender` zeigt Absender seit
+jeher so an. Sie ist damit keine neue Erfindung, sondern dieselbe Konvention auf der
+Adressseite.
+
+### Verwaiste Sitzungen
+
+Dieselbe Petra lief seit **151 Stunden** und war zuletzt vor fünf Tagen aktiv - sie belegte
+einen Namen und 86k Kontext, ohne dass es auffiel. Die TUI markiert das jetzt: ab
+`VERWAIST_STUNDEN` (24 h, dieselbe Frist wie der Auftragsverfall) ohne Aktivität steht ein
+rotes `⚠` in der Aktiv-Spalte.
+
+Bewusst **die Alter-Spalte** und nicht die Ampel: die Ampel sagt, ob die Sitzung Aufträge
+annehmen **kann** - das kann eine verwaiste durchaus. Markiert wird der Befund dort, wo auch
+sein Beleg steht. Ohne Zeitstempel wird nichts behauptet, eine frisch gestartete Sitzung ist
+nicht tot, nur neu.
+
 ### Namen: zwei Systeme, die sich beissen
 
 Sanctuary vergibt seine Namen über den SessionStart-Hook (Fritzi, Sherin), Claude Code

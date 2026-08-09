@@ -242,6 +242,26 @@ Across machines the route is unchanged: ssh inside the tailnet. Only the last me
 target machine becomes instant, because that is where the socket lives - the sender cannot
 know it.
 
+### The same name on two machines
+
+A name is a lease **per machine**. `Petra` can run on RAINBOW and SENZA at the same time - both
+sessions are real and have their own IDs. What has to be unambiguous is not the name but the
+address:
+
+```bash
+sanctuary send Petra@SENZA "..."
+```
+
+While the name is unique across the mesh, plain `send Petra` keeps working. Once it is not, the
+bus stops and names both variants instead of silently picking one. The table renders such names
+as `Petra@RAINBOW`, and `sanctuary bus doctor` lists them.
+
+### Stale sessions
+
+A session that is running but has done nothing for 24 hours gets a red `⚠` in the activity
+column. Its traffic light stays green - the session **can** take tasks, it just isn't doing
+anything. The mark sits where the evidence sits.
+
 ### Two traps
 
 ⚠ **The first session after a Claude Code update does not get the feature.** Its feature flags
