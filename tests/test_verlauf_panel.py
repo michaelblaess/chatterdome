@@ -6,17 +6,38 @@ aber die spezifischeren Regeln fuer ``eigen`` und ``fremd`` nur
 ``margin-left`` bzw. ``margin-right`` - und Textual fuehrt ``margin`` als EINE
 Eigenschaft. Die spezifischere Regel ersetzte damit den ganzen Wert samt dem
 unteren Abstand. Gemessen kam ``bottom=0`` heraus.
+
+GEPRUEFT WIRD IN EINER MINIMALEN APP, nicht in der echten. Der erste Anlauf
+fuhr ``SanctuaryApp`` hoch und rief ``zeigen()`` von aussen auf - unter Windows
+gruen, auf den Linux-Laeufern der CI kamen null Blasen heraus. Ursache ist kein
+Timing, sondern ein Rennen: die App verwaltet dasselbe Panel selbst und leert
+es beim naechsten Durchlauf wieder. Auch eine Warteschleife half deshalb nicht.
+Hier haengt das Panel allein in einer App, die sonst nichts tut - dasselbe
+Stylesheet, aber niemand raeumt dazwischen.
 """
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import pytest
+from textual.app import App, ComposeResult
 
+import claude_sanctuary.tui as tui_paket
 from claude_sanctuary.kern.modelle import Auftrag, Ereignis
-from claude_sanctuary.tui.app import SanctuaryApp
 from claude_sanctuary.tui.widgets.verlauf_panel import VerlaufPanel
+
+TCSS = Path(tui_paket.__file__).parent / "app.tcss"
+
+
+class NurVerlauf(App[None]):
+    """Traegt nur das Verlaufspanel - und das echte Stylesheet."""
+
+    CSS_PATH = TCSS
+
+    def compose(self) -> ComposeResult:
+        yield VerlaufPanel(id="verlauf")
 
 
 def _auftrag() -> Auftrag:
@@ -46,14 +67,8 @@ def _auftrag() -> Auftrag:
 
 
 async def _blasen(panel: VerlaufPanel, pilot: Any) -> list[Any]:
-    """Wartet, bis die Blasen wirklich haengen, und gibt sie zurueck.
-
-    EIN ``pilot.pause()`` genuegt nicht. Lokal war der Test damit gruen, auf
-    den langsameren Linux-Laeufern der CI kamen null Blasen heraus - mounten
-    ist asynchron, und wie viele Durchlaeufe es braucht, haengt an der
-    Maschine. Dasselbe Muster wie ``_gefuellt`` in test_app.py.
-    """
-    for _ in range(120):
+    """Wartet, bis die Blasen haengen. Mounten ist asynchron."""
+    for _ in range(60):
         await pilot.pause()
         blasen = [k for k in panel.children if "blase" in k.classes]
         if len(blasen) >= 2:
@@ -65,8 +80,7 @@ async def _blasen(panel: VerlaufPanel, pilot: Any) -> list[Any]:
 class TestAbstandZwischenBlasen:
     async def test_jede_blase_hat_unten_abstand(self) -> None:
         """Sonst klebt die naechste Nachricht direkt an der vorigen."""
-        app = SanctuaryApp()
-        app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
+        app = NurVerlauf()
         async with app.run_test(size=(120, 40)) as pilot:
             panel = app.query_one("#verlauf", VerlaufPanel)
             panel.zeigen("Petra@SENZA", [_auftrag()])
@@ -80,8 +94,7 @@ class TestAbstandZwischenBlasen:
     async def test_die_seitliche_einrueckung_bleibt_erhalten(self) -> None:
         """Sie unterscheidet eigene von fremden Nachrichten - beim Reparieren
         des unteren Abstands darf sie nicht verlorengehen."""
-        app = SanctuaryApp()
-        app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
+        app = NurVerlauf()
         async with app.run_test(size=(120, 40)) as pilot:
             panel = app.query_one("#verlauf", VerlaufPanel)
             panel.zeigen("Petra@SENZA", [_auftrag()])
