@@ -236,7 +236,11 @@ Volltext landet über `bus.mjs read` einmalig im Kontext statt dauerhaft.
 Der Hook ist non-blocking (immer Exit 0). Ein blockierender Stop-Hook würde die Instanz
 zwingen weiterzuarbeiten, und das ist nicht der Sinn einer Zustellung.
 
-### Eine wartende Instanz bekommt nichts
+### Eine wartende Instanz bekommt nichts - auf Windows
+
+⚠ **Seit dem 09.08.2026 gilt das nur noch für natives Windows.** Auf macOS und Linux stellt
+der Bus jetzt sofort zu, siehe [Sofortzustellung](#sofortzustellung-über-den-inbox-socket)
+weiter unten. Der folgende Abschnitt beschreibt den Zustand, der dort weiterhin gilt.
 
 **`send Charlene` wirkt erst, wenn Charlene das nächste Mal eine Antwort beendet.** Sitzt
 Charlene im Leerlauf und wartet auf Eingabe, bleibt die Nachricht liegen - beliebig lange.
@@ -266,6 +270,101 @@ Nebeneffekte wie Protokollieren.
 - Für reine Aufträge ohne Vorgeschichte ist eine wartende Instanz ohnehin der falsche
   Empfänger. Ein frischer `claude -p "..."` erledigt das sofort und billiger - eine
   bestehende Instanz lohnt nur, wenn ihr Kontext gebraucht wird.
+
+## Sofortzustellung über den Inbox-Socket
+
+Seit Claude Code **2.1.224** bindet jede Sitzung auf **macOS und Linux** einen Unix-Socket, in
+den von aussen geschrieben werden darf. Der Bus nutzt das: ein Auftrag landet sofort in der
+Zielsitzung, auch wenn sie nur wartet. Damit fällt die Wartezeit auf den nächsten Stop-Hook
+weg - die Bringschuld des Empfängers wird zum echten Push.
+
+**Auf nativem Windows gibt es das nicht.** Anthropic bietet das Feature dort nicht an (Stand
+09.08.2026), also bleibt es auf RAINBOW und DELL beim Stop-Hook. Die Einstellung erkennt das
+selbst und meldet es, statt es zu verschleiern.
+
+### Einstellung `zustellung`
+
+| Wert | Verhalten |
+|---|---|
+| `auto` | Vorgabe. Sofort über den Socket, wo es den gibt, sonst Stop-Hook. |
+| `socket` | Nur sofort. Klappt es nicht, gibt es eine Warnung - der Auftrag liegt trotzdem bereit. |
+| `stop-hook` | Immer der bisherige Weg. |
+
+```bash
+sanctuary bus config zustellung socket
+# oder pro Rechner ohne Datei:
+CLAUDE_BUS_ZUSTELLUNG=stop-hook sanctuary send Marga "..."
+```
+
+Ein unbekannter Wert fällt still auf `auto` zurück. Sonst trüge ein Tippfehler bis in den
+Zustellweg, wo ihn niemand mehr als Tippfehler erkennt.
+
+### Wie es zusammenspielt
+
+- **`socket-hook.mjs`** läuft bei `SessionStart` und schreibt die Zuordnung Session-ID zu
+  Socket nach `~/.claude/bus/<RECHNER>/sockets.json`. Der Pfad kommt aus
+  `CLAUDE_CODE_MESSAGING_SOCKET`, das Claude Code vor jedem Hook exportiert. Bewusst ein
+  eigener Hook und nicht `whoami.mjs`: das steigt für eine Sitzung mit bekanntem Namen früh
+  aus, und genau dann - bei `claude --resume` - hat sich der Socketpfad geändert, weil die PID
+  darin steckt.
+- **`socket.mjs`** hält Tabelle, Protokoll und Zustellung zusammen.
+- **`bus.mjs send`** versucht die Abkürzung nach dem Ablegen in der Datenbank. Der Auftrag ist
+  zu dem Zeitpunkt schon sicher - misslingt die Sofortzustellung, holt ihn der Stop-Hook wie
+  bisher ab, es geht nichts verloren.
+- **`bus.mjs receive`** versucht sie ebenfalls. Das ist der **letzte Meter** bei einem Auftrag
+  über Rechnergrenzen: der Absender kann den Socket nicht kennen, er liegt auf dem
+  Zielrechner. Der Weg dorthin bleibt unverändert ssh im Tailnet.
+- **`starte.mjs`** gibt frisch gestarteten Agenten auf macOS/Linux
+  `--settings <datei>` mit `crossSessionInbound: accept` mit. Ohne das hält eine Sitzung im
+  Bypass-Modus - Michaels Normalfall - eine Einspeisung von aussen zur Freigabe zurück, weil
+  der Absender keinen Berechtigungsmodus mitteilt.
+
+### Das Protokoll
+
+Steht nicht in Anthropics Doku, wohl aber in der Info-Zeile, die Claude Code beim Binden
+selbst ausgibt (am 09.08.2026 mit `strings` aus dem Binary geholt). Zeilenweises JSON:
+
+```json
+{"type":"user","message":{"role":"user","content":"hallo"}}
+```
+
+Socket-Pfad ist `$XDG_RUNTIME_DIR/cc-socks/<pid>.sock`, Rückfall
+`/tmp/cc-socks-<uid>/<pid>.sock`, sobald der Pfad über 103 Byte geht. Verzeichnis 0700,
+Socket 0600.
+
+### Zwei Fallen
+
+⚠ **Die erste Sitzung nach einem Claude-Code-Update bekommt das Feature nicht.** Nach dem
+Update auf 2.1.226 band die sofort gestartete Sitzung keinen Socket und hatte keine
+`Peer address` in `/status`, obwohl Version, Betriebssystem und Umgebung alle passten. Die
+drei Minuten später gestartete zweite Sitzung hatte beides, ein Neustart der ersten behob es.
+Ursache ist der Feature-Flag-Abruf, der beim allerersten Start noch nicht durch ist. **Also
+nach einem Update einmal neu starten, bevor man die Sofortzustellung für kaputt hält.**
+
+⚠ **`/list-agents` taugt nicht als Test, ob das Feature läuft** - obwohl Anthropics Doku genau
+das vorschlägt. Der Befehl wird auch ohne das Feature erkannt und meldet dann nur "No subagents
+or other Claude sessions", denn er listet auch Subagenten. Belastbar sind:
+
+```bash
+# in der Sitzung
+/status          # die Zeile "Peer address: uds:/run/user/…/cc-socks/<pid>.sock"
+# von aussen
+ss -xlp | grep cc-socks
+```
+
+**Retest geplant für Ende August 2026:** ob Anthropic den `/list-agents`-Test brauchbar macht
+und ob natives Windows dazukommt. Bis dahin bleibt es bei den beiden Prüfungen oben.
+
+### Namen: zwei Systeme, die sich beissen
+
+Sanctuary vergibt seine Namen über den SessionStart-Hook (Fritzi, Sherin), Claude Code
+adressiert seine Peers über `--name`. `/list-agents` und Claude Codes eigenes `SendMessage`
+kennen nur letzteren. Beim Versuch am 09.08.2026 schrieb die Empfängerin selbst zurück: *"Sie
+hat mich als beta angesprochen, diese Session heisst aber Fritzi."*
+
+Für den Bus ist das **kein** Problem - er adressiert über seine eigene Namenstabelle und die
+Session-ID und benutzt Claude Codes Adressierung gar nicht. Wer aber Claude Codes eingebautes
+Messaging daneben nutzt, muss die beiden Namen auseinanderhalten.
 
 ## Was das Messaging kostet
 

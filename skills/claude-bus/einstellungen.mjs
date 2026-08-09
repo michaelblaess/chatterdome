@@ -27,6 +27,15 @@ export const FELDER = {
     art: 'zahl',
     text: 'Nach wie vielen Stunden ein unangenommener Auftrag verfaellt. 0 schaltet den Verfall ab.',
   },
+  zustellung: {
+    vorgabe: 'auto',
+    umgebung: 'CLAUDE_BUS_ZUSTELLUNG',
+    art: 'auswahl',
+    werte: ['auto', 'socket', 'stop-hook'],
+    text: 'Wie ein Auftrag beim Empfaenger ankommt. auto = sofort ueber den '
+      + 'Inbox-Socket, wo es geht (macOS/Linux), sonst Stop-Hook. socket = nur '
+      + 'sofort, ohne Rueckfall. stop-hook = immer der bisherige Weg.',
+  },
 };
 
 function lies() {
@@ -58,6 +67,14 @@ export function einstellung(schluessel) {
     : lies()[schluessel];
 
   if (roh === undefined || roh === null || roh === '') return feld.vorgabe;
+
+  // Ein unbekannter Wert faellt auf die Vorgabe zurueck statt durchgereicht zu
+  // werden. Sonst traegt ein Tippfehler in der Umgebungsvariablen bis in den
+  // Zustellweg, wo ihn niemand mehr als Tippfehler erkennt - er sieht dort nur
+  // aus wie "keiner der bekannten Faelle trifft zu".
+  if (feld.art === 'auswahl') {
+    return feld.werte.includes(String(roh)) ? String(roh) : feld.vorgabe;
+  }
   if (feld.art !== 'zahl') return roh;
 
   // Eine unbrauchbare Zahl faellt auf die Vorgabe zurueck statt NaN durch den
@@ -91,6 +108,9 @@ export function setzeEinstellung(schluessel, wert) {
     const zahl = Number(wert);
     if (!Number.isFinite(zahl) || zahl < 0) return `'${wert}' ist keine gueltige Zahl fuer ${schluessel}.`;
     wert = zahl;
+  }
+  if (feld.art === 'auswahl' && !feld.werte.includes(String(wert))) {
+    return `'${wert}' ist kein gueltiger Wert fuer ${schluessel}. Erlaubt: ${feld.werte.join(', ')}`;
   }
   const d = lies();
   d[schluessel] = wert;

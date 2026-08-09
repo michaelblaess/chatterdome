@@ -26,6 +26,7 @@ import {
 } from './speicher.mjs';
 import { verfallen, fehlgeleitete, VERFALLEN, EMPFAENGER_WEG } from './pacht.mjs';
 import { einstellung, alleEinstellungen, setzeEinstellung, einstellungsDatei } from './einstellungen.mjs';
+import { sofortZustellen, sockelFaehig } from './socket.mjs';
 import { homedir, hostname } from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { join, dirname } from 'node:path';
@@ -377,6 +378,12 @@ export function findeRechner(name) {
       [operator, 'status', '--mesh', '--json'],
       { encoding: 'utf8', timeout: 40000, maxBuffer: 8 * 1024 * 1024 },
     );
+    // Der Vergleichswert kommt aus dem Parameter. Hier stand bis zum 09.08.2026
+    // "ziel", eine Variable, die es in dieser Funktion nie gab - der
+    // ReferenceError lief in das catch unten und die Funktion lieferte damit
+    // IMMER null, sobald der Name nicht lokal bekannt war. Ein Auftrag an einen
+    // Agenten auf einem anderen Rechner landete dadurch still auf dem eigenen.
+    const ziel = String(name).toLowerCase();
     for (const zweig of JSON.parse(roh).rechner || []) {
       for (const i of zweig.instanzen || []) {
         if (String(i.name).toLowerCase() === ziel) {
@@ -400,7 +407,7 @@ export function findeRechner(name) {
  * die des Ursprungsrechners, sonst liessen sich die beiden Kopien nicht mehr
  * als derselbe Auftrag erkennen.
  */
-function cmdUebernehmen() {
+async function cmdUebernehmen() {
   sicherstellen();
   let ereignis;
   try {
@@ -452,10 +459,29 @@ function cmdUebernehmen() {
       quittung: Boolean(ereignis.quittung_erwartet),
     });
   }
-  console.log(JSON.stringify({ ok: true, auftrag_id: ereignis.auftrag_id, host: rechner() }));
+  // Der letzte Meter. Der Absender konnte den Socket nicht kennen, er liegt auf
+  // DIESEM Rechner - deshalb wird die Sofortzustellung hier versucht und nicht
+  // dort. Der Weg ueber Rechnergrenzen bleibt unveraendert ssh im Tailnet, nur
+  // die Wartezeit auf den naechsten Stop-Hook faellt weg.
+  //
+  // Ergebnis in die Antwort, nicht auf die Konsole: der Aufrufer ist ein
+  // anderer Rechner und liest genau diese eine JSON-Zeile.
+  let sofort = null;
+  if (ereignis.art === 'auftrag' && einstellung('zustellung') !== 'stop-hook') {
+    const { zugestellt } = await sofortZustellen({
+      datenDir: hostDir(),
+      sessionId: ereignis.an_session,
+      text: ereignis.text,
+      modus: einstellung('zustellung'),
+    });
+    sofort = zugestellt;
+  }
+  console.log(JSON.stringify({
+    ok: true, auftrag_id: ereignis.auftrag_id, host: rechner(), ...(sofort !== null && { sofort }),
+  }));
 }
 
-function cmdSend(argv) {
+async function cmdSend(argv) {
   sicherstellen();
   const to = argv[0];
 
@@ -561,6 +587,12 @@ function cmdSend(argv) {
   } else {
     console.log(`${GRUEN}Gesendet an ${to}${R}  ${GRAU}(id ${nachricht.id})${R}`);
   }
+  // Sofortzustellung nur fuer den lokalen Fall. Sitzt der Empfaenger woanders,
+  // hat zustellenAn() den Auftrag schon dorthin gebracht, und der dortige
+  // "receive" versucht den Socket seinerseits - dort kennt er ihn auch, hier
+  // nicht.
+  if (lokal) await meldeSofort(zielSession, text);
+
   const frist = einstellung('verfall_stunden');
   console.log(zielSession
     ? `${GRAU}Gebunden an die Sitzung ${zielSession.slice(0, 8)} - ein spaeterer Traeger des Namens bekommt ihn nicht.${R}`
@@ -568,6 +600,45 @@ function cmdSend(argv) {
       ? `${GRAU}An den Namen adressiert, nicht an eine Sitzung${frist ? `. Verfaellt nach ${frist} h` : ''}.${R}`
       : `${GRAU}Bindung holt ${zielHost} beim Eintreffen nach${frist ? `, sonst Verfall nach ${frist} h` : ''}.${R}`);
   if (nachricht.quittung) console.log(`${GRAU}Quittung erwartet - Stand mit: bus.mjs open${R}`);
+}
+
+/**
+ * Versucht die Sofortzustellung und sagt dem Anwender, was daraus wurde.
+ *
+ * Der Auftrag steht zu diesem Zeitpunkt bereits in der Datenbank. Misslingt die
+ * Abkuerzung, geht also nichts verloren - der Stop-Hook holt ihn wie bisher ab.
+ * Deshalb ist ein Fehlschlag hier eine Notiz und kein Abbruch.
+ *
+ * Nur im Modus 'socket' wird laut gewarnt: dort hat der Anwender den Rueckfall
+ * ausdruecklich abgewaehlt und muss erfahren, dass es trotzdem der langsame Weg
+ * wird.
+ *
+ * @param {string|null} zielSession
+ * Sitzung des Empfaengers, oder null wenn nicht aufloesbar.
+ * @param {string} text
+ * Der Auftragstext.
+ */
+async function meldeSofort(zielSession, text) {
+  const modus = einstellung('zustellung');
+  if (modus === 'stop-hook') return;
+
+  const { zugestellt, grund } = await sofortZustellen({
+    datenDir: hostDir(), sessionId: zielSession, text, modus,
+  });
+
+  if (zugestellt) {
+    console.log(`${GRUEN}Sofort zugestellt${R} ${GRAU}- der Empfaenger reagiert ohne auf den Stop-Hook zu warten.${R}`);
+    return;
+  }
+  if (modus === 'socket') {
+    console.error(`${GELB}Sofortzustellung nicht moeglich: ${grund}.${R}`);
+    console.error(`${GRAU}Der Auftrag liegt bereit und wird ueber den Stop-Hook abgeholt.${R}`);
+    return;
+  }
+  // Im Modus 'auto' ist der Stop-Hook der geplante Weg und keine Panne. Auf
+  // Windows ueberhaupt nichts sagen - dort gibt es den Socket nie, und eine
+  // Zeile bei JEDEM Senden waere reines Rauschen.
+  if (sockelFaehig()) console.log(`${GRAU}Zustellung ueber den Stop-Hook (${grund}).${R}`);
 }
 
 function cmdRead(argv) {
@@ -955,6 +1026,26 @@ function hilfe() {
     send Marga "..." --rolle  an den Namen, wer immer ihn traegt. Ueberlebt
                                den Namenswechsel - deshalb nur mit Verfall.
 
+  Wie ein Auftrag ankommt - Einstellung "zustellung"
+    auto        Vorgabe. Sofort ueber den Inbox-Socket der Zielsitzung, wo es
+                den gibt (macOS und Linux), sonst ueber den Stop-Hook.
+    socket      nur sofort. Klappt es nicht, gibt es eine Warnung - der Auftrag
+                liegt trotzdem bereit und wird spaeter abgeholt.
+    stop-hook   immer der bisherige Weg. Auf Windows ohnehin der einzige.
+
+    Setzen mit: config zustellung socket
+
+  Zwei Fallen beim Inbox-Socket (Stand 09.08.2026, Claude Code 2.1.226)
+    Die ERSTE Sitzung nach einem Claude-Code-Update bekommt das Feature nicht.
+    Die Feature-Flags sind dann noch nicht abgerufen, die Sitzung bindet keinen
+    Socket. Ein Neustart der Sitzung behebt es. Also nach einem Update einmal
+    neu starten, bevor man die Sofortzustellung fuer kaputt haelt.
+
+    "/list-agents" taugt NICHT als Test, ob das Feature laeuft. Der Befehl wird
+    auch ohne es erkannt und meldet dann nur "No subagents or other Claude
+    sessions" - er listet ja auch Subagenten. Belastbar ist die Zeile
+    "Peer address" in /status, oder von aussen: ss -xlp | grep cc-socks
+
   Zustaende: submitted -> working (202) -> completed (2xx) | failed (4xx/5xx)
              409 und 503 setzen zurueck auf submitted, der Auftrag bleibt liegen
              expired (408) und cancelled (410) vergibt der Bus selbst
@@ -988,8 +1079,8 @@ if (direktAufgerufen) {
   // nur Bequemlichkeit: "uebernehmen" ruft ein anderer Rechner ueber SSH auf,
   // und solange dort noch ein aelterer Stand liegt, kommt genau dieses Wort.
   switch (argv[0]) {
-    case 'send': cmdSend(argv.slice(1)); break;
-    case 'receive': case 'uebernehmen': cmdUebernehmen(); break;
+    case 'send': await cmdSend(argv.slice(1)); break;
+    case 'receive': case 'uebernehmen': await cmdUebernehmen(); break;
     case 'read': cmdRead(argv.slice(1)); break;
     case 'ack': cmdAck(argv.slice(1)); break;
     case 'tasks': case 'task':

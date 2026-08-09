@@ -173,19 +173,54 @@ Der Tab ist rein lesend. Er ändert und löscht nichts.
 
 Die wichtigste Entwurfsentscheidung, weil sie erklärt, was dieses Werkzeug **nicht** kann:
 
-Eine laufende **interaktive** Claude-Sitzung hat keinen externen Eingang. Ein neuer Zug
-entsteht ausschließlich durch eine Eingabe des Benutzers - das ist eine Architekturgrenze von
-Claude Code und ändert sich durch keinen Transport, weder über ein Terminal noch über HTTP.
+Eine laufende **interaktive** Claude-Sitzung hatte lange keinen externen Eingang. Ein neuer Zug
+entstand ausschließlich durch eine Eingabe des Benutzers - eine Architekturgrenze von Claude
+Code, an der kein Transport etwas änderte, weder ein Terminal noch HTTP.
 
-Deshalb trennt dieses Projekt zwei Klassen:
+**Auf macOS und Linux gilt das seit Claude Code 2.1.224 nicht mehr.** Jede Sitzung bindet dort
+einen Unix-Socket, in den von außen geschrieben werden darf, und der Bus nutzt ihn - siehe
+[Sofortzustellung](#sofortzustellung). Auf **nativem Windows** bleibt die Grenze bestehen.
+
+Die Trennung in zwei Klassen bleibt trotzdem sinnvoll:
 
 - **Interaktive Sitzungen** sind Michaels Arbeitsfenster. Sie werden **beobachtet**, nicht
-  gesteuert. Aufträge können für sie hinterlegt werden, abgeholt werden sie beim nächsten
-  Mal - Zustellung ist eine Bringschuld des Empfängers.
+  gesteuert. Auf macOS und Linux erreicht ein Auftrag sie sofort, auf Windows liegt er bis zum
+  nächsten Stop-Hook.
 - **Auftrags-Agenten** werden bei Bedarf gestartet (`claude -p`, headless), erledigen eine
   Sache und sind wieder weg. Sie sind fernsteuerbar, das ist ihr Zweck.
 
 Details in [`docs/architektur-http.md`](docs/architektur-http.md).
+
+## Sofortzustellung
+
+Ein Auftrag landet direkt in der wartenden Sitzung, statt bis zu ihrer nächsten Antwort liegen
+zu bleiben. Gesteuert über die Einstellung `zustellung`:
+
+| Wert | Verhalten |
+|---|---|
+| `auto` | Vorgabe. Sofort über den Inbox-Socket, wo es den gibt (macOS, Linux), sonst Stop-Hook. |
+| `socket` | Nur sofort. Klappt es nicht, gibt es eine Warnung - der Auftrag liegt trotzdem bereit. |
+| `stop-hook` | Immer der bisherige Weg. Auf Windows ohnehin der einzige. |
+
+```bash
+sanctuary bus config zustellung socket
+```
+
+Über Rechnergrenzen bleibt der Weg unverändert ssh im Tailnet. Nur der letzte Meter auf dem
+Zielrechner wird sofort - dort kennt der Bus den Socket, der Absender kann ihn nicht kennen.
+
+### Zwei Fallen
+
+⚠ **Die erste Sitzung nach einem Claude-Code-Update bekommt das Feature nicht.** Die
+Feature-Flags sind dann noch nicht abgerufen, die Sitzung bindet keinen Socket. Ein Neustart
+der Sitzung behebt es. Nach einem Update also einmal neu starten, bevor man die
+Sofortzustellung für kaputt hält.
+
+⚠ **`/list-agents` taugt nicht als Prüfung**, ob das Feature läuft - obwohl Anthropics Doku
+das vorschlägt. Der Befehl wird auch ohne das Feature erkannt und meldet dann nur "No subagents
+or other Claude sessions", denn er listet auch Subagenten. Belastbar sind die Zeile
+`Peer address` in `/status` und von außen `ss -xlp | grep cc-socks`. Ein erneuter Test ist für
+Ende August 2026 vorgesehen.
 
 ## SSH: interaktiv oder mit Befehl
 

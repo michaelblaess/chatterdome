@@ -20,7 +20,7 @@
 //   node starte.mjs -- --resume       alles nach -- geht an claude durch
 
 import { spawn } from 'node:child_process';
-import { readFileSync, existsSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { homedir, hostname } from 'node:os';
 import { join } from 'node:path';
 import { ladePool } from './pool.mjs';
@@ -66,7 +66,7 @@ if (name) {
 }
 
 const claudeCmd = process.env.CLAUDE_CODE_EXECPATH || 'claude';
-const argumente = ['-n', name, ...durchreichen];
+const argumente = ['-n', name, ..._inboxFlags(durchreichen), ...durchreichen];
 const umgebung = { ...process.env, CLAUDE_INSTANZ_NAME: name };
 
 // stdio: 'inherit' gibt das Terminal komplett an Claude weiter, sonst waere die
@@ -91,6 +91,46 @@ kind.on('error', (e) => {
   console.error(`Konnte claude nicht starten: ${e.message}`);
   process.exit(1);
 });
+
+/**
+ * Sorgt dafuer, dass ein frisch gestarteter Agent Bus-Auftraege sofort annimmt.
+ *
+ * WARUM NOETIG: Der Bus stellt einen Auftrag direkt in den Inbox-Socket der
+ * Sitzung zu. So eine Einspeisung von aussen teilt aber keinen
+ * Berechtigungsmodus mit, und eine Sitzung im Bypass-Modus - Michaels
+ * Normalfall - haelt sie deshalb zur Freigabe zurueck. Sie kommt an, aber
+ * jemand muss sie erst bestaetigen, und genau das sollte die Sofortzustellung
+ * ja ersparen. "crossSessionInbound": "accept" hebt das auf.
+ *
+ * Nur auf macOS und Linux: auf nativem Windows gibt es den Socket nicht, dort
+ * waere die Einstellung wirkungslos und nur ein zusaetzliches Flag im Aufruf.
+ *
+ * Ein bereits mitgegebenes --settings wird NICHT ueberschrieben - wer es selbst
+ * setzt, meint es auch so.
+ *
+ * @param {string[]} durchgereicht
+ * Die Argumente, die der Aufrufer schon mitgibt.
+ * @returns {string[]}
+ * Ergaenzende Flags, oder eine leere Liste.
+ */
+function _inboxFlags(durchgereicht) {
+  if (process.platform === 'win32') return [];
+  if (durchgereicht.includes('--settings')) return [];
+  try {
+    const rechnername = (process.env.COMPUTERNAME || hostname().split('.')[0]).toUpperCase();
+    const dir = join(homedir(), '.claude', 'bus', rechnername);
+    mkdirSync(dir, { recursive: true });
+    const datei = join(dir, 'inbox-accept.json');
+    if (!existsSync(datei)) {
+      writeFileSync(datei, `${JSON.stringify({ crossSessionInbound: 'accept' }, null, 1)}\n`, 'utf8');
+    }
+    return ['--settings', datei];
+  } catch {
+    // Ohne die Datei laeuft der Agent trotzdem - nur muessen Auftraege dann
+    // von Hand freigegeben werden. Kein Grund, den Start zu verhindern.
+    return [];
+  }
+}
 
 /**
  * Quotet ein Argument fuer die Shell, damit shell:true es nicht zerlegt.

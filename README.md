@@ -202,19 +202,53 @@ exactly that user PATH to incoming connections. The entry is only appended, neve
 
 The central design decision, because it explains what this tool deliberately **cannot** do:
 
-A running **interactive** Claude session has no external inbox. A new turn only ever starts
-from user input - that is an architectural boundary of Claude Code, and no transport changes
-it, neither a terminal trick nor HTTP.
+For a long time a running **interactive** Claude session had no external inbox. A new turn only
+ever started from user input - an architectural boundary of Claude Code that no transport could
+work around, neither a terminal trick nor HTTP.
 
-So this project separates two classes:
+**On macOS and Linux that stopped being true with Claude Code 2.1.224.** Every session binds a
+Unix socket there that accepts writes from outside, and the bus uses it - see
+[Instant delivery](#instant-delivery). On **native Windows** the boundary still stands.
 
-- **Interactive sessions** are your working windows. They are **observed**, not driven. Tasks
-  can be left for them and are picked up next time the session is active - delivery is the
-  receiver's duty, not the sender's.
+The split into two classes remains useful regardless:
+
+- **Interactive sessions** are your working windows. They are **observed**, not driven. On
+  macOS and Linux a task reaches them right away, on Windows it waits for the next stop hook.
 - **Task agents** are started on demand (`claude -p`, headless), do one job and are gone.
   Those are remote controllable, that is their whole point.
 
 Details in [`docs/architektur-http.md`](docs/architektur-http.md) (German).
+
+## Instant delivery
+
+A task lands in the waiting session directly instead of sitting there until its next reply.
+Controlled by the `zustellung` setting:
+
+| Value | Behaviour |
+|---|---|
+| `auto` | Default. Straight through the inbox socket where one exists (macOS, Linux), stop hook otherwise. |
+| `socket` | Instant only. If it fails you get a warning - the task is still queued. |
+| `stop-hook` | Always the previous route. The only one available on Windows anyway. |
+
+```bash
+sanctuary bus config zustellung socket
+```
+
+Across machines the route is unchanged: ssh inside the tailnet. Only the last metre on the
+target machine becomes instant, because that is where the socket lives - the sender cannot
+know it.
+
+### Two traps
+
+⚠ **The first session after a Claude Code update does not get the feature.** Its feature flags
+have not been fetched yet, so the session binds no socket. Restarting that session fixes it.
+After an update, restart once before concluding instant delivery is broken.
+
+⚠ **`/list-agents` is not a usable check** for whether the feature is on, even though
+Anthropic's documentation suggests it. The command is recognised without the feature too and
+then merely reports "No subagents or other Claude sessions", because it also lists subagents.
+What holds up is the `Peer address` row in `/status`, and `ss -xlp | grep cc-socks` from
+outside. A re-test is planned for late August 2026.
 
 ## Where the code came from
 
