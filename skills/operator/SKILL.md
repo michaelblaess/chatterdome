@@ -200,7 +200,9 @@ nimmt im Fehlerfall allen laufenden Instanzen den Namen - deshalb wird nur aufge
 die Abfrage tatsächlich Instanzen gemeldet hat, und sonst gar nicht.
 `reset-names` bleibt daneben als Handgriff bestehen, wenn die Liste einfach sauber sein soll.
 
-Geprüft wird das von `vergabe.test.mjs` (`node --test skills/operator/vergabe.test.mjs`).
+Geprüft wird das von `vergabe.test.mjs` (`node --test "skills/operator/*.test.mjs"` - ein
+**Verzeichnis** als Argument scheitert unter Node 24.18.0 auf Windows mit "Cannot find
+module", in bash und PowerShell gleichermaßen).
 Der erste Test baut den Zustand vom 10.08.2026 nach und scheitert, sobald die
 Recycling-Stufen fehlen.
 

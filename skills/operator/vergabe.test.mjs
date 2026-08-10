@@ -5,7 +5,9 @@
 // namen.json voller Karteileichen, daneben eine kurze Liste laufender
 // Instanzen. Er kann scheitern - vor dem Fix liefert er die Nummer zurueck.
 //
-// Aufruf: node --test skills/operator/
+// Aufruf: node --test "skills/operator/*.test.mjs"
+// Ein Verzeichnis als Argument scheitert unter Node 24.18.0 auf Windows mit
+// "Cannot find module" - Glob oder Dateiname nehmen.
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';

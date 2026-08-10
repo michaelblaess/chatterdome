@@ -5,7 +5,9 @@
 // nachsieht, ob eine Spalte existiert, haette den Fehler nicht gefunden - die
 // Spalte gab es ja nicht, und trotzdem lief alles scheinbar richtig.
 //
-// Aufruf: node --test skills/claude-bus/
+// Aufruf: node --test "skills/claude-bus/*.test.mjs"
+// Das Verzeichnis als Argument scheitert unter Node 24.18.0 auf Windows mit
+// "Cannot find module" (geprueft am 10.08.2026 in bash und PowerShell).
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
