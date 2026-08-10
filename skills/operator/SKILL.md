@@ -162,7 +162,7 @@ freigibt, `pachtEndet()` aus `claude-bus/pacht.mjs` auf:
 
 - `operator.mjs reset-names` über `postfachSchliessen()`
 - `werde-operator`, wenn es den Namen einer beendeten Sitzung abnimmt
-- Stufe 2 der Namenssuche in `whoami.mjs` (die Sammelliste `freigegeben`)
+- das Aufräumen in `vergabe.mjs` (die Sammelliste `freigegeben`)
 
 Betroffen sind nur Aufträge, die an die **Sitzung** gebunden waren. Ausdrückliche
 Rollenaufträge überleben und verfallen stattdessen nach Frist. Gegenstück beim Antritt:
@@ -171,23 +171,38 @@ Busprotokolls (`pachtBeginnt()`) - sonst gilt die gesamte Historie des geerbten 
 neu. Ein vorhandener Zeiger wird nie angefasst, `claude --resume` behält die Session-ID.
 Details im Skill `claude-bus`, Abschnitt "Der Name ist eine Pacht".
 
-**Geht der Pool zur Neige, sucht der Hook in drei Stufen weiter** - Michaels Vorgabe: erst
-den Pool zu Ende abarbeiten, erst dann aufräumen.
+**Die Vergabe steht in `vergabe.mjs` und gilt für Hook und Starter gleichermaßen.** Zuerst
+werden beendete Sitzungen aufgeräumt, danach wird gewählt:
 
-1. Ein freier Name des aktiven Motivs (Wolfram, Salma, Patsy ...).
-2. Ist keiner mehr da, werden **beendete Sitzungen automatisch aufgeräumt** und es wird
-   erneut gesucht. Das kostet den Aufruf von `claude agents --json`, also knapp eine
-   Sekunde - deshalb passiert es erst hier und nicht bei jedem Sitzungsstart.
-3. Laufen wirklich alle: ein Name aus einem **anderen Motiv**. Ein Heiligenname ist immer
-   noch besser als `Snorre-21`.
+1. Ein Name des aktiven Motivs, der noch **nie** vergeben war (Wolfram, Salma, Patsy ...).
+2. Ein Name des aktiven Motivs, dessen **Sitzung beendet ist** - er wird recycelt.
+3. Ein nie vergebener Name aus einem **anderen Motiv**. Ein Heiligenname ist immer noch
+   besser als `Snorre-21`.
+4. Ein freigeräumter Name aus einem anderen Motiv.
 
-Erst wenn alle 68 Namen aller Motive gleichzeitig belegt sind, wird durchnummeriert.
+Erst wenn alle 68 Namen aller Motive gleichzeitig an **laufenden** Instanzen hängen, wird
+durchnummeriert.
+
+**Warum Stufe 1 vor Stufe 2 kommt:** zwischen dem Start einer Instanz und ihrem Auftauchen
+in `claude agents --json` liegt ein kurzer Moment. Ein Fenster, das genau dann startet,
+hielte das andere für beendet. Solange unbenutzte Namen da sind, wird dieser Zweifelsfall
+gar nicht erst angefasst.
+
+**Aufgeräumt wird bei jedem Start**, nicht erst bei erschöpftem Pool. Der Aufruf von
+`ladeInstanzen()` kostet gemessene **0,15 s** (10.08.2026, PN-ENVM-111912), nicht die früher
+angenommene knappe Sekunde. Vorher sammelten sich Karteileichen so lange an, bis der Pool
+scheinbar voll war - am 10.08.2026 hieß ein Fenster deshalb `Operator-22`, obwohl nur sechs
+Namen an laufenden Instanzen hingen.
 
 **Eine leere Instanzliste löscht nichts.** `claude agents --json` liefert im Fehlerfall
 dasselbe wie bei "nichts läuft", nämlich ein leeres Array. Wer daraus Einträge entfernt,
-nimmt im Fehlerfall allen laufenden Instanzen den Namen - deshalb räumt Stufe 2 nur auf,
-wenn die Abfrage tatsächlich Instanzen gemeldet hat, und fällt sonst auf Stufe 3 durch.
+nimmt im Fehlerfall allen laufenden Instanzen den Namen - deshalb wird nur aufgeräumt, wenn
+die Abfrage tatsächlich Instanzen gemeldet hat, und sonst gar nicht.
 `reset-names` bleibt daneben als Handgriff bestehen, wenn die Liste einfach sauber sein soll.
+
+Geprüft wird das von `vergabe.test.mjs` (`node --test skills/operator/vergabe.test.mjs`).
+Der erste Test baut den Zustand vom 10.08.2026 nach und scheitert, sobald die
+Recycling-Stufen fehlen.
 
 Es gibt **zwei Wege**, wie eine Instanz zu ihrem Namen kommt:
 
@@ -196,7 +211,8 @@ geöffneten Fenster automatisch. Die Instanz erfährt ihren Namen als Kontext un
 darauf, wenn Michael sie so anspricht. Der Hook kann aber **nicht** den Terminal-Titel
 setzen.
 
-**2. `starte.mjs`** als Wrapper. Sucht einen freien Namen, reicht ihn über
+**2. `starte.mjs`** als Wrapper. Sucht über dieselbe `vergabe.mjs` einen freien Namen (nur
+lesend, geschrieben wird `namen.json` ausschließlich vom Hook), reicht ihn über
 `CLAUDE_INSTANZ_NAME` weiter und startet `claude -n <Name>`. Das Flag `-n/--name` setzt einen
 Anzeigenamen, der in der Prompt-Box, im `/resume`-Picker **und in der Terminal-Titelleiste**
 erscheint. Nur so steht der Name im Tab. Der Hook erkennt die Vorgabe und übernimmt sie,

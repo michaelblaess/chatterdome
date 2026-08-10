@@ -24,6 +24,7 @@ import { readFileSync, existsSync, mkdirSync } from 'node:fs';
 import { homedir, hostname } from 'node:os';
 import { join } from 'node:path';
 import { ladePool } from './pool.mjs';
+import { vergibNamen } from './vergabe.mjs';
 
 function rechner() {
   return (process.env.COMPUTERNAME || hostname().split('.')[0]).toUpperCase();
@@ -50,8 +51,13 @@ const trenner = argv.indexOf('--');
 const eigene = trenner === -1 ? argv : argv.slice(0, trenner);
 const durchreichen = trenner === -1 ? [] : argv.slice(trenner + 1);
 
+// Die Tabelle wird hier nur GELESEN und in dieser Kopie aufgeraeumt. Geschrieben
+// wird sie ausschliesslich vom SessionStart-Hook des Kindes - sonst schreiben
+// zwei Stellen dieselbe Datei, und die Session-ID gibt es hier ohnehin noch nicht.
+const tabelle = ladeNamen();
+const { name: vorschlag } = vergibNamen({ tabelle });
+const vergeben = new Set(Object.values(tabelle));
 const pool = ladePool();
-const vergeben = new Set(Object.values(ladeNamen()));
 
 let name = eigene[0];
 if (name) {
@@ -60,9 +66,7 @@ if (name) {
     process.exit(1);
   }
 } else {
-  const frei = pool.filter((n) => !vergeben.has(n));
-  // Pool erschoepft: durchnummerieren statt doppelt vergeben.
-  name = frei.length ? frei[0] : `${pool[0]}-${vergeben.size + 1}`;
+  name = vorschlag;
 }
 
 const claudeCmd = process.env.CLAUDE_CODE_EXECPATH || 'claude';
