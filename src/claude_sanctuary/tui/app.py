@@ -44,6 +44,7 @@ from claude_sanctuary.kern.lokale_quelle import LokaleQuelle
 from claude_sanctuary.kern.modelle import Agent, Auftrag, Bestand, Busbestand, Namenspool
 from claude_sanctuary.kern.protokolle import Quelle
 from claude_sanctuary.kern.statistik import Statistik, lade_statistik
+from claude_sanctuary.tui.schutz import klartext
 from claude_sanctuary.tui.starter import oeffne_ordner
 from claude_sanctuary.tui.widgets.agenten_tabelle import AgentenTabelle
 from claude_sanctuary.tui.widgets.bus_detail import BusDetail
@@ -706,7 +707,7 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
     def _senden_fertig(self, name: str, fehler: str) -> None:
         if fehler:
             self._schreibe_log(t("log.send_failed", name=name, fehler=fehler), "error")
-            self.notify(fehler, severity="error")
+            self.notify(fehler, severity="error", markup=False)
             return
         self._schreibe_log(t("log.sent", name=name), "success")
         self.verlauf_laden(name)
@@ -866,7 +867,7 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
     def _neustart_fertig(self, name: str, fehler: str) -> None:
         if fehler:
             self._schreibe_log(t("log.restart_failed", name=name, fehler=fehler), "error")
-            self.notify(fehler, severity="error")
+            self.notify(fehler, severity="error", markup=False)
         else:
             self._schreibe_log(t("log.restarted", name=name), "success")
         self.set_timer(3.0, self.aktualisieren)
@@ -890,7 +891,7 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
     def _update_fertig(self, rechner: str, version: str, fehler: str) -> None:
         if fehler:
             self._schreibe_log(t("log.update_failed", rechner=rechner, fehler=fehler), "error")
-            self.notify(fehler, severity="error")
+            self.notify(fehler, severity="error", markup=False)
             return
         self._schreibe_log(t("log.updated", rechner=rechner, version=version or "?"), "success")
         self.notify(t("notify.updated", rechner=rechner, version=version or "?"))
@@ -1032,7 +1033,7 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         fehler = starte_lokal(einstellungen=self._einstellungen.laden())
         if fehler:
             self._schreibe_log(t("log.start_failed", fehler=fehler), "error")
-            self.notify(fehler, severity="error")
+            self.notify(fehler, severity="error", markup=False)
             return
         self._schreibe_log(t("log.started_agent", name="-"), "success")
         self.set_timer(3.0, self.aktualisieren)
@@ -1060,5 +1061,9 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
     # -- Hilfsmittel ----------------------------------------------------
 
     def _schreibe_log(self, zeile: str, stufe: str = "info") -> None:
+        # Das LogPanel schreibt mit markup=True und ruft Text.from_markup auf -
+        # eine eckige Klammer aus einer Fehlerausgabe reisst also die App um.
+        # Keiner der eigenen Log-Texte enthaelt Auszeichnungen, deshalb darf
+        # hier die ganze Zeile entschaerft werden. Siehe schutz.py.
         with contextlib.suppress(Exception):
-            self.query_one("#log", LogPanel).write_log(self.linkify_urls(zeile), stufe)
+            self.query_one("#log", LogPanel).write_log(self.linkify_urls(klartext(zeile)), stufe)

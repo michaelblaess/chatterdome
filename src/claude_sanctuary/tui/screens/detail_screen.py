@@ -116,7 +116,12 @@ class DetailScreen(ModalScreen[str | None]):
         tabelle.add_column(style="dim", no_wrap=True, min_width=18)
         tabelle.add_column(overflow="fold")
         for beschriftung, wert in zeilen:
-            tabelle.add_row(beschriftung, wert if isinstance(wert, Text) else str(wert))
+            # Text() statt str(): eine rich-Tabelle wertet blanke Zeichenketten
+            # als Markup aus. Der letzte Prompt einer Sitzung steht hier drin
+            # und ist Fremdtext - ein "[/x]" darin liess die App abstuerzen
+            # (12.08.2026). Der Schutz sitzt am Kanal, damit auch jedes spaeter
+            # ergaenzte Feld ihn erbt.
+            tabelle.add_row(beschriftung, wert if isinstance(wert, Text) else Text(str(wert)))
         return tabelle
 
     def _block_sitzung(self) -> Table:

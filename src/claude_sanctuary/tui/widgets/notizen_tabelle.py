@@ -16,6 +16,7 @@ from textual_widgets import SearchInputWithHistory
 
 from claude_sanctuary.i18n import t
 from claude_sanctuary.kern.gedaechtnis import Notiz
+from claude_sanctuary.tui.schutz import klartext_oder_nichts
 
 # Feste Farben statt Theme-Variablen, wie bei der Agentenampel: die Aussage
 # haengt an der Farbe selbst und darf nicht mit dem Thema wandern.
@@ -75,7 +76,8 @@ class NotizenDaten(DataTable[Any]):
         if value.row == -1:
             self.tooltip = self.kopf_hinweise.get(value.column)
             return
-        self.tooltip = self.zell_hinweise.get((value.row, value.column))
+        # Beschreibung und Dateiname stammen aus fremden Notizen - siehe schutz.py.
+        self.tooltip = klartext_oder_nichts(self.zell_hinweise.get((value.row, value.column)))
 
 
 class NotizenTabelle(Vertical):

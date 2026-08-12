@@ -17,6 +17,7 @@ from textual_widgets import SearchInputWithHistory
 
 from claude_sanctuary.i18n import format_datetime, t
 from claude_sanctuary.kern.modelle import Agent, Ampel, geteilte_namen, kennung
+from claude_sanctuary.tui.schutz import klartext_oder_nichts
 
 # Feste Ampelfarben statt Theme-Variablen oder benannter ANSI-Farben: eine
 # Ampel hat rot, gelb und gruen, und die muessen auf jedem Theme genau so
@@ -126,7 +127,10 @@ class AgentenDaten(DataTable[Any]):
         # super() ist Pflicht: die Basis zeichnet die verlassene und die neue
         # Zelle neu. Ohne den Aufruf bleibt die Hervorhebung stehen.
         super().watch_hover_coordinate(old, value)
-        self.tooltip = self.zell_hinweise.get((value.row, value.column))
+        # Der Hinweis zeigt den vollen Prompt und den vollen Pfad, beides
+        # Fremdtext - und ein Hinweisfenster ist ein Static, wertet Markup
+        # also aus. Siehe schutz.py.
+        self.tooltip = klartext_oder_nichts(self.zell_hinweise.get((value.row, value.column)))
 
     class RechtsKlick(Message):
         def __init__(self, tabelle: AgentenDaten, zeile: int, bei: tuple[int, int]) -> None:
