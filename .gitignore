@@ -19,5 +19,9 @@ dist/
 
 # Interne Planungsnotizen - bleiben lokal, nicht im Repo. Sie halten den
 # Arbeitsstand waehrend der Entwicklung fest, nicht das fertige Werkzeug.
+# Muster statt Einzelnamen: PLAN.md war trotz dieser Regel getrackt und fiel
+# erst beim Release-Preflight am 12.08.2026 auf.
 docs/plan-tui.md
 docs/roadmap.md
+PLAN*.md
+ROADMAP*.md
