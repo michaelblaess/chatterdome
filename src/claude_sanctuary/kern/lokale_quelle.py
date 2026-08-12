@@ -299,7 +299,7 @@ class LokaleQuelle:
             # Ohne das Entfernen der Farbcodes stuenden die Steuerzeichen
             # spaeter woertlich in der Meldung und im Protokoll.
             zeilen = [z for z in (_ohne_farbe(r).strip() for r in roh) if z]
-            return None, zeilen[0] if zeilen else f"Exit-Code {lauf.returncode}"
+            return None, _kernfehler(zeilen) or f"Exit-Code {lauf.returncode}"
         return lauf, ""
 
     def _json(
@@ -399,10 +399,43 @@ class LokaleQuelle:
 
 FARBCODE = re.compile(r"\x1b\[[0-9;]*m")
 
+STACKZEILE = re.compile(r"^at\s")
+"""Zeile eines Aufrufstapels - traegt die Fundstelle, nie die Ursache."""
+
+FEHLERZEILE = re.compile(r"\w*(Error|Exception)\s*:")
+"""Die Zeile, die den Fehler BENENNT: ``Error:``, ``TypeError:``, ``ValueError:``."""
+
 
 def _ohne_farbe(text: str) -> str:
     """Entfernt ANSI-Farbcodes aus einer Meldung."""
     return FARBCODE.sub("", text)
+
+
+def _kernfehler(zeilen: list[str]) -> str:
+    """Waehlt aus einer mehrzeiligen Ausgabe die aussagekraeftige Zeile.
+
+    Node stellt einem Fehler die FUNDSTELLE voran, nicht die Ursache::
+
+        node:internal/modules/cjs/loader:1520
+          throw err;
+          ^
+
+        Error: Cannot find module 'C:\\...\\bin\\sanctuary.mjs'
+            at Module._resolveFilename (node:internal/modules/cjs/loader:1517:15)
+
+    Wer blind die erste Zeile nimmt, protokolliert ``loader:1520`` und
+    verliert genau die Zeile, um die es geht. Belegt am 12.08.2026: der
+    Kurzbefehl zeigte nach einem Ordnerwechsel ins Leere, und im Protokoll
+    stand nur die Fundstelle - die Ursache musste von Hand nachgestellt
+    werden.
+
+    Bleibt keine benannte Fehlerzeile uebrig, gilt weiter die erste Zeile.
+    """
+    ohne_rahmen = [z for z in zeilen if z != "^" and not STACKZEILE.match(z)]
+    benannt = next((z for z in ohne_rahmen if FEHLERZEILE.search(z)), "")
+    if benannt:
+        return benannt
+    return ohne_rahmen[0] if ohne_rahmen else ""
 
 
 def _rechnername() -> str:

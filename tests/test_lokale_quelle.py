@@ -97,9 +97,33 @@ VERLAUF = {
 }
 
 
+NODE_FEHLER = (
+    "node:internal/modules/cjs/loader:1520\n"
+    "  throw err;\n"
+    "  ^\n"
+    "\n"
+    "Error: Cannot find module 'C:\\ZusatzSW\\repos\\claude-sanctuary\\bin\\sanctuary.mjs'\n"
+    "    at Module._resolveFilename (node:internal/modules/cjs/loader:1517:15)\n"
+    "    at Module._load (node:internal/modules/cjs/loader:1294:5) {\n"
+    "  code: 'MODULE_NOT_FOUND',\n"
+    "  requireStack: []\n"
+    "}\n"
+    "\n"
+    "Node.js v24.18.0\n"
+)
+"""Woertlich das, was der Kurzbefehl am 12.08.2026 ausgab, als der Shim in
+``~/.local/bin`` nach einem Ordnerwechsel noch auf den alten Pfad zeigte."""
+
+
 def _quelle(nutzlast: dict[str, object]) -> LokaleQuelle:
     """Baut eine Quelle, deren Befehl eine feste Antwort ausgibt."""
     skript = f"import sys; sys.stdout.write({json.dumps(json.dumps(nutzlast))})"
+    return LokaleQuelle([sys.executable, "-c", skript])
+
+
+def _scheiternde_quelle(ausgabe: str) -> LokaleQuelle:
+    """Baut eine Quelle, deren Befehl auf stderr schreibt und scheitert."""
+    skript = f"import sys; sys.stderr.write({json.dumps(ausgabe)}); sys.exit(1)"
     return LokaleQuelle([sys.executable, "-c", skript])
 
 
@@ -141,6 +165,34 @@ class TestBestand:
         bestand = quelle.bestand()
         assert bestand.agenten == []
         assert "JSON" in bestand.fehler[0]
+
+
+class TestFehlermeldung:
+    """Die gemeldete Zeile muss die URSACHE tragen, nicht die Fundstelle.
+
+    Node stellt jedem Fehler die Stelle im eigenen Lader voran. Wer die
+    erste Zeile nimmt, protokolliert ``loader:1520`` - eine Zahl, aus der
+    niemand etwas ableiten kann - und verschweigt, welches Modul fehlt.
+    """
+
+    def test_node_fehler_nennt_das_fehlende_modul(self) -> None:
+        fehler = _scheiternde_quelle(NODE_FEHLER).bestand().fehler[0]
+        assert "Cannot find module" in fehler
+        assert "sanctuary.mjs" in fehler
+
+    def test_fundstelle_steht_nicht_allein_im_protokoll(self) -> None:
+        fehler = _scheiternde_quelle(NODE_FEHLER).bestand().fehler[0]
+        assert not fehler.startswith("node:internal")
+
+    def test_einzeiler_bleibt_unveraendert(self) -> None:
+        # Der Operator meldet eigene Fehler einzeilig - daran darf sich
+        # durch die Auswahl nichts aendern.
+        fehler = _scheiternde_quelle("Rechner nicht erreichbar\n").bestand().fehler[0]
+        assert fehler == "Rechner nicht erreichbar"
+
+    def test_ohne_ausgabe_bleibt_der_exit_code(self) -> None:
+        quelle = LokaleQuelle([sys.executable, "-c", "raise SystemExit(3)"])
+        assert "3" in quelle.bestand().fehler[0]
 
 
 class TestVerlauf:
