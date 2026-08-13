@@ -11,6 +11,31 @@ from claude_sanctuary.kern import absturz
 from claude_sanctuary.kern.einstellungen import Einstellungen
 
 
+def soll_grafik_wecken(bild_modus: str, protokoll: str | None) -> bool:
+    """Sagt, ob das Grafik-Backend vor dem Start geweckt werden soll.
+
+    Ohne erkanntes Protokoll fragt das Wecken ein Terminal nach seiner
+    Zellgroesse, das gar keine Grafik beherrscht. Die Abfrage laeuft in einen
+    Timeout, und textual-image meldet das mit logger.warning(exc_info=...) -
+    also mit vollem Traceback auf der Standardfehlerausgabe. Sichtbar wird der
+    erst beim Beenden, weil Textual bis dahin den zweiten Bildschirmpuffer
+    haelt, und sieht dort nach einem Absturz aus. Belegt am 14.08.2026 auf
+    senza (gnome-terminal, TERM=xterm-256color, kein Sixel).
+
+    :param bild_modus:
+    Einstellung "bild_modus": auto, graphics oder halfblock.
+    :param protokoll:
+    Ergebnis von erkenne_protokoll(), also tgp, sixel oder None.
+    :returns:
+    True, wenn vorab_initialisieren() sinnvoll ist.
+    """
+    if bild_modus == "halfblock":
+        return False
+    # Auch bei erzwungenem "graphics" bringt das Wecken nichts, solange kein
+    # Protokoll erkannt ist - die Widget-Klasse kaeme ohnehin nicht zustande.
+    return protokoll is not None
+
+
 def main() -> None:
     """Startet die Zentrale."""
     einstellungen = Einstellungen()
@@ -32,6 +57,7 @@ def main() -> None:
         einstellungen.speichern({"language": args.lang})
 
     from textual_widgets import (
+        erkenne_protokoll,
         reset_terminal_title,
         set_terminal_title,
         vorab_initialisieren,
@@ -42,7 +68,11 @@ def main() -> None:
     # MUSS vor App.run() stehen: textual-image fragt beim ersten Import die
     # Zellgroesse am Terminal ab. Passiert das erst waehrend der App, landet
     # die Antwort des Terminals als Zeichenmuell im Eingabefeld.
-    if str(werte.get("bild_modus", "auto")) != "halfblock":
+    #
+    # Aber nur, wenn das Terminal ueberhaupt Grafik kann - sonst wartet die
+    # Abfrage vergeblich und hinterlaesst einen Traceback, siehe
+    # soll_grafik_wecken().
+    if soll_grafik_wecken(str(werte.get("bild_modus", "auto")), erkenne_protokoll()):
         vorab_initialisieren()
 
     set_terminal_title(f"claude-sanctuary v{__version__}")
