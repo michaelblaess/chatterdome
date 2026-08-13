@@ -69,5 +69,11 @@ test = "pytest"
 # Die Skripte unter skills/ sind Node und werden von pytest nicht erfasst. Sie
 # tragen aber die Adressierung des Bus, und dort sass der Fehler vom
 # 07.08.2026 - deshalb ein eigenes Tor statt gar keins.
-test-js = "node --test skills/claude-bus/pacht.test.mjs skills/claude-bus/bus.test.mjs skills/claude-bus/socket.test.mjs skills/claude-bus/adresse.test.mjs"
+#
+# Muster statt Einzelliste: hier standen vier Dateien namentlich, und
+# skills/operator/vergabe.test.mjs fiel dadurch monatelang aus dem Tor - die
+# Datei war gruen, lief aber weder lokal noch in der CI. Ein Test, der nie
+# laeuft, ist kein Schutz. Das Muster loest node selbst auf (nicht die Shell),
+# deshalb die Anfuehrungszeichen.
+test-js = "node --test \"skills/**/*.test.mjs\""
 alles = ["lint", "typecheck", "test", "test-js"]
