@@ -157,7 +157,7 @@ describe('Zustellung', () => {
       merkeSocket(dir, 'sid', join(dir, 'gibtsnicht.sock'));
       const e = await sofortZustellen({ datenDir: dir, sessionId: 'sid', text: 't', modus: 'auto' });
       assert.equal(e.zugestellt, false);
-      assert.match(e.grund, /laeuft nicht mehr/);
+      assert.match(e.grund, /läuft nicht mehr/);
     } finally { rmSync(dir, { recursive: true, force: true }); }
   });
 

@@ -528,6 +528,13 @@ seinen Adressaten. Den Rückweg der Quittung hält `von_host` fest.
   CLI-Unterbefehle `uebernehmen` und `auftraege` (ein `ä` bräche die Kommandozeile), die
   SQL-Spalte `geaendert` in `speicher.mjs` und die Testnamen. Vor so einem Durchgang prüfen,
   ob ein Test auf den Wortlaut matcht - `bus.test.mjs` hing an `/traegt gerade niemand/`.
+- **Ein grüner Testlauf unter Windows beweist für `socket.mjs` nichts.** Die vier
+  Socket-Tests hängen an `sockelFaehig()` und werden dort übersprungen: lokal 52 Tests,
+  auf den Linux-Läufern der CI 56. Genau darin ist mir am 14.08.2026 eine zweite
+  Wortlaut-Kopplung durchgerutscht (`socket.test.mjs` prüfte `/laeuft nicht mehr/`) - lokal
+  grün, CI rot. **Wer `socket.mjs` anfasst, lässt die Tests auf einem Linux-Rechner laufen**,
+  etwa `ssh senza 'cd ~/repos/claude-sanctuary && node --test "skills/**/*.test.mjs"'`. Das
+  ist schneller als eine CI-Runde und zeigt dieselben 56 Tests.
 - **`send all` bleibt auf dem eigenen Rechner.** Der Rundruf setzt `zielHost = rechner()`
   (`bus.mjs`, "Der Rundruf bleibt bewusst lokal") - eine stille Ausweitung auf alle Rechner
   wäre eine eigene Entscheidung und keine Nebenwirkung. Wer wirklich alle erreichen will,
