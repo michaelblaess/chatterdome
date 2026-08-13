@@ -147,3 +147,27 @@ describe('Einstellungen', () => {
     assert.match(aus, /aus Umgebung/);
   });
 });
+
+// Aufgefallen am 14.08.2026 beim Zustelltest ueber Rechnergrenzen: die
+// offen-Ansicht schrieb "[Invalid Date]" statt eines Datums. Zwei Ursachen
+// hintereinander - alsNachricht() las z.ts, die Tabelle "auftrag" fuehrt den
+// Zeitpunkt aber als "erstellt", und das try/catch in zeit() konnte das nicht
+// auffangen, weil new Date(undefined) gar nicht wirft.
+describe('Zeitangaben', () => {
+  test('die offen-Ansicht zeigt ein Datum, kein "Invalid Date"', (t) => {
+    const bus = busUmgebung(t);
+    bus.namen({ [SITZUNG_ALT]: 'Marga', [SITZUNG_NEU]: 'Lino' });
+
+    const gesendet = bus.lauf(
+      ['send', 'Marga', 'Zeitstempelprobe', '--expect-receipt', '--host', RECHNER],
+      SITZUNG_NEU,
+    );
+    assert.equal(gesendet.code, 0, gesendet.aus);
+
+    const { aus } = bus.lauf(['open'], SITZUNG_NEU);
+
+    assert.doesNotMatch(aus, /Invalid Date/, aus);
+    // dd.mm.yy - das Kurzformat von toLocaleString('de-DE').
+    assert.match(aus, /\d{2}\.\d{2}\.\d{2}/, aus);
+  });
+});

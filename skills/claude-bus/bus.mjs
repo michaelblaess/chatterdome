@@ -176,7 +176,11 @@ function db() {
  */
 function alsNachricht(z) {
   return {
-    id: z.auftrag_id, ts: z.ts, host: z.host,
+    // Die Funktion bekommt zwei verschiedene Zeilenarten: aus "ereignis"
+    // (Spalte ts) und aus "auftrag" (Spalte erstellt, kein ts). Ohne den
+    // Rueckfall stand in der offen-Ansicht "[Invalid Date]", weil z.ts dort
+    // schlicht fehlt - siehe zeit().
+    id: z.auftrag_id, ts: z.ts ?? z.erstellt, host: z.host,
     from: z.von, fromSession: z.von_session, to: z.an,
     toSession: z.an_session, bindung: z.bindung,
     topic: z.topic, text: z.text, quittung: Boolean(z.quittung_erwartet),
@@ -300,9 +304,13 @@ function cursorMerken(auf) {
 }
 
 function zeit(iso) {
-  try {
-    return new Date(iso).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' });
-  } catch { return iso; }
+  if (!iso) return '?';
+  // Hier stand ein try/catch, das nie etwas gefangen hat: new Date('quatsch')
+  // wirft NICHT, sondern liefert ein Invalid Date, dessen toLocaleString
+  // woertlich "Invalid Date" ausgibt. Nur getTime() verraet den Fehlschlag.
+  const wert = new Date(iso);
+  if (Number.isNaN(wert.getTime())) return String(iso);
+  return wert.toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' });
 }
 
 // ---------------------------------------------------------------------------
