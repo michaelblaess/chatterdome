@@ -454,6 +454,30 @@ Erste echte Messung (31.07.2026): eine Zustellung von 97 Zeichen lag zwischen **
 Zustellungen ohne nachfolgenden Modellaufruf werden als "noch nicht messbar" ausgewiesen,
 nicht als 0 - sonst läse sich Messaging als gratis.
 
+### Wie schnell die Sofortzustellung über Rechnergrenzen ist
+
+Gemessen am 14.08.2026, RAINBOW nach SENZA, an eine Sitzung im Leerlauf:
+
+| | |
+|---|---|
+| Gesendet | 00:11:07,675 |
+| Zugestellt | 00:11:10,289 (`zustellungen.jsonl` auf dem Zielrechner) |
+| **Abstand** | **2,6 s**, inklusive ssh durchs Tailnet |
+
+Die Empfängerin war `idle` und hat trotzdem geantwortet - vor der
+Sofortzustellung wäre gar nichts passiert, weil eine wartende Sitzung keinen
+Stop-Hook feuert.
+
+**Der Beleg steht in `~/.claude/bus/<RECHNER>/zustellungen.jsonl`**, nicht im
+Auftrag selbst. Die Zeile trägt `msgIds` und `session`, und die Session-ID
+lässt sich gegen `sockets.json` halten - erst damit ist belegt, dass der Weg
+wirklich der Socket war und nicht doch der Stop-Hook:
+
+```json
+{"ts":"2026-08-13T22:11:10.289Z","session":"892dd7c6-…","name":"Operator",
+ "anzahl":1,"msgIds":["f2d111dd03"],"zeichen":126,"cursorVor":32}
+```
+
 ## Rechnertrennung
 
 Michael arbeitet auf mehreren Rechnern - zwei privaten und einem Kundenrechner. **Vom
@@ -484,6 +508,26 @@ seinen Adressaten. Den Rückweg der Quittung hält `von_host` fest.
 
 ## Fallstricke
 
+- **`new Date(undefined)` wirft NICHT** - es liefert ein Invalid Date, dessen
+  `toLocaleString()` wörtlich `"Invalid Date"` ausgibt. Ein `try/catch` darum herum fängt
+  deshalb nie etwas und täuscht einen Schutz vor, den es nicht gibt. Nur `getTime()` verrät
+  den Fehlschlag:
+
+  ```js
+  const wert = new Date(iso);
+  if (Number.isNaN(wert.getTime())) return String(iso);
+  ```
+
+  Aufgefallen am 14.08.2026 in der offen-Ansicht: `alsNachricht()` las `z.ts`, die Tabelle
+  `auftrag` führt den Zeitpunkt aber als `erstellt` - nur `ereignis` hat ein `ts`. Da die
+  Funktion **beide** Zeilenarten bekommt, gehört der Rückfall (`z.ts ?? z.erstellt`) dorthin
+  und nicht in jede einzelne Ansicht.
+- **Echte Umlaute in Lesertexten, aber die Befehlsnamen bleiben.** Die Ersatzschreibung gilt
+  für Code-Kommentare, nicht für Ausgaben. Beim Aufräumen am 14.08.2026 mussten drei Gruppen
+  unangetastet bleiben, weil sie Bezeichner sind und keine Texte: die deutschen
+  CLI-Unterbefehle `uebernehmen` und `auftraege` (ein `ä` bräche die Kommandozeile), die
+  SQL-Spalte `geaendert` in `speicher.mjs` und die Testnamen. Vor so einem Durchgang prüfen,
+  ob ein Test auf den Wortlaut matcht - `bus.test.mjs` hing an `/traegt gerade niemand/`.
 - **`send all` bleibt auf dem eigenen Rechner.** Der Rundruf setzt `zielHost = rechner()`
   (`bus.mjs`, "Der Rundruf bleibt bewusst lokal") - eine stille Ausweitung auf alle Rechner
   wäre eine eigene Entscheidung und keine Nebenwirkung. Wer wirklich alle erreichen will,
