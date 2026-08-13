@@ -26,6 +26,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
 import { ladePool, aktivesMotiv, alleMotive, setzeMotiv } from './pool.mjs';
 import { ladeInstanzen } from './instanzen.mjs';
+import { aufgabeAusInhalt } from './aufgabe.mjs';
 // Nur zum Anzeigen wartender Post. bus.mjs fuehrt beim Import nichts aus.
 import { offeneNachrichten } from '../claude-bus/bus.mjs';
 import { oeffne as oeffneBus } from '../claude-bus/speicher.mjs';
@@ -220,13 +221,10 @@ function leseTranskript(pfad, { voll = false } = {}) {
     }
 
     if (e.type === 'user' && !ergebnis.aufgabe && e.message) {
-      const c = e.message.content;
-      const text = typeof c === 'string'
-        ? c
-        : (Array.isArray(c) ? (c.find((x) => x.type === 'text') || {}).text : null);
+      const text = aufgabeAusInhalt(e.message.content);
       // Werkzeugergebnisse und Systemtexte sind keine Aufgabe.
       if (text && !text.startsWith('Base directory') && !text.startsWith('<')) {
-        ergebnis.aufgabe = text.replace(/\s+/g, ' ').trim();
+        ergebnis.aufgabe = text;
       }
     }
   }
@@ -504,7 +502,7 @@ async function stoppe(suchName, { ohneRueckfrage = false } = {}) {
 
   if (!ohneRueckfrage) {
     if (!process.stdin.isTTY) {
-      console.log(`  ${ROT}Keine Rueckfrage moeglich - hier haengt kein Terminal.${R}`);
+      console.log(`  ${ROT}Keine Rückfrage möglich - hier hängt kein Terminal.${R}`);
       console.log(`  ${GRAU}Wer nicht antworten kann, erteilt den Befehl mit --force.${R}\n`);
       process.exitCode = 1;
       return;
@@ -525,7 +523,7 @@ async function stoppe(suchName, { ohneRueckfrage = false } = {}) {
   const traeger = prozessName(z.pid);
   if (!traeger.includes('claude')) {
     const was = traeger ? `"${traeger}"` : 'nicht ermittelbar';
-    console.log(`\n  ${ROT}PID ${z.pid} gehoert nicht mehr zu Claude (${was}).${R}`);
+    console.log(`\n  ${ROT}PID ${z.pid} gehört nicht mehr zu Claude (${was}).${R}`);
     console.log(`  ${GRAU}Nichts beendet. Liste mit "sanctuary status" neu holen.${R}\n`);
     process.exitCode = 1;
     return;
@@ -668,7 +666,7 @@ function werdeOperator() {
     const laeuft = ladeInstanzen().some((i) => i.sessionId === inhaber[0]);
     if (laeuft) {
       console.log(`\n  ${GELB}${ziel} ist an eine laufende Sitzung vergeben (${inhaber[0].slice(0, 8)}).${R}`);
-      console.log(`  ${GRAU}Dort beenden oder einen anderen Namen waehlen.${R}\n`);
+      console.log(`  ${GRAU}Dort beenden oder einen anderen Namen wählen.${R}\n`);
       process.exitCode = 1;
       return;
     }
@@ -681,7 +679,7 @@ function werdeOperator() {
   namen[meine] = ziel;
   speichereNamen(namen);
   console.log(`\n  ${GRUEN}${alt ? `${alt} heisst jetzt ${ziel}` : `Name ${ziel} uebernommen`}.${R}`);
-  console.log(`  ${GRAU}Die Statuszeile zieht den Namen bei ihrem naechsten Neuzeichnen nach.${R}\n`);
+  console.log(`  ${GRAU}Die Statuszeile zieht den Namen bei ihrem nächsten Neuzeichnen nach.${R}\n`);
 }
 
 /**
@@ -974,7 +972,7 @@ function raeumeNamen() {
   const zurueck = postfachSchliessen(beendet);
   console.log(`\n  ${GRUEN}${beendet.length} Zuordnung(en) beendeter Sitzungen entfernt, ${Object.keys(neu).length} aktiv.${R}`);
   console.log(zurueck.length
-    ? `  ${GELB}${zurueck.length} offene(r) Auftrag/Auftraege an diese Sitzungen zurueckgenommen.${R}\n`
+    ? `  ${GELB}${zurueck.length} offene(r) Auftrag/Aufträge an diese Sitzungen zurückgenommen.${R}\n`
     : '\n');
 }
 
