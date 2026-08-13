@@ -101,7 +101,7 @@ export function pachtEndet(db, sessionId, name = '') {
     quittiereSelbst(db, a, {
       status: EMPFAENGER_WEG,
       zustand: 'cancelled',
-      notiz: `Empfaenger ${name || a.an || sessionId.slice(0, 8)} ist beendet, der Auftrag wurde nie angenommen`,
+      notiz: `Empfänger ${name || a.an || sessionId.slice(0, 8)} ist beendet, der Auftrag wurde nie angenommen`,
     });
   }
   return betroffen.map((a) => a.auftrag_id);
@@ -126,7 +126,7 @@ export function verfallen(db, stunden = einstellung('verfall_stunden')) {
     quittiereSelbst(db, a, {
       status: VERFALLEN,
       zustand: 'expired',
-      notiz: `verfallen - lag laenger als ${stunden} h offen`,
+      notiz: `verfallen - lag länger als ${stunden} h offen`,
     });
   }
   return betroffen.map((a) => a.auftrag_id);

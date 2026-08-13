@@ -114,7 +114,7 @@ describe('Adressierung', () => {
     const { code, aus } = bus.lauf(['send', 'Schmid', 'Text', '--von', 'Sanctuary', '--host', RECHNER]);
 
     assert.equal(code, 1, 'ein Auftrag ins Leere ist genau der Bestand, der spaeter jemanden trifft');
-    assert.match(aus, /traegt gerade niemand/);
+    assert.match(aus, /trägt gerade niemand/);
   });
 
   test('mit --rolle geht auch ein unbesetzter Name', (t) => {

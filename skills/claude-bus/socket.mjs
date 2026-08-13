@@ -195,9 +195,9 @@ export function schreibeInSocket(pfad, text) {
     // ENOENT heisst: die Sitzung ist weg und hat ihren Socket abgeraeumt. Das
     // ist kein Fehler, sondern der Normalfall fuer einen veralteten Eintrag.
     verbindung.on('error', (fehler) => ende(
-      fehler.code === 'ENOENT' ? 'Sitzung laeuft nicht mehr' : fehler.message,
+      fehler.code === 'ENOENT' ? 'Sitzung läuft nicht mehr' : fehler.message,
     ));
-    verbindung.setTimeout(FRIST, () => ende('Zeitueberschreitung'));
+    verbindung.setTimeout(FRIST, () => ende('Zeitüberschreitung'));
   });
 }
 
@@ -219,10 +219,10 @@ export function schreibeInSocket(pfad, text) {
 export async function sofortZustellen({ datenDir, sessionId, text, modus }) {
   if (modus === 'stop-hook') return { zugestellt: false, grund: 'per Einstellung abgeschaltet' };
   if (!sockelFaehig()) return { zugestellt: false, grund: 'Windows kennt den Inbox-Socket nicht' };
-  if (!sessionId) return { zugestellt: false, grund: 'Empfaenger ist keiner Sitzung zugeordnet' };
+  if (!sessionId) return { zugestellt: false, grund: 'Empfänger ist keiner Sitzung zugeordnet' };
 
   const pfad = ladeSockets(datenDir)[sessionId];
-  if (!pfad) return { zugestellt: false, grund: 'fuer diese Sitzung ist kein Socket hinterlegt' };
+  if (!pfad) return { zugestellt: false, grund: 'für diese Sitzung ist kein Socket hinterlegt' };
 
   const fehler = await schreibeInSocket(pfad, text);
   return { zugestellt: !fehler, grund: fehler };

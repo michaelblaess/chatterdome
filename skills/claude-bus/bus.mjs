@@ -42,15 +42,15 @@ export const CODES = {
   200: 'erledigt',
   202: 'angenommen, wird bearbeitet',
   204: 'gelesen, nichts zu tun',
-  400: 'Nachricht unverstaendlich',
+  400: 'Nachricht unverständlich',
   403: 'darf ich nicht ohne Michaels Freigabe',
   404: 'Ziel nicht gefunden',
   408: 'verfallen - lag zu lange offen',
   409: 'geht gerade nicht, stecke in etwas anderem',
-  410: 'Empfaenger gibt es nicht mehr',
-  500: 'bei der Ausfuehrung schiefgegangen',
+  410: 'Empfänger gibt es nicht mehr',
+  500: 'bei der Ausführung schiefgegangen',
   501: 'verstanden, kann ich aber nicht',
-  503: 'beschaeftigt, spaeter nochmal',
+  503: 'beschäftigt, später nochmal',
 };
 
 /**
@@ -89,7 +89,7 @@ export function pfadProbleme(pfad) {
     if (existsSync(probe)) {
       try {
         if (lstatSync(probe).isSymbolicLink()) {
-          probleme.push(`'${probe}' ist ein Symlink. Das Ziel koennte synchronisiert werden.`);
+          probleme.push(`'${probe}' ist ein Symlink. Das Ziel könnte synchronisiert werden.`);
           break;
         }
       } catch { /* weiter */ }
@@ -103,7 +103,7 @@ export function pfadProbleme(pfad) {
   let g = pfad;
   while (g) {
     if (existsSync(join(g, '.git'))) {
-      probleme.push(`Der Pfad liegt im Git-Repo '${g}'. Ein Commit wuerde Sitzungsinhalte veroeffentlichen.`);
+      probleme.push(`Der Pfad liegt im Git-Repo '${g}'. Ein Commit würde Sitzungsinhalte veröffentlichen.`);
       break;
     }
     const eltern = dirname(g);
@@ -631,7 +631,7 @@ async function cmdSend(argv) {
   if (!rundruf && !alsRolle && lokal) {
     zielSession = nameZuSession(to);
     if (!zielSession) {
-      console.error(`${ROT}'${to}' traegt gerade niemand auf ${rechner()}.${R}`);
+      console.error(`${ROT}'${to}' trägt gerade niemand auf ${rechner()}.${R}`);
       console.error(`${GRAU}Laufende Instanzen: node ~/.claude/skills/operator/operator.mjs status${R}`);
       console.error(`${GRAU}An den Namen adressieren, wer immer ihn traegt: --rolle${R}`);
       process.exit(1);
@@ -697,7 +697,7 @@ async function cmdSend(argv) {
   console.log(zielSession
     ? `${GRAU}Gebunden an die Sitzung ${zielSession.slice(0, 8)} - ein spaeterer Traeger des Namens bekommt ihn nicht.${R}`
     : bindung === 'rolle'
-      ? `${GRAU}An den Namen adressiert, nicht an eine Sitzung${frist ? `. Verfaellt nach ${frist} h` : ''}.${R}`
+      ? `${GRAU}An den Namen adressiert, nicht an eine Sitzung${frist ? `. Verfällt nach ${frist} h` : ''}.${R}`
       : `${GRAU}Bindung holt ${zielHost} beim Eintreffen nach${frist ? `, sonst Verfall nach ${frist} h` : ''}.${R}`);
   if (nachricht.quittung) console.log(`${GRAU}Quittung erwartet - Stand mit: bus.mjs open${R}`);
 }
@@ -811,7 +811,7 @@ function cmdAck(argv) {
     process.exit(1);
   }
   if (SELBSTCODES.has(code)) {
-    console.log(`${GELB}${code} vergibt sonst der Bus selbst (Verfall, verschwundener Empfaenger).${R}`);
+    console.log(`${GELB}${code} vergibt sonst der Bus selbst (Verfall, verschwundener Empfänger).${R}`);
   }
   const nachricht = alsNachricht(zeile);
   const quittung = {
@@ -979,7 +979,7 @@ function cmdLog(argv) {
     }, null, 1));
     return;
   }
-  console.log(`\n${CYAN}${liste.length} Auftrag/Auftraege im Bus auf ${rechner()}${R}\n`);
+  console.log(`\n${CYAN}${liste.length} Auftrag/Aufträge im Bus auf ${rechner()}${R}\n`);
   for (const a of liste) {
     console.log(`  ${GRAU}${zeit(a.erstellt)}  ${a.von} -> ${a.an}${R}  ${a.zustand}  ${GRAU}(${a.topic}, id ${a.auftrag_id})${R}`);
     console.log(`  ${String(a.text || '').slice(0, 100)}`);
@@ -1052,7 +1052,7 @@ function cmdDoctor() {
     const namen = namenstabelle();
     const irre = fehlgeleitete(d, namen);
     console.log(irre.length
-      ? `  Namenswechsel ${GELB}${irre.length} Auftrag/Auftraege an einen inzwischen neu vergebenen Namen${R}`
+      ? `  Namenswechsel ${GELB}${irre.length} Auftrag/Aufträge an einen inzwischen neu vergebenen Namen${R}`
       : `  Namenswechsel ${GRUEN}keine${R}`);
     for (const a of irre.slice(0, 5)) {
       console.log(`               ${GRAU}${a.auftrag_id}  an ${a.an} (${String(a.an_session).slice(0, 8)}), Name gehoert jetzt einer anderen Sitzung${R}`);

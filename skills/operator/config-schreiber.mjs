@@ -123,7 +123,7 @@ const liste = andere
   .join(', ');
 const meldung = `ACHTUNG: ${liste} schreibt ebenfalls nach claude-config. `
   + `Dein ${art} kann abgelehnt werden oder einen Merge erzeugen. `
-  + `Vorher: git pull --rebase. Der Befehl laeuft trotzdem weiter.`;
+  + `Vorher: git pull --rebase. Der Befehl läuft trotzdem weiter.`;
 
 // Anfuehrungszeichen und Backslashes entschaerfen, damit die per JSON.stringify
 // erzeugte Zeile in jedem Fall gueltig bleibt.

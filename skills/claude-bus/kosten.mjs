@@ -142,8 +142,8 @@ console.log(`\n  ${'Gesamt'.padEnd(14)}${String(gesamtZahl).padStart(3)} gemesse
     ? `${GRAU}zwischen${R} ${n(gesamtUnten).padStart(9)} ${GRAU}und${R} ${n(gesamtOben).padStart(9)} ${GRAU}Tokens${R}`
     : `${GRAU}noch nichts messbar${R}`));
 
-console.log(`\n  ${GRAU}Untergrenze aus der Zeichenlaenge geschaetzt (${ZEICHEN_JE_TOKEN} Zeichen je Token).${R}`);
-console.log(`  ${GRAU}Obergrenze aus cache_creation des naechsten Aufrufs - enthaelt auch${R}`);
+console.log(`\n  ${GRAU}Untergrenze aus der Zeichenlänge geschätzt (${ZEICHEN_JE_TOKEN} Zeichen je Token).${R}`);
+console.log(`  ${GRAU}Obergrenze aus cache_creation des nächsten Aufrufs - enthält auch${R}`);
 console.log(`  ${GRAU}fremden neuen Kontext und ist deshalb zu hoch. Der wahre Wert liegt dazwischen.${R}`);
 
 // Vergleichsmassstab: was Polling gekostet haette.

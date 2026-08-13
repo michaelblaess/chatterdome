@@ -25,16 +25,16 @@ export const FELDER = {
     vorgabe: 24,
     umgebung: 'CLAUDE_BUS_VERFALL_STUNDEN',
     art: 'zahl',
-    text: 'Nach wie vielen Stunden ein unangenommener Auftrag verfaellt. 0 schaltet den Verfall ab.',
+    text: 'Nach wie vielen Stunden ein unangenommener Auftrag verfällt. 0 schaltet den Verfall ab.',
   },
   zustellung: {
     vorgabe: 'auto',
     umgebung: 'CLAUDE_BUS_ZUSTELLUNG',
     art: 'auswahl',
     werte: ['auto', 'socket', 'stop-hook'],
-    text: 'Wie ein Auftrag beim Empfaenger ankommt. auto = sofort ueber den '
+    text: 'Wie ein Auftrag beim Empfänger ankommt. auto = sofort über den '
       + 'Inbox-Socket, wo es geht (macOS/Linux), sonst Stop-Hook. socket = nur '
-      + 'sofort, ohne Rueckfall. stop-hook = immer der bisherige Weg.',
+      + 'sofort, ohne Rückfall. stop-hook = immer der bisherige Weg.',
   },
 };
 
@@ -106,11 +106,11 @@ export function setzeEinstellung(schluessel, wert) {
   if (!feld) return `Unbekannte Einstellung '${schluessel}'. Bekannt: ${Object.keys(FELDER).join(', ')}`;
   if (feld.art === 'zahl') {
     const zahl = Number(wert);
-    if (!Number.isFinite(zahl) || zahl < 0) return `'${wert}' ist keine gueltige Zahl fuer ${schluessel}.`;
+    if (!Number.isFinite(zahl) || zahl < 0) return `'${wert}' ist keine gültige Zahl für ${schluessel}.`;
     wert = zahl;
   }
   if (feld.art === 'auswahl' && !feld.werte.includes(String(wert))) {
-    return `'${wert}' ist kein gueltiger Wert fuer ${schluessel}. Erlaubt: ${feld.werte.join(', ')}`;
+    return `'${wert}' ist kein gültiger Wert für ${schluessel}. Erlaubt: ${feld.werte.join(', ')}`;
   }
   const d = lies();
   d[schluessel] = wert;
