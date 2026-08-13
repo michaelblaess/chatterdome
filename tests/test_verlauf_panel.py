@@ -109,3 +109,175 @@ class TestAbstandZwischenBlasen:
             assert fremd is not None, "die fremde Blase fehlt"
             assert eigen.styles.margin.left > 0
             assert fremd.styles.margin.right > 0
+
+
+def _zweiter_auftrag() -> Auftrag:
+    """Ein spaeter eingegangener Auftrag, mit eigener Kennung."""
+    return Auftrag(
+        auftrag_id="y",
+        zustand="submitted",
+        an="Petra",
+        text="und wie voll ist die Platte?",
+        verlauf=[
+            Ereignis(
+                art="auftrag",
+                ts="2026-08-09T05:10:00",
+                von="Sanctuary",
+                host="RAINBOW",
+                text="und wie voll ist die Platte?",
+            ),
+        ],
+    )
+
+
+@pytest.mark.asyncio
+class TestAnsichtLeeren:
+    """Das Leeren betrifft NUR die Anzeige - der Bus bleibt unberuehrt."""
+
+    async def test_leeren_entfernt_die_blasen(self) -> None:
+        app = NurVerlauf()
+        async with app.run_test(size=(120, 40)) as pilot:
+            panel = app.query_one("#verlauf", VerlaufPanel)
+            panel.zeigen("Petra@SENZA", [_auftrag()])
+            await _blasen(panel, pilot)
+
+            panel.ansicht_leeren()
+            await pilot.pause()
+
+            assert [k for k in panel.children if "blase" in k.classes] == []
+            assert panel.etwas_ausgeblendet
+
+    async def test_neue_auftraege_erscheinen_wieder(self) -> None:
+        """Sonst waere das Fenster nach einmal Leeren dauerhaft tot."""
+        app = NurVerlauf()
+        async with app.run_test(size=(120, 40)) as pilot:
+            panel = app.query_one("#verlauf", VerlaufPanel)
+            panel.zeigen("Petra@SENZA", [_auftrag()])
+            await _blasen(panel, pilot)
+            panel.ansicht_leeren()
+            await pilot.pause()
+
+            # Der naechste Durchlauf bringt den alten UND einen neuen Auftrag.
+            panel.zeigen("Petra@SENZA", [_auftrag(), _zweiter_auftrag()])
+            for _ in range(60):
+                await pilot.pause()
+                if [k for k in panel.children if "blase" in k.classes]:
+                    break
+
+            texte = [k.klartext for k in panel.children if "blase" in k.classes]
+            assert len(texte) == 1, f"nur der neue Auftrag gehoert hierher: {texte}"
+            assert "Platte" in texte[0]
+
+    async def test_alles_zeigen_nimmt_es_zurueck(self) -> None:
+        app = NurVerlauf()
+        async with app.run_test(size=(120, 40)) as pilot:
+            panel = app.query_one("#verlauf", VerlaufPanel)
+            panel.zeigen("Petra@SENZA", [_auftrag()])
+            await _blasen(panel, pilot)
+            panel.ansicht_leeren()
+            await pilot.pause()
+
+            panel.alles_zeigen()
+            blasen = await _blasen(panel, pilot)
+
+            assert len(blasen) == 2
+            assert not panel.etwas_ausgeblendet
+
+    async def test_partnerwechsel_hebt_das_ausblenden_auf(self) -> None:
+        """Die Marke gilt dem Verlauf, den der Anwender vor sich hatte."""
+        app = NurVerlauf()
+        async with app.run_test(size=(120, 40)) as pilot:
+            panel = app.query_one("#verlauf", VerlaufPanel)
+            panel.zeigen("Petra@SENZA", [_auftrag()])
+            await _blasen(panel, pilot)
+            panel.ansicht_leeren()
+            await pilot.pause()
+
+            panel.zeigen("Lino@RAINBOW", [_auftrag()])
+            blasen = await _blasen(panel, pilot)
+
+            assert len(blasen) == 2, "beim anderen Agenten darf nichts verborgen sein"
+
+
+@pytest.mark.asyncio
+class TestKopierenUndSpeichern:
+    async def test_sichtbarer_text_ist_klartext(self) -> None:
+        """Ohne Rich-Auszeichnung - der Text geht in Zwischenablage und Datei."""
+        app = NurVerlauf()
+        async with app.run_test(size=(120, 40)) as pilot:
+            panel = app.query_one("#verlauf", VerlaufPanel)
+            panel.zeigen("Petra@SENZA", [_auftrag()])
+            await _blasen(panel, pilot)
+
+            text = panel.sichtbarer_text()
+
+            assert "wie ist der freie RAM auf Senza?" in text
+            assert "21 GiB frei" in text
+            assert "[" not in text, "Rich-Auszeichnung gehoert nicht in die Datei"
+
+    async def test_geleerte_ansicht_liefert_keinen_text(self) -> None:
+        app = NurVerlauf()
+        async with app.run_test(size=(120, 40)) as pilot:
+            panel = app.query_one("#verlauf", VerlaufPanel)
+            panel.zeigen("Petra@SENZA", [_auftrag()])
+            await _blasen(panel, pilot)
+            panel.ansicht_leeren()
+            await pilot.pause()
+
+            assert panel.sichtbarer_text() == ""
+
+    async def test_vorschlagsname_taugt_als_dateiname(self) -> None:
+        app = NurVerlauf()
+        async with app.run_test(size=(120, 40)) as pilot:
+            panel = app.query_one("#verlauf", VerlaufPanel)
+            panel.zeigen("Petra@SENZA", [_auftrag()])
+            await pilot.pause()
+
+            name = panel.vorschlagsname()
+
+            assert name == "verlauf-Petra@SENZA.txt"
+            # Kein Zeichen, an dem ein Dateisystem sich stoert.
+            assert not set(name) & set('\\/:*?"<>|')
+
+
+class MitMenue(NurVerlauf):
+    """Faengt die Menue-Meldung ab, wie die echte App es tut."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.meldungen: list[VerlaufPanel.MenueGewuenscht] = []
+
+    def on_verlauf_panel_menue_gewuenscht(
+        self, ereignis: VerlaufPanel.MenueGewuenscht
+    ) -> None:
+        self.meldungen.append(ereignis)
+
+
+@pytest.mark.asyncio
+class TestRechtsklick:
+    async def test_rechtsklick_auf_eine_blase_meldet_sie_mit(self) -> None:
+        """Ohne die Blase wuesste das Menue nicht, worauf es zeigt."""
+        app = MitMenue()
+        async with app.run_test(size=(120, 40)) as pilot:
+            panel = app.query_one("#verlauf", VerlaufPanel)
+            panel.zeigen("Petra@SENZA", [_auftrag()])
+            blasen = await _blasen(panel, pilot)
+
+            await pilot.click(blasen[0], button=3)
+            await pilot.pause()
+
+            assert len(app.meldungen) == 1, "der Rechtsklick kam nicht an"
+            assert app.meldungen[0].blase is not None
+            assert app.meldungen[0].blase.auftrag_id == "x"
+
+    async def test_linksklick_oeffnet_kein_menue(self) -> None:
+        app = MitMenue()
+        async with app.run_test(size=(120, 40)) as pilot:
+            panel = app.query_one("#verlauf", VerlaufPanel)
+            panel.zeigen("Petra@SENZA", [_auftrag()])
+            blasen = await _blasen(panel, pilot)
+
+            await pilot.click(blasen[0])
+            await pilot.pause()
+
+            assert app.meldungen == []

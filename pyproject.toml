@@ -17,6 +17,9 @@ dependencies = [
     # Diagramme im Terminal fuer den Statistik-Tab. MIT-lizenziert und damit
     # vertraeglich mit Apache 2.0, in jira-timesheet bereits erprobt.
     "textual-plotext>=1.0",
+    # Datei-Dialog fuer "Verlauf speichern unter". MIT-lizenziert, in
+    # jira-timesheet und sitemap-tracker bereits im Einsatz.
+    "textual-fspicker>=1.0",
 ]
 
 [project.optional-dependencies]

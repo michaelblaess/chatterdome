@@ -54,7 +54,7 @@ from claude_sanctuary.tui.widgets.kopf_panel import KopfPanel
 from claude_sanctuary.tui.widgets.notizen_tabelle import NotizenTabelle
 from claude_sanctuary.tui.widgets.statistik_dashboard import StatistikDashboard
 from claude_sanctuary.tui.widgets.status_zeile import StatusZeile
-from claude_sanctuary.tui.widgets.verlauf_panel import VerlaufPanel
+from claude_sanctuary.tui.widgets.verlauf_panel import Blase, VerlaufPanel
 
 ABSENDER = "Sanctuary"
 """Absendername der Auftraege aus dieser Oberflaeche.
@@ -148,6 +148,12 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         self._gewaehlt: Agent | None = None
         self._stop_kandidat = ""
         self._menue_ziel: Agent | None = None
+        self._verlauf_blase: Blase | None = None
+        """Die Blase, auf der das Verlaufsmenue geoeffnet wurde."""
+
+        self._letzter_speicherort = str(Path.home())
+        """Startordner des Speichern-Dialogs, zieht mit dem letzten Ziel mit."""
+
         self._letzte_fehler: list[str] = []
         self._verbrauch: int | None = None
         """Zuletzt ermittelter Verbrauch. None, solange nie abgefragt."""
@@ -645,6 +651,89 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
             return
         self.copy_to_clipboard(text)
         self.notify(t("notify.copied"))
+
+    # -- Verlauf: Kontextmenue ------------------------------------------
+
+    def on_verlauf_panel_menue_gewuenscht(
+        self, ereignis: VerlaufPanel.MenueGewuenscht
+    ) -> None:
+        from textual_widgets import ContextMenuItem, ContextMenuScreen
+
+        panel = self.query_one("#verlauf", VerlaufPanel)
+        self._verlauf_blase = ereignis.blase
+        hat_blase = ereignis.blase is not None
+        hat_inhalt = bool(panel.sichtbarer_text())
+        eintraege = [
+            ContextMenuItem("blase_kopieren", t("menu.chat.copy_entry"), enabled=hat_blase),
+            ContextMenuItem("auftrag_id", t("menu.chat.copy_id"), enabled=hat_blase),
+            ContextMenuItem.separator(),
+            ContextMenuItem("alles_kopieren", t("menu.chat.copy_all"), enabled=hat_inhalt),
+            ContextMenuItem("speichern", t("menu.chat.save"), enabled=hat_inhalt),
+            ContextMenuItem.separator(),
+            ContextMenuItem("leeren", t("menu.chat.clear"), enabled=hat_inhalt),
+            ContextMenuItem(
+                "alles_zeigen", t("menu.chat.restore"), enabled=panel.etwas_ausgeblendet
+            ),
+        ]
+        self.push_screen(
+            ContextMenuScreen(eintraege, at=ereignis.position),
+            callback=self._verlauf_menue_gewaehlt,
+        )
+
+    def _verlauf_menue_gewaehlt(self, auswahl: str | None) -> None:
+        if auswahl is None:
+            return
+        panel = self.query_one("#verlauf", VerlaufPanel)
+        blase = self._verlauf_blase
+        if auswahl == "blase_kopieren" and blase is not None:
+            self._in_zwischenablage(blase.klartext)
+        elif auswahl == "auftrag_id" and blase is not None:
+            self._in_zwischenablage(blase.auftrag_id)
+        elif auswahl == "alles_kopieren":
+            self._in_zwischenablage(panel.sichtbarer_text())
+        elif auswahl == "speichern":
+            self._verlauf_speichern(panel)
+        elif auswahl == "leeren":
+            panel.ansicht_leeren()
+        elif auswahl == "alles_zeigen":
+            panel.alles_zeigen()
+
+    def _verlauf_speichern(self, panel: VerlaufPanel) -> None:
+        """Fragt nach einem Ziel und schreibt den sichtbaren Verlauf dorthin."""
+        from textual_fspicker import FileSave, Filters
+
+        if not panel.sichtbarer_text():
+            return
+        self.push_screen(
+            FileSave(
+                location=self._letzter_speicherort,
+                default_file=panel.vorschlagsname(),
+                title=t("save.title"),
+                save_button=t("save.button"),
+                cancel_button=t("save.cancel"),
+                filters=Filters(
+                    (t("save.filter_text"), lambda p: p.suffix.lower() == ".txt"),
+                    (t("save.filter_all"), lambda _p: True),
+                ),
+            ),
+            callback=self._verlauf_datei_gewaehlt,
+        )
+
+    def _verlauf_datei_gewaehlt(self, ziel: Path | None) -> None:
+        if ziel is None:
+            return
+        panel = self.query_one("#verlauf", VerlaufPanel)
+        try:
+            # newline="\n": sonst macht Windows CRLF daraus, und die Datei
+            # sieht auf jedem anderen Rechner falsch aus.
+            ziel.write_text(f"{panel.sichtbarer_text()}\n", encoding="utf-8", newline="\n")
+        except OSError as fehler:
+            # markup=False: der Pfad ist Fremdtext, eine eckige Klammer darin
+            # wuerde rich als Auszeichnung lesen.
+            self.notify(str(fehler), severity="error", markup=False)
+            return
+        self._letzter_speicherort = str(ziel.parent)
+        self.notify(t("notify.saved", pfad=str(ziel)), markup=False)
 
     def _angaben_kopieren(self, agent: Agent) -> None:
         zeilen = [
