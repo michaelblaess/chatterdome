@@ -327,6 +327,56 @@ DEP0190 auf stderr (gesehen am 02.08.2026), weil die Argumente dann unmaskiert
 aneinandergehängt werden. Stattdessen `cmd /c` davorsetzen - damit bleibt die
 Argumentliste eine Liste.
 
+## Neustart: `neustart.mjs`
+
+```bash
+sanctuary restart <Name>                          # auf diesem Rechner
+sanctuary restart --session <id> --host SENZA     # auf einem anderen
+sanctuary restart --setup                         # Windows, einmalig je Rechner
+```
+
+Beendet die Sitzung und öffnet sie mit `claude --resume` in einem neuen Fenster. Der Zweck ist
+der Versionswechsel: eine laufende Sitzung hält ihre Claude-Version fest. Weil die
+Sitzungskennung dieselbe bleibt, kommt der Agent unter seinem alten Namen zurück - die
+Namenstabelle hängt an der Kennung, nicht am Fenster.
+
+**Die Hürde ist das Fenster, nicht das Beenden.** Beenden geht per ssh problemlos, ein Fenster
+braucht einen Desktop. Gelöst wie in `shot.mjs`, nicht mit tmux - das gibt es unter Windows
+nicht, und eine Sitzung darin wäre auf dem Bildschirm auch nicht mehr zu sehen:
+
+| System | Weg |
+|---|---|
+| Windows | geplante Aufgabe mit `/IT` im angemeldeten Benutzerkontext. `schtasks` hält einen festen Befehl, die Kennung wechselt - deshalb liegen die Parameter in `neustart-auftrag.json`, die Antwort in `neustart-ergebnis.json`. |
+| Linux/macOS | `DISPLAY` und `XAUTHORITY` aus der Prozessliste über `xUmgebung()` aus `shot.mjs` - eine Quelle für beide Nutzer, keine Kopie. |
+
+Am 14.08.2026 von RAINBOW aus gegen senza belegt, der Prozess dort:
+
+```
+PID 1295216  PPID 570364  TT pts/1  STAT Ssl+   claude --resume 46a5da5a-…
+   Eltern: /usr/libexec/gnome-terminal-server
+```
+
+`pts/1` und `Ssl+` heissen: echtes Terminal, Vordergrund, bedienbar. **Der Windows-Pfad ist
+noch ungetestet** - RAINBOW ist zugleich der Rechner mit der Oberfläche, ein Neustart über ssh
+dorthin wäre ein Test gegen sich selbst.
+
+### Vier Fallen, alle beim Bauen aufgetreten
+
+- **Ohne `detached: true` plus `unref()` stirbt das Fenster mit der ssh-Sitzung**, aus der es
+  gestartet wurde. Im Fenster ersetzt `exec` die Shell durch claude, sonst bleibt eine leere
+  bash stehen, wenn die Sitzung endet.
+- **`realpathSync(process.argv[1])` wirft bei `node -e`**, weil `argv[1]` dort `undefined` ist.
+  Der Direktaufruf-Vergleich braucht deshalb einen Guard - ohne ihn reisst ein blosser Import
+  den Aufrufer mit, statt nur keine Kommandozeile zu starten.
+- **`pgrep -c gnome-terminal-server` findet nichts**, obwohl der Prozess läuft: pgrep prüft
+  gegen den auf 15 Zeichen gekürzten Prozessnamen. `pgrep -a gnome-terminal` findet ihn.
+  Umgekehrt matcht `pgrep -f "claude --resume <id>"` über ssh die **eigene Befehlszeile** mit -
+  wer damit zählt, findet immer einen zu viel. Für beides ist `ps -eo pid,tty,args` ehrlicher.
+- **PowerShell 5.1 schreibt bei `Set-Content -Encoding utf8` eine Stückliste (BOM)**, und daran
+  scheitert `JSON.parse` auf der Node-Seite mit "Unexpected token". `neustart.ps1` schreibt
+  deshalb über `[System.IO.File]::WriteAllText(..., New-Object System.Text.UTF8Encoding $false)`,
+  und die Node-Seite schneidet eine BOM zusätzlich ab.
+
 ## Ausgabe für Werkzeuge: `--json` und der Strom
 
 Die Tabelle ist für Menschen gebaut. Wer sie zurückparst, hat ANSI-Farben im Text und bricht
