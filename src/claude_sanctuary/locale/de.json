@@ -244,6 +244,7 @@
   "notify.no_session": "Für diesen Agenten ist keine Sitzungskennung bekannt - ohne sie lässt sich nichts fortsetzen.",
   "menu.restart": "Agent neu starten",
   "menu.update": "Claude auf diesem Rechner aktualisieren",
+  "menu.only_here": "nur auf diesem Rechner",
   "menu.chat.copy_entry": "Diesen Eintrag kopieren",
   "menu.chat.copy_id": "Auftrags-ID kopieren",
   "menu.chat.copy_all": "Verlauf kopieren",

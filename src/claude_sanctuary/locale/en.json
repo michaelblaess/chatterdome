@@ -244,6 +244,7 @@
   "notify.no_session": "No session id known for this agent - there is nothing to resume.",
   "menu.restart": "Restart agent",
   "menu.update": "Update Claude on this machine",
+  "menu.only_here": "this machine only",
   "menu.chat.copy_entry": "Copy this entry",
   "menu.chat.copy_id": "Copy task id",
   "menu.chat.copy_all": "Copy history",

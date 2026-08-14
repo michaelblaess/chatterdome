@@ -80,6 +80,17 @@ def _bus_datei() -> Path:
     return Path.home() / ".claude" / "bus" / rechner / "bus.db"
 
 
+def _nur_hier(beschriftung: str, moeglich: bool) -> str:
+    """Haengt den Grund an, wenn ein Menueeintrag nur lokal geht.
+
+    Ein ausgegrauter Eintrag ohne Begruendung ist ein Raetsel: Michael hielt
+    "Agent neu starten" am 14.08.2026 fuer fehlend, weil es bei einem Agenten
+    auf einem anderen Rechner grau dastand. Der Grund gehoert an die
+    Beschriftung, sonst sucht man ihn im Code.
+    """
+    return beschriftung if moeglich else f"{beschriftung} ({t('menu.only_here')})"
+
+
 class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # type: ignore[misc]
     """Beobachtet die laufenden Sitzungen und verteilt Auftraege."""
 
@@ -598,7 +609,9 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
             ContextMenuItem.separator(),
             ContextMenuItem("kopiere_name", t("menu.copy_name")),
             ContextMenuItem("kopiere_id", t("menu.copy_id"), enabled=bool(agent.session_id)),
-            ContextMenuItem("ordner", t("menu.open_dir"), enabled=hier and bool(agent.cwd)),
+            ContextMenuItem(
+                "ordner", _nur_hier(t("menu.open_dir"), hier), enabled=hier and bool(agent.cwd)
+            ),
             ContextMenuItem("neu_laden", t("menu.reload")),
             ContextMenuItem.separator(),
             ContextMenuItem("bild", t("menu.screenshot")),
@@ -606,9 +619,11 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
             ContextMenuItem("update", t("menu.update")),
             ContextMenuItem.separator(),
             ContextMenuItem(
-                "neustart", t("menu.restart"), enabled=hier and bool(agent.session_id)
+                "neustart",
+                _nur_hier(t("menu.restart"), hier),
+                enabled=hier and bool(agent.session_id),
             ),
-            ContextMenuItem("stop", t("menu.stop"), enabled=hier),
+            ContextMenuItem("stop", _nur_hier(t("menu.stop"), hier), enabled=hier),
         ]
         self.push_screen(
             ContextMenuScreen(eintraege, at=ereignis.bei),
