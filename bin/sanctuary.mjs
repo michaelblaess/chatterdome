@@ -19,6 +19,7 @@ const OPERATOR = join(HIER, '..', 'skills', 'operator', 'operator.mjs');
 const STARTE = join(HIER, '..', 'skills', 'operator', 'starte.mjs');
 const SHOT = join(HIER, '..', 'skills', 'operator', 'shot.mjs');
 const UPDATE = join(HIER, '..', 'skills', 'operator', 'update.mjs');
+const NEUSTART = join(HIER, '..', 'skills', 'operator', 'neustart.mjs');
 const BUS = join(HIER, '..', 'skills', 'claude-bus', 'bus.mjs');
 const KOSTEN = join(HIER, '..', 'skills', 'claude-bus', 'kosten.mjs');
 
@@ -34,6 +35,7 @@ const ZIELE = {
   start: STARTE, starte: STARTE,
   shot: SHOT, bild: SHOT,
   update: UPDATE,
+  restart: NEUSTART, neustart: NEUSTART,
   send: BUS, read: BUS, ack: BUS, doctor: BUS, pending: BUS,
   open: BUS, tasks: BUS, task: BUS, history: BUS, receive: BUS,
   log: BUS, bestand: BUS, config: BUS, einstellungen: BUS,
@@ -56,6 +58,10 @@ function hilfe() {
   Instanzen
     sanctuary start [Name]         neue Instanz mit Namen im Tab-Titel
     sanctuary stop <Name> [--force]  Instanz beenden (--force ohne Rueckfrage)
+    sanctuary restart <Name>       beenden und mit --resume neu oeffnen
+    sanctuary restart --session <id> [--host RECHNER]
+                                   dasselbe fuer einen anderen Rechner
+    sanctuary restart --setup      Windows: Aufgabe fuer den ssh-Zugriff anlegen
     sanctuary become-operator      diese Sitzung uebernimmt den Operator-Namen
 
   Bildschirm
@@ -102,7 +108,7 @@ if (!befehl) {
   const ziel = ZIELE[befehl];
   // starte.mjs und kosten.mjs kennen den Unterbefehl nicht, sie sind selbst
   // schon das Kommando - deshalb faellt er dort weg.
-  const eigenstaendig = [STARTE, KOSTEN, SHOT, UPDATE];
+  const eigenstaendig = [STARTE, KOSTEN, SHOT, UPDATE, NEUSTART];
   const rest = eigenstaendig.includes(ziel) ? argv.slice(1) : argv;
   process.argv = [process.argv[0], ziel, ...rest];
   await import(pathToFileURL(ziel).href);

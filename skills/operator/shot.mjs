@@ -179,7 +179,7 @@ function linuxAufnahme(ziel) {
  * aber in seiner Kommandozeile: "Xorg vt2 -displayfd 3 -auth /run/user/1000/
  * gdm/Xauthority". Der Socket in /tmp/.X11-unix nennt die Anzeigenummer.
  */
-function xUmgebung() {
+export function xUmgebung() {
   const werte = {};
   try {
     const ps = execFileSync('ps', ['-eo', 'args'], { encoding: 'utf8', timeout: 8000 });
