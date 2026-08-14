@@ -618,11 +618,7 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
             ContextMenuItem("nur_host", t("menu.filter_host")),
             ContextMenuItem("update", t("menu.update")),
             ContextMenuItem.separator(),
-            ContextMenuItem(
-                "neustart",
-                _nur_hier(t("menu.restart"), hier),
-                enabled=hier and bool(agent.session_id),
-            ),
+            ContextMenuItem("neustart", t("menu.restart"), enabled=bool(agent.session_id)),
             ContextMenuItem("stop", _nur_hier(t("menu.stop"), hier), enabled=hier),
         ]
         self.push_screen(
@@ -928,12 +924,9 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         if agent is None:
             self.notify(t("notify.select_agent"), severity="warning")
             return
-        if agent.rechner.upper() != self._bestand.rechner.upper():
-            self.notify(
-                t("notify.remote_stop", name=agent.name, rechner=agent.rechner),
-                severity="warning",
-            )
-            return
+        # Seit dem 14.08.2026 geht der Neustart auch ueber Rechnergrenzen: das
+        # CLI des Zielrechners oeffnet das Fenster dort. Beenden bleibt lokal,
+        # "sanctuary stop" kennt kein Ziel.
         if not agent.session_id:
             self.notify(t("notify.no_session"), severity="warning")
             return
@@ -951,11 +944,20 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         agent = self._neustart_kandidat
         self._neustart_kandidat = None
         if ja and agent is not None:
-            self._neustart_ausfuehren(agent.name, agent.session_id, agent.cwd)
+            self._neustart_ausfuehren(agent.name, agent.session_id, agent.cwd, agent.rechner)
 
     @work(thread=True, group="neustart")
-    def _neustart_ausfuehren(self, name: str, session_id: str, cwd: str) -> None:
+    def _neustart_ausfuehren(
+        self, name: str, session_id: str, cwd: str, rechner: str = ""
+    ) -> None:
         from claude_sanctuary.tui.starter import starte_resume
+
+        # Auf einem anderen Rechner macht das dortige CLI beides in einem Zug -
+        # von hier aus laesst sich dort kein Fenster oeffnen.
+        if rechner and rechner.upper() != self._bestand.rechner.upper():
+            fehler = self._quelle.neustarten_fern(rechner, session_id, cwd)
+            self.call_from_thread(self._neustart_fertig, name, fehler)
+            return
 
         fehler = self._quelle.stoppen(name)
         if fehler:

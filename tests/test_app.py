@@ -28,6 +28,7 @@ class FakeQuelle:
     def __init__(self) -> None:
         self.gesendet: list[tuple[str, str, str, str]] = []
         self.gestoppt: list[str] = []
+        self.fern_neugestartet: list[tuple[str, str, str]] = []
         self.mit_tokens: list[bool] = []
         """Je Abfrage, ob der Verbrauch mit angefordert wurde."""
 
@@ -105,6 +106,10 @@ class FakeQuelle:
 
     def stoppen(self, name: str) -> str:
         self.gestoppt.append(name)
+        return ""
+
+    def neustarten_fern(self, rechner: str, session_id: str, cwd: str = "") -> str:
+        self.fern_neugestartet.append((rechner, session_id, cwd))
         return ""
 
     def bildschirmfoto(self, rechner: str = "") -> tuple[str, str]:
@@ -616,6 +621,34 @@ class TestNeustart:
 
             assert quelle.gestoppt == ["Klara"]
             assert gerufen == [("sid-42", r"C:\Repos\test")]
+
+    async def test_ferner_agent_geht_ueber_das_cli_des_zielrechners(
+        self, quelle: FakeQuelle, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Von hier aus laesst sich auf einem fremden Rechner kein Fenster oeffnen.
+
+        Der lokale Weg (stoppen + starte_resume) darf deshalb gar nicht erst
+        anlaufen - sonst wuerde hier ein Fenster aufgehen statt dort.
+        """
+        lokal_gerufen: list[str] = []
+        monkeypatch.setattr(
+            starter_modul,
+            "starte_resume",
+            lambda sid, wd="", e=None: lokal_gerufen.append(sid) or "",  # type: ignore[func-returns-value]
+        )
+        monkeypatch.setattr(zeit_modul, "sleep", lambda _s: None)
+
+        app = SanctuaryApp(quelle=quelle)
+        app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
+        async with app.run_test(size=(160, 50)) as pilot:
+            await _gefuellt(app, pilot)
+            app._neustart_ausfuehren("Petra", "sid-99", "/home/michael", "SENZA")
+            for _ in range(60):
+                await pilot.pause()
+
+            assert quelle.fern_neugestartet == [("SENZA", "sid-99", "/home/michael")]
+            assert quelle.gestoppt == [], "beendet wird auf dem Zielrechner, nicht von hier"
+            assert lokal_gerufen == [], "sonst geht das Fenster auf dem falschen Rechner auf"
 
 
 class TestAktualisierung:

@@ -223,6 +223,28 @@ class LokaleQuelle:
         # der Oberflaeche. Beleg und Absicherung siehe _lauf().
         return self._still(["stop", name, "--force"])
 
+    def neustarten_fern(self, rechner: str, session_id: str, cwd: str = "") -> str:
+        """Setzt eine Sitzung auf einem ANDEREN Rechner in einem Fenster fort.
+
+        Lokal macht das die Oberflaeche selbst ueber starte_resume, weil sie
+        dort die Terminalwahl des Anwenders kennt. Ueber Rechnergrenzen geht es
+        nur ueber das dortige CLI: ein Fenster braucht einen Desktop, und den
+        hat eine ssh-Sitzung nicht (Einzelheiten in skills/operator/neustart.mjs).
+
+        Der Aufruf dauert - er wartet auf die Rueckmeldung des Zielrechners -
+        und gehoert deshalb in einen Thread.
+
+        :returns: Leer bei Erfolg, sonst der Grund.
+        """
+        if not session_id:
+            # Kein t() hier: der Kern bleibt UI-frei. Derselbe Wortlaut wie im
+            # CLI, damit beide Wege dasselbe sagen.
+            return "Ohne Sitzungskennung gibt es nichts fortzusetzen."
+        args = ["restart", "--session", session_id, "--host", rechner]
+        if cwd:
+            args += ["--cwd", cwd]
+        return self._still(args)
+
     def bildschirmfoto(self, rechner: str = "") -> tuple[str, str]:
         """Nimmt den Bildschirm eines Rechners auf.
 

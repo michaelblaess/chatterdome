@@ -56,6 +56,16 @@ class Quelle(Protocol):
         """
         ...
 
+    def neustarten_fern(self, rechner: str, session_id: str, cwd: str = "") -> str:
+        """Setzt eine Sitzung auf einem anderen Rechner in einem Fenster fort.
+
+        Nur fuer fremde Rechner: lokal oeffnet die Oberflaeche das Fenster
+        selbst, weil sie dort die Terminalwahl des Anwenders kennt.
+
+        :returns: leere Zeichenkette bei Erfolg, sonst die Fehlermeldung.
+        """
+        ...
+
     def stoppen(self, name: str) -> str:
         """Beendet eine Sitzung.
 
