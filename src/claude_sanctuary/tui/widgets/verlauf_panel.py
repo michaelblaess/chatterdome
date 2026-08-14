@@ -167,7 +167,13 @@ class VerlaufPanel(VerticalScroll):
         # Name@RECHNER statt nur Name: im Mesh kann derselbe Name auf zwei
         # Rechnern vergeben sein, und ohne den Zusatz ist nicht erkennbar,
         # von wo die Antwort kam.
-        kopf.append(f"{ereignis.absender} ", style="bold")
+        #
+        # Und BEIDE Seiten, nicht nur der Absender: sonst steht in der Zeile
+        # zwar, wer geschrieben hat, aber nicht, an welchen von zwei
+        # gleichnamigen Agenten - bei einer Quittung also nicht, wohin sie ging.
+        kopf.append(f"{ereignis.absender}", style="bold")
+        kopf.append(" -> ", style="dim")
+        kopf.append(f"{ereignis.empfaenger} ", style="bold")
         kopf.append(format_time(ereignis.ts), style="dim")
         if ereignis.eigen:
             zustand = auftrag.zustand

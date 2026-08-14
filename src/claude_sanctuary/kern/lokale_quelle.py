@@ -361,6 +361,7 @@ class LokaleQuelle:
                 text=str(e.get("text", "")),
                 zustand=str(e.get("zustand", "")),
                 host=ab_host,
+                an_host=ziel_host,
             )
         ]
         for q in e.get("quittungen", []):
@@ -375,6 +376,9 @@ class LokaleQuelle:
                     status=q.get("status"),
                     notiz=str(q.get("notiz") or ""),
                     host=str(q.get("host") or ziel_host),
+                    # Die Quittung laeuft den Weg zurueck: sie geht an den
+                    # Rechner, von dem der Auftrag kam.
+                    an_host=str(q.get("an_host") or ab_host),
                 )
             )
         return Auftrag(

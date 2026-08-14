@@ -52,6 +52,8 @@ def _auftrag() -> Auftrag:
                 ts="2026-08-09T04:50:00",
                 von="Sanctuary",
                 host="RAINBOW",
+                an="Petra",
+                an_host="SENZA",
                 text="wie ist der freie RAM auf Senza?",
             ),
             Ereignis(
@@ -59,6 +61,8 @@ def _auftrag() -> Auftrag:
                 ts="2026-08-09T04:51:00",
                 von="Petra",
                 host="SENZA",
+                an="Sanctuary",
+                an_host="RAINBOW",
                 status=200,
                 notiz="Senza: 21 GiB frei von 30 GiB",
             ),
@@ -238,6 +242,35 @@ class TestKopierenUndSpeichern:
             assert name == "verlauf-Petra@SENZA.txt"
             # Kein Zeichen, an dem ein Dateisystem sich stoert.
             assert not set(name) & set('\\/:*?"<>|')
+
+
+@pytest.mark.asyncio
+class TestKopfzeile:
+    """Beide Seiten, nicht nur der Absender.
+
+    Michael am 14.08.2026: bei einer Quittung stand nur, WER geantwortet hat -
+    nicht, an welchen von zwei gleichnamigen Agenten sie ging. Im Mesh ist der
+    Name eine Pacht pro Rechner, "Operator" allein ist also mehrdeutig.
+    """
+
+    async def test_auftrag_nennt_absender_und_empfaenger(self) -> None:
+        app = NurVerlauf()
+        async with app.run_test(size=(120, 40)) as pilot:
+            panel = app.query_one("#verlauf", VerlaufPanel)
+            panel.zeigen("Petra@SENZA", [_auftrag()])
+            blasen = await _blasen(panel, pilot)
+
+            assert "Sanctuary@RAINBOW -> Petra@SENZA" in blasen[0].klartext
+
+    async def test_quittung_zeigt_den_rueckweg(self) -> None:
+        """Sie laeuft zurueck an den Rechner, von dem der Auftrag kam."""
+        app = NurVerlauf()
+        async with app.run_test(size=(120, 40)) as pilot:
+            panel = app.query_one("#verlauf", VerlaufPanel)
+            panel.zeigen("Petra@SENZA", [_auftrag()])
+            blasen = await _blasen(panel, pilot)
+
+            assert "Petra@SENZA -> Sanctuary@RAINBOW" in blasen[1].klartext
 
 
 class MitMenue(NurVerlauf):

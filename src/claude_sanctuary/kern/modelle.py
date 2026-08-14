@@ -140,6 +140,13 @@ class Ereignis:
     nicht erkennbar, wer geantwortet hat.
     """
 
+    an_host: str = ""
+    """Rechner des Empfaengers, das Gegenstueck zu ``host``.
+
+    Aus demselben Grund noetig: ohne ihn steht in der Zeile zwar, WER etwas
+    geschickt hat, aber nicht, an WELCHEN von zwei gleichnamigen Agenten.
+    """
+
     @property
     def eigen(self) -> bool:
         """Wahr, wenn dieser Eintrag von uns stammt (rechte Blase)."""
@@ -150,6 +157,12 @@ class Ereignis:
         """Absender als ``Name@RECHNER``, oder nur der Name ohne Rechner."""
         name = self.von or "?"
         return f"{name}@{self.host.upper()}" if self.host else name
+
+    @property
+    def empfaenger(self) -> str:
+        """Empfaenger als ``Name@RECHNER``, oder nur der Name ohne Rechner."""
+        name = self.an or "?"
+        return f"{name}@{self.an_host.upper()}" if self.an_host else name
 
 
 OFFENE_ZUSTAENDE = frozenset({"submitted", "working", "input_required"})

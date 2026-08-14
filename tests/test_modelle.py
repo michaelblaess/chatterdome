@@ -11,6 +11,7 @@ from claude_sanctuary.kern.modelle import (
     Agent,
     Ampel,
     Bestand,
+    Ereignis,
     geteilte_namen,
 )
 
@@ -158,3 +159,25 @@ class TestGeteilteNamen:
 
     def test_leere_liste(self) -> None:
         assert geteilte_namen([]) == set()
+
+
+class TestAdressenEinesEreignisses:
+    """Beide Seiten als Name@RECHNER - und der Rueckfall fuer den Altbestand."""
+
+    def test_beide_seiten_mit_rechner(self) -> None:
+        e = Ereignis(
+            art="auftrag", ts="", von="Sanctuary", host="rainbow", an="Petra", an_host="senza"
+        )
+        assert e.absender == "Sanctuary@RAINBOW"
+        assert e.empfaenger == "Petra@SENZA"
+
+    def test_ohne_rechner_bleibt_der_blosse_name(self) -> None:
+        """Altbestand im Bus kennt an_host nicht - dann kein leeres "Petra@"."""
+        e = Ereignis(art="auftrag", ts="", von="Sanctuary", an="Petra")
+        assert e.absender == "Sanctuary"
+        assert e.empfaenger == "Petra"
+
+    def test_fehlende_namen_werden_markiert(self) -> None:
+        e = Ereignis(art="quittung", ts="")
+        assert e.absender == "?"
+        assert e.empfaenger == "?"
