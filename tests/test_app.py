@@ -776,3 +776,89 @@ class TestAuswahlBeiGleichemNamen:
                 "die Markierung ist auf den gleichnamigen Agenten des anderen "
                 "Rechners gesprungen"
             )
+
+
+class ZweimalDerselbeQuelle(FakeQuelle):
+    """Zweimal derselbe Name auf DEMSELBEN Rechner.
+
+    Der Zustand vom 16.08.2026 auf senza: ein Neustart hatte den alten Prozess
+    nicht beendet, zwei Prozesse lagen auf derselben Sitzungskennung - und
+    weil der Name an der Kennung haengt, trugen beide denselben. Die Tabelle
+    baut ihre Zeilenkennung aus Rechner und Name, und ``add_row`` wirft bei
+    einer doppelten ``DuplicateKey``.
+    """
+
+    def bestand(self, *, mesh: bool = False, tokens: bool = False) -> Bestand:
+        self.mit_tokens.append(tokens)
+        return Bestand(
+            rechner="RAINBOW",
+            zeit="2026-08-16T00:19:00.000Z",
+            agenten=[
+                Agent(name="Operator", status="idle", rechner="SENZA", session_id="sid-1"),
+                Agent(name="Operator", status="idle", rechner="SENZA", session_id="sid-1"),
+            ],
+        )
+
+
+class TestDoppelterAgentReisstNichtsMit:
+    async def test_beide_zeilen_stehen_da_und_die_app_lebt(self) -> None:
+        """Nicht entdoppeln: zwei Prozesse auf einer Sitzung soll man SEHEN.
+
+        Vor dem Fix starb die App an dieser Stelle - und zwar aus dem
+        Neuaufbau heraus, der im Sekundentakt laeuft. Der Absturzschirm fing
+        es ab, der naechste Durchlauf warf es erneut.
+        """
+        app = SanctuaryApp(quelle=ZweimalDerselbeQuelle())
+        app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
+        async with app.run_test(size=(160, 50)) as pilot:
+            daten = await _gefuellt(app, pilot)
+            assert daten.row_count == 2
+            assert app.is_running
+
+
+class NochLaufendQuelle(FakeQuelle):
+    """Der Stop kommt durch, der Prozess bleibt trotzdem stehen."""
+
+    def bestand(self, *, mesh: bool = False, tokens: bool = False) -> Bestand:
+        self.mit_tokens.append(tokens)
+        return Bestand(
+            rechner="TESTHOST",
+            zeit="2026-08-16T00:19:00.000Z",
+            agenten=[
+                Agent(name="Klara", status="idle", rechner="TESTHOST", session_id="sid-42")
+            ],
+        )
+
+
+class TestKeinZweitesFensterAufEinemGespraech:
+    """Warten statt raten - hier stand ein festes ``sleep(1.5)``.
+
+    Wer das Fenster oeffnet, waehrend der alte Prozess noch lebt, bekommt zwei
+    Sitzungen auf einem Transkript. Genau dieser Zustand lag am 16.08.2026 auf
+    senza vor, dort ueber den fernen Weg.
+    """
+
+    async def test_ohne_beendeten_prozess_kein_resume(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        gerufen: list[str] = []
+        monkeypatch.setattr(
+            starter_modul,
+            "starte_resume",
+            lambda sid, wd="", e=None: gerufen.append(sid) or "",  # type: ignore[func-returns-value]
+        )
+        monkeypatch.setattr(zeit_modul, "sleep", lambda _s: None)
+
+        quelle = NochLaufendQuelle()
+        app = SanctuaryApp(quelle=quelle)
+        app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
+        # Ohne die kurze Frist wartete der Test acht Sekunden auf sein Ergebnis.
+        monkeypatch.setattr(SanctuaryApp, "STERBEFRIST", 0.2)
+        async with app.run_test(size=(160, 50)) as pilot:
+            await _gefuellt(app, pilot)
+            app._neustart_ausfuehren("Klara", "sid-42", r"C:\Repos\test")
+            for _ in range(120):
+                await pilot.pause()
+
+            assert quelle.gestoppt == ["Klara"]
+            assert gerufen == [], "sonst laufen zwei Sitzungen auf einem Gespraech"

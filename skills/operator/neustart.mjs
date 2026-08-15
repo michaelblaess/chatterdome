@@ -7,8 +7,8 @@
 // Name - die Namenstabelle haengt an der Kennung, nicht am Fenster.
 //
 // DIE HUERDE IST DAS FENSTER, NICHT DAS BEENDEN. Beenden geht per ssh
-// problemlos. Ein Fenster dagegen braucht einen Desktop, und den hat eine
-// ssh-Sitzung nicht:
+// problemlos - es muss nur auch WIRKLICH GESCHEHEN, siehe beendeSitzung(). Ein
+// Fenster dagegen braucht einen Desktop, und den hat eine ssh-Sitzung nicht:
 //
 //   Windows: der Aufruf laeuft im sshd-Dienstkontext (Session 0) und kommt an
 //     keinen Desktop. Derselbe Ausweg wie bei shot.mjs - eine geplante
@@ -31,6 +31,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { ladeInstanzen } from './instanzen.mjs';
+import { istClaude, laeuft } from './prozess.mjs';
 import { xUmgebung } from './shot.mjs';
 
 const HIER = dirname(fileURLToPath(import.meta.url));
@@ -95,8 +96,88 @@ export function resumeBefehl(sessionId) {
   return `exec ${claude} --resume ${sessionId}`;
 }
 
+/** Wie lange nach dem SIGTERM auf das Verschwinden des Prozesses gewartet wird. */
+const STERBEFRIST_MS = 8000;
+
 /**
- * Oeffnet auf DIESEM Rechner ein Fenster mit der fortgesetzten Sitzung.
+ * Beendet alle laufenden Prozesse dieser Sitzung.
+ *
+ * DAS IST DAS "NEU" IM NEUSTART, und es fehlte bis zum 16.08.2026. Der ferne
+ * Weg oeffnete nur ein zweites Fenster mit --resume, ohne das erste zu
+ * beenden. Ergebnis auf senza: zwei lebende Prozesse (PID 1319787 und
+ * 3585570) auf DERSELBEN Sitzungskennung, beide im selben Transkript. Weil
+ * die Namenstabelle an der Kennung haengt, trugen beide denselben Namen -
+ * und die Tabelle der Oberflaeche stuerzte an der doppelten Zeilenkennung ab.
+ *
+ * Bewusst ueber ALLE Treffer statt ueber den ersten: genau dieser Zustand ist
+ * ja der, den es aufzuraeumen gilt.
+ *
+ * Die Werkzeuge sind einspritzbar, damit der Test nicht auf echte Prozesse
+ * angewiesen ist. Im Betrieb ruft niemand sie mit Argumenten auf.
+ *
+ * @param {string} sessionId Kennung der zu beendenden Sitzung.
+ * @returns {string} Leer bei Erfolg, sonst der Grund.
+ */
+export function beendeSitzung(sessionId, werkzeuge = {}) {
+  const {
+    // jeProzess: hier zaehlt jeder einzelne Prozess. Die Vorgabe faltet zwei
+    // Eintraege derselben Sitzung zusammen - dann bliebe genau der Prozess
+    // stehen, dessentwegen aufgeraeumt wird.
+    instanzen = () => ladeInstanzen({ jeProzess: true }),
+    lebt = laeuft,
+    claude = istClaude,
+    toete = (pid) => process.kill(pid, 'SIGTERM'),
+    warte = schlafe,
+    frist = STERBEFRIST_MS,
+    selbst = process.env.CLAUDE_CODE_SESSION_ID,
+  } = werkzeuge;
+
+  const treffer = instanzen().filter((i) => i.sessionId === sessionId);
+  if (!treffer.length) return '';
+
+  // Selbstmord wird nicht angeboten - dieselbe Regel wie in "operator stop".
+  // Ein --resume auf die eigene Sitzung waere ohnehin sinnlos.
+  if (selbst && sessionId === selbst) {
+    return 'Das ist diese Sitzung - sie kann sich nicht selbst neu starten.';
+  }
+
+  const pids = [];
+  for (const i of treffer) {
+    if (!lebt(i.pid)) continue;
+    // Fail-closed: wer nicht beweisen kann, dass die PID zu Claude gehoert,
+    // schickt kein Signal. Nach einem Ausstieg vergibt das Betriebssystem
+    // dieselbe Nummer schnell neu, unter Windows besonders.
+    if (!claude(i.pid)) {
+      return `PID ${i.pid} gehoert nicht mehr zu Claude - nichts beendet.`;
+    }
+    pids.push(Number(i.pid));
+  }
+  if (!pids.length) return '';
+
+  for (const pid of pids) {
+    try {
+      toete(pid);
+    } catch (fehler) {
+      // ESRCH heisst "gibt es nicht mehr" - genau das Ziel der Uebung.
+      if (fehler.code !== 'ESRCH') return `PID ${pid} liess sich nicht beenden: ${fehler.message}`;
+    }
+  }
+
+  // Warten statt raten: erst wenn der alte Prozess wirklich weg ist, gibt er
+  // das Transkript frei. Ein sofortiger Resume traefe auf eine belegte Sitzung.
+  const bis = Date.now() + frist;
+  for (;;) {
+    const zaeh = pids.filter((pid) => lebt(pid));
+    if (!zaeh.length) return '';
+    if (Date.now() >= bis) {
+      return `Beendet nicht: PID ${zaeh.join(', ')}. Kein zweites Fenster geoeffnet.`;
+    }
+    warte(200);
+  }
+}
+
+/**
+ * Beendet die Sitzung auf DIESEM Rechner und setzt sie in einem neuen Fenster fort.
  *
  * @param {string} sessionId Kennung der fortzusetzenden Sitzung.
  * @param {string} verzeichnis Arbeitsverzeichnis, darf leer sein.
@@ -104,6 +185,10 @@ export function resumeBefehl(sessionId) {
  */
 export function neustartHier(sessionId, verzeichnis = '') {
   if (!sessionId) return 'Keine Sitzungskennung - ohne sie gibt es nichts fortzusetzen.';
+  // Reihenfolge ist Pflicht: erst beenden, dann oeffnen. Andersherum laufen
+  // zwei Prozesse auf einem Transkript, und das merkt niemand sofort.
+  const fehler = beendeSitzung(sessionId);
+  if (fehler) return fehler;
   if (platform() === 'win32') return ueberAufgabe(sessionId, verzeichnis);
   return mitTerminal(sessionId, verzeichnis);
 }

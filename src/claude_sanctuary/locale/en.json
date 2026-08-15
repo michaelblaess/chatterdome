@@ -241,6 +241,7 @@
   "confirm.restart_text": "Stop {name} and resume the session right away? The conversation is kept, the Claude version is reloaded.",
   "log.restarted": "{name} restarted",
   "log.restart_failed": "{name} could not be restarted: {fehler}",
+  "restart.still_running": "{name} is still running after the stop - no second window opened, that would leave two sessions on one conversation.",
   "notify.no_session": "No session id known for this agent - there is nothing to resume.",
   "menu.restart": "Restart agent",
   "menu.update": "Update Claude on this machine",

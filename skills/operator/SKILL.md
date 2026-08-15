@@ -340,9 +340,10 @@ der Versionswechsel: eine laufende Sitzung hält ihre Claude-Version fest. Weil 
 Sitzungskennung dieselbe bleibt, kommt der Agent unter seinem alten Namen zurück - die
 Namenstabelle hängt an der Kennung, nicht am Fenster.
 
-**Die Hürde ist das Fenster, nicht das Beenden.** Beenden geht per ssh problemlos, ein Fenster
-braucht einen Desktop. Gelöst wie in `shot.mjs`, nicht mit tmux - das gibt es unter Windows
-nicht, und eine Sitzung darin wäre auf dem Bildschirm auch nicht mehr zu sehen:
+**Die Hürde ist das Fenster, nicht das Beenden** - was nicht heißt, dass das Beenden von allein
+geschieht, siehe den Vorfall unten. Beenden geht per ssh problemlos, ein Fenster braucht einen
+Desktop. Gelöst wie in `shot.mjs`, nicht mit tmux - das gibt es unter Windows nicht, und eine
+Sitzung darin wäre auf dem Bildschirm auch nicht mehr zu sehen:
 
 | System | Weg |
 |---|---|
@@ -359,6 +360,38 @@ PID 1295216  PPID 570364  TT pts/1  STAT Ssl+   claude --resume 46a5da5a-…
 `pts/1` und `Ssl+` heissen: echtes Terminal, Vordergrund, bedienbar. **Der Windows-Pfad ist
 noch ungetestet** - RAINBOW ist zugleich der Rechner mit der Oberfläche, ein Neustart über ssh
 dorthin wäre ein Test gegen sich selbst.
+
+### Der Neustart, der nichts beendete (16.08.2026)
+
+Michael startete den Operator auf senza über das Kontextmenü neu. Danach stürzte die
+Oberfläche ab - `DuplicateKey: SENZA/operator`, der Absturzschirm fing es ab, der nächste
+Neuaufbau warf es erneut, dann fiel die App in die Konsole. Der Absturz war aber nur die
+Anzeige des eigentlichen Schadens:
+
+```
+$ ssh senza 'ps -o pid,stat,etime,cmd -p 1319787 -p 3585570'
+    PID STAT     ELAPSED CMD
+1319787 Sl+   1-21:23:12 claude
+3585570 Ssl+       04:13 claude --resume 2501336f-c9fc-48ea-9728-23e9d48cc828
+```
+
+**Zwei lebende Prozesse auf einer Sitzungskennung, beide im selben Transkript.** Ursache:
+`neustart.mjs` öffnete nur ein Fenster mit `--resume`. Das Beenden lag beim Aufrufer, und der
+ferne Weg der Oberfläche hatte keinen - `sanctuary stop` kennt kein Ziel. Der Name heißt
+"restart", der Code machte "start".
+
+Drei Schichten sind seitdem eingezogen, jede fängt etwas anderes:
+
+| Schicht | Was sie tut |
+|---|---|
+| `beendeSitzung()` in `neustart.mjs` | Beendet **alle** Prozesse der Kennung, prüft je PID mit `istClaude()` gegen eine neu vergebene Nummer, wartet bis zu 8 s auf das Verschwinden. Stirbt einer nicht, geht **kein** Fenster auf. |
+| `jeSitzungEinmal()` in `instanzen.mjs` | Es gibt eine Datei je PID, aber der Name hängt an der Sitzung. Zwei Einträge auf einer Kennung fallen auf den jüngeren zusammen, damit Namensvergabe und Bus nicht zwei Prozesse unter einer Adresse führen. `ladeInstanzen({ jeProzess: true })` liefert die rohe Liste - nur zum Aufräumen, denn wer beenden will, muss alle sehen. |
+| `eindeutig()` in `agenten_tabelle.py` | Hängt bei einer doppelten Zeilenkennung einen Zähler an, statt `add_row` werfen zu lassen. Bewusst kein Entdoppeln: zwei Prozesse auf einer Sitzung sind ein echter Zustand, und den soll man sehen. |
+
+Die Oberfläche wartet beim lokalen Weg jetzt ebenfalls, bis die Sitzung aus der Liste ist
+(`SanctuaryApp.STERBEFRIST`, 8 s). Dort stand ein festes `sleep(1.5)`, also dasselbe Loch,
+nur schmaler. Gefragt wird die Quelle, **nicht** `os.kill(pid, 0)` - das ist unter Windows
+keine Existenzprüfung, sondern beendet den Prozess mit Exit-Code 0.
 
 ### Vier Fallen, alle beim Bauen aufgetreten
 

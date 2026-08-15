@@ -62,6 +62,32 @@ function ausSessionsVerzeichnis() {
   return liste;
 }
 
+/**
+ * Haelt je Sitzungskennung nur den juengsten Eintrag.
+ *
+ * Es gibt eine Datei je PID, aber der Name haengt an der SITZUNG - zwei
+ * Eintraege mit derselben Kennung erscheinen also zwangslaeufig unter einem
+ * Namen, und der ist als Adresse dann nicht mehr eindeutig. Belegt am
+ * 16.08.2026 auf senza: nach einem Neustart, der den alten Prozess nicht
+ * beendet hatte, lagen PID 1319787 und 3585570 auf Sitzung 2501336f vor.
+ *
+ * Der juengste gewinnt, weil ein Resume den fortgesetzten Prozess ist - der
+ * aeltere Eintrag ist entweder eine Leiche mit neu vergebener PID oder der
+ * Vorgaenger, der gerade aussteigt.
+ *
+ * Das ist ein Netz, kein Fix. Die Ursache gehoert in neustart.mjs behoben,
+ * hier wird nur verhindert, dass sie sich in Namensvergabe und Oberflaeche
+ * fortpflanzt.
+ */
+export function jeSitzungEinmal(liste) {
+  const beste = new Map();
+  for (const e of liste) {
+    const da = beste.get(e.sessionId);
+    if (!da || Number(e.startedAt || 0) > Number(da.startedAt || 0)) beste.set(e.sessionId, e);
+  }
+  return [...beste.values()];
+}
+
 /** Der bisherige Weg ueber das CLI. Bleibt als Rueckfall. */
 function ueberCli({ timeout }) {
   // CLAUDE_CODE_EXECPATH zeigt auf die echte Binaerdatei und ist der
@@ -98,9 +124,14 @@ function ueberCli({ timeout }) {
  * @param {number} timeout
  * Wartezeit in Millisekunden fuer den CLI-Rueckfall. Der Hook nimmt einen
  * kleineren Wert als das CLI, weil er den Sitzungsstart nicht aufhalten darf.
+ * @param {boolean} jeProzess
+ * Jeden Prozess einzeln liefern, auch wenn zwei auf derselben Sitzung liegen.
+ * Nur fuer das Aufraeumen gedacht - wer beenden will, muss alle sehen. Fuer
+ * jede Anzeige und jede Namensvergabe gilt die Vorgabe, siehe jeSitzungEinmal.
  */
-export function ladeInstanzen({ timeout = 20000 } = {}) {
-  if (process.env.OPERATOR_INSTANZEN_VIA_CLI) return ueberCli({ timeout });
-  const direkt = ausSessionsVerzeichnis();
-  return null === direkt ? ueberCli({ timeout }) : direkt;
+export function ladeInstanzen({ timeout = 20000, jeProzess = false } = {}) {
+  const roh = process.env.OPERATOR_INSTANZEN_VIA_CLI
+    ? ueberCli({ timeout })
+    : (ausSessionsVerzeichnis() ?? ueberCli({ timeout }));
+  return jeProzess ? roh : jeSitzungEinmal(roh);
 }

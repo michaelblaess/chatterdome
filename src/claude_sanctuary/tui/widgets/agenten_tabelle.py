@@ -102,6 +102,32 @@ def _aufgabe(text: str, breite: int = AUFGABEN_BREITE) -> str:
     return einzeilig[: breite - 3].rstrip() + "..."
 
 
+def eindeutig(schluessel: str, vergeben: set[str]) -> str:
+    """Haengt einen Zaehler an, solange die Kennung schon vergeben ist.
+
+    Die Zeilenkennung MUSS eindeutig sein - ``DataTable.add_row`` wirft sonst
+    ``DuplicateKey``, und zwar aus dem Neuaufbau heraus, der im Sekundentakt
+    laeuft. Genau so ist die Oberflaeche am 16.08.2026 gestorben: auf senza
+    liefen nach einem misslungenen Neustart zwei Prozesse unter derselben
+    Sitzungskennung, damit unter demselben Namen, und ``SENZA/operator`` kam
+    zweimal. Der Absturzschirm fing es ab, der naechste Durchlauf warf es
+    erneut - eine Schleife, aus der die App nicht mehr herausfand.
+
+    Bewusst wird NICHT entdoppelt: zwei Prozesse auf einer Sitzung sind ein
+    echter Zustand, und den soll man sehen. Die Ursache gehoert in
+    neustart.mjs behoben, nicht in der Anzeige versteckt. Die Kennung selbst
+    bleibt fuer den ersten Treffer unveraendert, damit das Wiederfinden der
+    Markierung ueber ``kennung()`` weiter greift.
+    """
+    kandidat = schluessel
+    nummer = 2
+    while kandidat in vergeben:
+        kandidat = f"{schluessel}#{nummer}"
+        nummer += 1
+    vergeben.add(kandidat)
+    return kandidat
+
+
 class AgentenDaten(DataTable[Any]):
     """DataTable, die Doppel- und Rechtsklick als eigene Nachricht meldet.
 
@@ -323,8 +349,9 @@ class AgentenTabelle(Vertical):
 
         tabelle.clear()
         hinweise: dict[tuple[int, int], str] = {}
+        vergeben: set[str] = set()
         for zeile, a in enumerate(sichtbar):
-            tabelle.add_row(*self._zeile(a), key=kennung(a))
+            tabelle.add_row(*self._zeile(a), key=eindeutig(kennung(a), vergeben))
             # Nur wo wirklich gekuerzt wurde - sonst haengt an jeder Zelle ein
             # Hinweis, der dasselbe sagt wie die Zelle selbst.
             if a.cwd and len(a.cwd) > ORDNER_BREITE:

@@ -241,6 +241,7 @@
   "confirm.restart_text": "{name} beenden und die Sitzung sofort fortsetzen? Das Gespräch bleibt erhalten, die Claude-Version wird neu geladen.",
   "log.restarted": "{name} neu gestartet",
   "log.restart_failed": "{name} konnte nicht neu gestartet werden: {fehler}",
+  "restart.still_running": "{name} läuft nach dem Beenden weiter - kein zweites Fenster geöffnet, sonst gäbe es zwei Sitzungen auf demselben Gespräch.",
   "notify.no_session": "Für diesen Agenten ist keine Sitzungskennung bekannt - ohne sie lässt sich nichts fortsetzen.",
   "menu.restart": "Agent neu starten",
   "menu.update": "Claude auf diesem Rechner aktualisieren",

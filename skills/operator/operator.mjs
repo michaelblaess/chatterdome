@@ -26,6 +26,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
 import { ladePool, aktivesMotiv, alleMotive, setzeMotiv } from './pool.mjs';
 import { ladeInstanzen } from './instanzen.mjs';
+import { prozessName } from './prozess.mjs';
 import { aufgabeAusInhalt } from './aufgabe.mjs';
 // Nur zum Anzeigen wartender Post. bus.mjs fuehrt beim Import nichts aus.
 import { offeneNachrichten } from '../claude-bus/bus.mjs';
@@ -535,39 +536,6 @@ async function stoppe(suchName, { ohneRueckfrage = false } = {}) {
   } catch (e) {
     console.log(`  ${ROT}Konnte nicht beenden: ${e.message}${R}\n`);
     process.exitCode = 1;
-  }
-}
-
-/**
- * Ermittelt den Namen des Programms hinter einer PID.
- *
- * Bewusst fail-closed gebaut: laesst sich der Name nicht feststellen, kommt
- * eine leere Zeichenkette zurueck und der Aufrufer bricht ab. Ein
- * verweigerter Stop ist aergerlich, ein Signal an den falschen Prozess ist
- * teuer.
- *
- * @param {number|string} pid  Prozesskennung.
- * @returns {string}  Kleingeschriebener Programmname, leer wenn unbekannt.
- */
-function prozessName(pid) {
-  const nummer = Number(pid);
-  if (!Number.isInteger(nummer) || nummer <= 0) return '';
-  try {
-    if (platform() === 'win32') {
-      const aus = execFileSync('tasklist', ['/FI', `PID eq ${nummer}`, '/FO', 'CSV', '/NH'],
-        { encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] });
-      // Ohne Treffer meldet tasklist einen Hinweistext statt einer CSV-Zeile.
-      const treffer = aus.match(/^"([^"]+)"/m);
-      return treffer ? treffer[1].toLowerCase() : '';
-    }
-    // Die volle Kommandozeile, nicht "comm": Claude Code laeuft auf Linux als
-    // Node-Programm, der blosse Prozessname waere dort "node". Im Argument
-    // steht dagegen der Pfad zum claude-Skript.
-    const aus = execFileSync('ps', ['-p', String(nummer), '-o', 'args='],
-      { encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] });
-    return aus.trim().toLowerCase();
-  } catch {
-    return '';
   }
 }
 

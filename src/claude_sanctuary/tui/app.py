@@ -925,8 +925,9 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
             self.notify(t("notify.select_agent"), severity="warning")
             return
         # Seit dem 14.08.2026 geht der Neustart auch ueber Rechnergrenzen: das
-        # CLI des Zielrechners oeffnet das Fenster dort. Beenden bleibt lokal,
-        # "sanctuary stop" kennt kein Ziel.
+        # CLI des Zielrechners beendet die Sitzung und oeffnet das Fenster
+        # dort. Von hier aus ginge beides nicht - "sanctuary stop" kennt kein
+        # Ziel, und ein Fenster braucht den Desktop des anderen Rechners.
         if not agent.session_id:
             self.notify(t("notify.no_session"), severity="warning")
             return
@@ -963,12 +964,39 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         if fehler:
             self.call_from_thread(self._neustart_fertig, name, fehler)
             return
-        # Kurz warten: das Terminal des alten Prozesses gibt die Datei erst
-        # frei, wenn er wirklich weg ist. Ein sofortiger Resume traefe auf
-        # eine noch belegte Sitzung.
-        time.sleep(1.5)
+        if not self._sitzung_verschwunden(session_id):
+            self.call_from_thread(
+                self._neustart_fertig, name, t("restart.still_running", name=name)
+            )
+            return
         fehler = starte_resume(session_id, cwd, self._einstellungen.laden())
         self.call_from_thread(self._neustart_fertig, name, fehler)
+
+    STERBEFRIST = 8.0
+    """Wie lange nach dem Stop auf das Verschwinden der Sitzung gewartet wird."""
+
+    def _sitzung_verschwunden(self, session_id: str) -> bool:
+        """Wartet, bis die Sitzung wirklich aus der Liste ist.
+
+        Hier stand ein festes ``time.sleep(1.5)``, und das war geraten. Wer
+        das Fenster oeffnet, waehrend der alte Prozess noch lebt, bekommt ZWEI
+        Prozesse auf einem Transkript - beide unter derselben Sitzungskennung
+        und damit unter demselben Namen. Am 16.08.2026 auf senza genau so
+        passiert (PID 1319787 und 3585570), dort ueber den fernen Weg, der
+        gar nicht beendete. Der lokale Weg hatte dasselbe Loch, nur schmaler.
+
+        Gefragt wird die Quelle, nicht das Betriebssystem: ``os.kill(pid, 0)``
+        ist unter Windows KEINE Existenzpruefung, sondern beendet den Prozess
+        mit Exit-Code 0.
+        """
+        ende = time.monotonic() + self.STERBEFRIST
+        while True:
+            agenten = self._quelle.bestand().agenten
+            if not any(a.session_id == session_id for a in agenten):
+                return True
+            if time.monotonic() >= ende:
+                return False
+            time.sleep(0.25)
 
     def _neustart_fertig(self, name: str, fehler: str) -> None:
         if fehler:
