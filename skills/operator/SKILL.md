@@ -390,8 +390,18 @@ Drei Schichten sind seitdem eingezogen, jede fängt etwas anderes:
 
 Die Oberfläche wartet beim lokalen Weg jetzt ebenfalls, bis die Sitzung aus der Liste ist
 (`SanctuaryApp.STERBEFRIST`, 8 s). Dort stand ein festes `sleep(1.5)`, also dasselbe Loch,
-nur schmaler. Gefragt wird die Quelle, **nicht** `os.kill(pid, 0)` - das ist unter Windows
-keine Existenzprüfung, sondern beendet den Prozess mit Exit-Code 0.
+nur schmaler. Gefragt wird die Quelle, **nicht** die PID: eine Nummer kann nach dem Ausstieg
+längst neu vergeben sein, und über Rechnergrenzen hat die Oberfläche ohnehin keinen Zugriff
+darauf. Wahr ist, was die Instanzliste sagt.
+
+Am Rande beim Bauen widerlegt, weil ich es zuerst als Grund in den Code geschrieben hatte:
+**`os.kill(pid, 0)` beendet unter Windows keinen Prozess.** Die Warnung ist verbreitet, für
+Python 3.13.6 auf Windows 11 stimmt sie nicht - der Zielprozess lief nach dem Aufruf weitere
+drei Sekunden lang weiter, `poll()` blieb `None`. Eine brauchbare Existenzprüfung ist der
+Aufruf trotzdem nicht: für eine freie Nummer kommt `OSError [WinError 87] Falscher Parameter`
+statt `ProcessLookupError`, und für einen fremden Systemprozess (PID 4)
+`PermissionError [WinError 5]` - wer nur auf `ProcessLookupError` prüft, hält beides für
+"lebt".
 
 ### Vier Fallen, alle beim Bauen aufgetreten
 

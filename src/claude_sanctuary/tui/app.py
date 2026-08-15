@@ -985,9 +985,10 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         passiert (PID 1319787 und 3585570), dort ueber den fernen Weg, der
         gar nicht beendete. Der lokale Weg hatte dasselbe Loch, nur schmaler.
 
-        Gefragt wird die Quelle, nicht das Betriebssystem: ``os.kill(pid, 0)``
-        ist unter Windows KEINE Existenzpruefung, sondern beendet den Prozess
-        mit Exit-Code 0.
+        Gefragt wird die Quelle, nicht die PID. Eine Nummer kann nach dem
+        Ausstieg laengst neu vergeben sein, und ueber Rechnergrenzen hat die
+        Oberflaeche ohnehin keinen Zugriff darauf. Wahr ist, was die
+        Instanzliste sagt: solange die Sitzung dort steht, wird sie gefuehrt.
         """
         ende = time.monotonic() + self.STERBEFRIST
         while True:
