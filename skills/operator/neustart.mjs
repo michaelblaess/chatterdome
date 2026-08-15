@@ -33,6 +33,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { ladeInstanzen } from './instanzen.mjs';
 import { istClaude, laeuft } from './prozess.mjs';
 import { xUmgebung } from './shot.mjs';
+import { fortsetzbar } from './transkript.mjs';
 
 const HIER = dirname(fileURLToPath(import.meta.url));
 const AUFGABE = 'ClaudeSanctuaryNeustart';
@@ -185,6 +186,16 @@ export function beendeSitzung(sessionId, werkzeuge = {}) {
  */
 export function neustartHier(sessionId, verzeichnis = '') {
   if (!sessionId) return 'Keine Sitzungskennung - ohne sie gibt es nichts fortzusetzen.';
+  // Eine Sitzung ohne Transkript hat noch kein Wort gewechselt, und
+  // "claude --resume" bricht dann mit "No conversation found with session ID"
+  // ab - aber erst, NACHDEM das Fenster aufgegangen ist. Am 16.08.2026 auf
+  // senza so erlebt: ein Fenster im Heimatverzeichnis, davor der
+  // Vertrauensdialog, und dahinter wartete nur eine Fehlermeldung. Lieber
+  // vorher absagen als ein Fenster oeffnen, das nichts fortsetzen kann.
+  if (!fortsetzbar(sessionId)) {
+    return 'Zu dieser Sitzung gibt es kein Gespraech - eine leere Sitzung laesst sich nicht '
+      + 'fortsetzen. Statt eines Neustarts hilft hier ein frisches Fenster.';
+  }
   // Reihenfolge ist Pflicht: erst beenden, dann oeffnen. Andersherum laufen
   // zwei Prozesse auf einem Transkript, und das merkt niemand sofort.
   const fehler = beendeSitzung(sessionId);

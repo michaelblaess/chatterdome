@@ -27,6 +27,7 @@ import { dirname } from 'node:path';
 import { ladePool, aktivesMotiv, alleMotive, setzeMotiv } from './pool.mjs';
 import { ladeInstanzen } from './instanzen.mjs';
 import { prozessName } from './prozess.mjs';
+import { findeTranskript } from './transkript.mjs';
 import { aufgabeAusInhalt } from './aufgabe.mjs';
 // Nur zum Anzeigen wartender Post. bus.mjs fuehrt beim Import nichts aus.
 import { offeneNachrichten } from '../claude-bus/bus.mjs';
@@ -88,19 +89,8 @@ function vergibName(tabelle, sessionId) {
 // ladeInstanzen kommt aus instanzen.mjs - dieselbe Quelle nutzt der
 // SessionStart-Hook, wenn ihm die Namen ausgehen.
 
-function findeTranskript(sessionId) {
-  const wurzel = join(homedir(), '.claude', 'projects');
-  if (!existsSync(wurzel)) return null;
-  for (const projekt of readdirSync(wurzel)) {
-    const dir = join(wurzel, projekt);
-    try {
-      if (!statSync(dir).isDirectory()) continue;
-      const treffer = join(dir, `${sessionId}.jsonl`);
-      if (existsSync(treffer)) return treffer;
-    } catch { /* unlesbares Verzeichnis ueberspringen */ }
-  }
-  return null;
-}
+// findeTranskript kommt aus transkript.mjs - dieselbe Suche braucht der
+// Neustart, um vorher zu wissen, ob es ueberhaupt etwas fortzusetzen gibt.
 
 /**
  * Liest die letzten Zeilen einer Datei, ohne sie komplett zu laden. Wichtig,

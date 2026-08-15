@@ -57,6 +57,14 @@ describe('Weigerungen', () => {
     assert.match(grund, /Sitzungskennung/);
   });
 
+  test('eine Sitzung ohne Gespraech oeffnet kein Fenster', () => {
+    // Am 16.08.2026 auf senza: das Fenster ging auf, davor der
+    // Vertrauensdialog, und dahinter wartete nur "No conversation found with
+    // session ID". Eine leere Sitzung hat nichts fortzusetzen.
+    const grund = neustartHier('00000000-0000-0000-0000-000000000000');
+    assert.match(grund, /kein Gespraech/);
+  });
+
   test('die Weigerung kommt als Text, nicht als Ausnahme', () => {
     // Der Aufrufer sitzt womoeglich am anderen Ende einer ssh-Leitung. Eine
     // Ausnahme dort ist ein Stacktrace, ein Satz ist eine Antwort.

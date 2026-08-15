@@ -403,6 +403,34 @@ statt `ProcessLookupError`, und für einen fremden Systemprozess (PID 4)
 `PermissionError [WinError 5]` - wer nur auf `ProcessLookupError` prüft, hält beides für
 "lebt".
 
+### Eine leere Sitzung lässt sich nicht fortsetzen
+
+Direkt danach am selben Abend: auf senza ging das Fenster auf, zeigte aber den
+Vertrauensdialog für `/home/michael`, und dahinter wartete nur eine Fehlermeldung. Zwei
+Ursachen, beide belegt:
+
+- **Der Ordner war nicht als vertraut hinterlegt.** In `~/.claude.json` stand für
+  `/home/michael` ein `hasTrustDialogAccepted: false`, für `~/repos/claude-sanctuary`
+  dagegen `true`. Das Fenster ging im richtigen Verzeichnis auf - `/proc/<pid>/cwd` zeigte
+  `/home/michael`, genau das cwd der Sitzung. Der Dialog ist also kein Fehler der Kette,
+  sondern eine Sicherheitsabfrage von Claude Code.
+- **Die Sitzung hatte kein Transkript.** Eine frisch geöffnete Sitzung, die noch kein Wort
+  gewechselt hat, hat keine `.jsonl` unter `~/.claude/projects/`. `--resume` bricht dann ab:
+
+  ```
+  $ claude --resume 00000000-0000-0000-0000-000000000000 -p hallo
+  No conversation found with session ID: 00000000-0000-0000-0000-000000000000
+  ```
+
+  Und zwar **nachdem** das Fenster aufgegangen ist. Seitdem prüft `neustartHier()` über
+  `fortsetzbar()` aus `transkript.mjs` vorher und sagt ab, statt ein Fenster zu öffnen, das
+  nichts fortsetzen kann.
+
+Merke fürs Ganze: **`claude --resume` ist projektgebunden.** Die Sitzung wird im
+Arbeitsverzeichnis gesucht, das Transkript liegt unter dem Pfad-Slug des cwd. Ein Fenster im
+falschen Verzeichnis findet die Sitzung nicht, auch wenn die Kennung stimmt - das cwd
+mitzugeben ist also Pflicht, kein Komfort.
+
 ### Vier Fallen, alle beim Bauen aufgetreten
 
 - **Ohne `detached: true` plus `unref()` stirbt das Fenster mit der ssh-Sitzung**, aus der es
