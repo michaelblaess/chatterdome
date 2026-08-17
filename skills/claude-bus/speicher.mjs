@@ -251,6 +251,34 @@ export function offeneAelterAls(db, isoZeit) {
   ).all(...OFFEN, isoZeit);
 }
 
+/**
+ * Auftraege eines Absenders an ein Ziel, ab einem Zeitpunkt.
+ *
+ * Futter fuer die Schleifenbremse (siehe bremse.mjs). Gefragt wird nach der
+ * SITZUNG des Absenders und dem NAMEN des Ziels: die Sitzung ist eindeutig,
+ * der Zielname dagegen genau die Ebene, auf der eine Schleife entsteht - ob
+ * der Auftrag an eine Person oder an eine Rolle ging, aendert daran nichts.
+ *
+ * Ueber die Sitzung, wo es eine gibt, sonst ueber den Namen: die Oberflaeche
+ * sendet als "Sanctuary" ohne eigene Claude-Sitzung, und gerade sie kann
+ * Rundrufe in Serie ausloesen. Ohne den Rueckfall bliebe der haeufigste
+ * Serientaeter ungebremst.
+ *
+ * @param {object} db
+ * @param {{session?: string, name?: string}} absender
+ * @param {string} an Zielname, verglichen ohne Ruecksicht auf Gross-/Kleinschreibung.
+ * @param {string} seitIso Frueheste beruecksichtigte Zeit, ISO.
+ */
+export function auftraegeVonAn(db, absender, an, seitIso) {
+  const { session, name } = absender || {};
+  if (!an || (!session && !name)) return [];
+  const spalte = session ? 'von_session = ?' : 'lower(von) = lower(?)';
+  return db.prepare(
+    `SELECT ts, text FROM ereignis WHERE art = ? AND ${spalte} AND lower(an) = lower(?) `
+    + 'AND ts >= ? ORDER BY ts',
+  ).all('auftrag', session || name, an, seitIso);
+}
+
 /** Offene Auftraege, die an eine bestimmte Sitzung gebunden sind. */
 export function offeneAnSession(db, sessionId) {
   if (!sessionId) return [];

@@ -22,8 +22,11 @@
 import { readFileSync, writeFileSync, appendFileSync, existsSync, mkdirSync, statSync, lstatSync, realpathSync } from 'node:fs';
 import {
   oeffne, schreibe, ereignisseAb, cursorLesen, cursorSetzen, letzteId,
-  auftraege, auftrag, quittungenZu, zahlen, zustandAusCode, importiereJsonl, OFFEN,
+  auftraege, auftrag, auftraegeVonAn, quittungenZu, zahlen, zustandAusCode,
+  importiereJsonl, OFFEN,
 } from './speicher.mjs';
+import { GRENZEN, lageAus, pruefeEingang, pruefeGroesse } from './bremse.mjs';
+import { GRENZMARKE, zustelltext } from './zustelltext.mjs';
 import { verfallen, fehlgeleitete, VERFALLEN, EMPFAENGER_WEG } from './pacht.mjs';
 import { einstellung, alleEinstellungen, setzeEinstellung, einstellungsDatei } from './einstellungen.mjs';
 import { sofortZustellen, sockelFaehig } from './socket.mjs';
@@ -510,6 +513,16 @@ async function cmdUebernehmen() {
     process.exit(1);
   }
 
+  // Die Groesse auch hier, obwohl der Absender sie schon geprueft hat: dieser
+  // Aufruf kommt von einem anderen Rechner, und dessen Bus kann aelter sein.
+  // Wiederholung und Takt bleiben dagegen Sache des Absenders - er allein hat
+  // den vollstaendigen Verlauf dessen, was er verschickt hat.
+  const zuGross = ereignis.art === 'auftrag' ? pruefeGroesse(ereignis.text) : '';
+  if (zuGross) {
+    console.log(JSON.stringify({ ok: false, auftrag_id: ereignis.auftrag_id, fehler: zuGross }));
+    process.exit(1);
+  }
+
   // Doppelt zugestellt wird nichts abgelegt. Ohne die Pruefung erzeugte jede
   // Wiederholung ein zweites Ereignis zur selben Auftrags-ID.
   const d = db();
@@ -560,7 +573,10 @@ async function cmdUebernehmen() {
     const { zugestellt } = await sofortZustellen({
       datenDir: hostDir(),
       sessionId: ereignis.an_session,
-      text: ereignis.text,
+      // Nicht der blosse Text: ueber den Socket kommt er als {type:'user'} an,
+      // die Empfaengerin saehe ihn also wie eine Eingabe von Michael. Siehe
+      // zustelltext.mjs.
+      text: zustelltext(ereignis),
       modus: einstellung('zustellung'),
     });
     sofort = zugestellt;
@@ -568,6 +584,28 @@ async function cmdUebernehmen() {
   console.log(JSON.stringify({
     ok: true, auftrag_id: ereignis.auftrag_id, host: rechner(), ...(sofort !== null && { sofort }),
   }));
+}
+
+/**
+ * Fragt die Schleifenbremse, ob dieser Auftrag abgelegt werden darf.
+ *
+ * Traegt die Zahlen zusammen und ueberlaesst das Urteil bremse.mjs - dort ist
+ * es eine reine Funktion und ohne Datenbank pruefbar.
+ *
+ * Der Rueckstau wird nur beim lokalen Ziel gezaehlt: wie viel beim Empfaenger
+ * offen liegt, steht in DESSEN Datenbank. Fuer ein fernes Ziel bleibt es bei
+ * Groesse, Wiederholung und Takt - die drei fangen die Schleife, der Rueckstau
+ * faengt nur den Rest.
+ *
+ * @returns {string} Leer, wenn gesendet werden darf, sonst der Grund.
+ */
+function pruefeSendung(d, absender, an, text, lokal) {
+  const jetzt = Date.now();
+  const seit = new Date(jetzt - GRENZEN.taktMs).toISOString();
+  const lage = lageAus(auftraegeVonAn(d, absender, an, seit), jetzt);
+  const offen = lokal ? auftraege(d, { zustand: 'submitted', an }).length : 0;
+  const urteil = pruefeEingang({ ...lage, text, offen, jetztMs: jetzt });
+  return urteil.ok ? '' : urteil.grund;
 }
 
 async function cmdSend(argv) {
@@ -668,6 +706,19 @@ async function cmdSend(argv) {
     quittung_erwartet: nachricht.quittung, cwd: nachricht.cwd,
   };
 
+  // Die Bremse steht VOR dem Ablegen, und zwar hier beim Absender: eine
+  // Schleife entsteht durch Senden, nicht durch Empfangen. Der Absender legt
+  // ohnehin immer auch lokal ab (siehe gleich darunter), sein eigener Bestand
+  // ist also die vollstaendige Grundlage - auch fuer ein Ziel auf einem
+  // anderen Rechner.
+  const abgewiesen = pruefeSendung(db(), {
+    session: selbstId(), name: vonName,
+  }, to, text, lokal);
+  if (abgewiesen) {
+    console.error(`${ROT}Nicht gesendet: ${abgewiesen}${R}`);
+    process.exit(1);
+  }
+
   // Immer auch lokal ablegen, selbst wenn der Empfaenger woanders sitzt: nur
   // so sieht der Absender seinen eigenen Verlauf und spaeter die Quittung.
   // Zugestellt wird die Kopie hier NICHT - dafuer sorgt host = Zielrechner.
@@ -691,7 +742,7 @@ async function cmdSend(argv) {
   // hat zustellenAn() den Auftrag schon dorthin gebracht, und der dortige
   // "receive" versucht den Socket seinerseits - dort kennt er ihn auch, hier
   // nicht.
-  if (lokal) await meldeSofort(zielSession, text);
+  if (lokal) await meldeSofort(zielSession, ereignis);
 
   const frist = einstellung('verfall_stunden');
   console.log(zielSession
@@ -746,12 +797,14 @@ function _zielRechnerErmitteln(name) {
  * @param {string} text
  * Der Auftragstext.
  */
-async function meldeSofort(zielSession, text) {
+async function meldeSofort(zielSession, ereignis) {
   const modus = einstellung('zustellung');
   if (modus === 'stop-hook') return;
 
   const { zugestellt, grund } = await sofortZustellen({
-    datenDir: hostDir(), sessionId: zielSession, text, modus,
+    // Derselbe aufbereitete Text wie beim fernen Weg - eine Quelle, sonst
+    // liest dieselbe Nachricht sich verschieden, je nachdem woher sie kam.
+    datenDir: hostDir(), sessionId: zielSession, text: zustelltext(ereignis), modus,
   });
 
   if (zugestellt) {
@@ -793,6 +846,10 @@ function cmdRead(argv) {
     }
     console.log('');
   }
+  // Einmal je Abruf, nicht je Nachricht: Absender und ID stehen oben schon an
+  // jeder Zeile, die Grenze gilt fuer alle gleichermassen - und sie mehrfach
+  // zu wiederholen kostet Kontext ohne etwas hinzuzufuegen.
+  console.log(`${GRAU}${GRENZMARKE}${R}\n`);
 }
 
 function cmdAck(argv) {
