@@ -248,6 +248,7 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
     def on_mount(self) -> None:
         self._binding_texte()
         self._schreibe_log(t("log.started", version=__version__))
+        self._theme_melden()
         self.set_interval(self._takt, self._takt_abfrage)
         self.aktualisieren()
         self.namen_laden()
@@ -1081,6 +1082,23 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         with contextlib.suppress(Exception):
             if self._einstellungen.laden().get("theme") != theme_name:
                 self._einstellungen.speichern({"theme": theme_name})
+        self._theme_melden()
+
+    def _theme_melden(self) -> None:
+        """Schreibt das aktive Theme ins Protokoll.
+
+        Textual zeigt nirgends an, welches Theme gerade laeuft - nach einem
+        Neustart weiss man also nicht, was man vor sich hat. Der technische
+        Name steht mit dabei, weil genau der in den Einstellungen und in der
+        Befehlspalette auftaucht.
+        """
+        with contextlib.suppress(Exception):
+            from textual_themes import THEME_DISPLAY_NAMES
+
+            name = self.theme or ""
+            anzeige = THEME_DISPLAY_NAMES.get(name, name)
+            beschriftung = f"{anzeige} ({name})" if anzeige != name else name
+            self._schreibe_log(t("log.theme_aktiv", name=beschriftung))
 
     def action_show_about(self) -> None:
         self.push_screen(

@@ -80,6 +80,7 @@
   "state.cancelled": "cancelled",
   "state.expired": "expired",
   "log.started": "Sanctuary v{version} started",
+  "log.theme_aktiv": "Theme: {name}",
   "log.refreshed": "{anzahl} agents on {rechner}",
   "log.refresh_failed": "Query failed: {fehler}",
   "log.unreachable": "Unreachable: {host}",
