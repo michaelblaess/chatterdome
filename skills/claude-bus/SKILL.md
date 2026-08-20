@@ -393,9 +393,10 @@ den von aussen geschrieben werden darf. Der Bus nutzt das: ein Auftrag landet so
 Zielsitzung, auch wenn sie nur wartet. Damit fällt die Wartezeit auf den nächsten Stop-Hook
 weg - die Bringschuld des Empfängers wird zum echten Push.
 
-**Auf nativem Windows gibt es das nicht.** Anthropic bietet das Feature dort nicht an (Stand
-09.08.2026), also bleibt es auf RAINBOW und DELL beim Stop-Hook. Die Einstellung erkennt das
-selbst und meldet es, statt es zu verschleiern.
+**Auf nativem Windows gibt es das nicht.** Anthropic bietet das Feature dort nicht an -
+**nachgeprüft am 20.08.2026 mit 2.1.238**, der zu dem Zeitpunkt aktuellen Version. Es bleibt
+auf RAINBOW und DELL beim Stop-Hook. Die Einstellung erkennt das selbst und meldet es, statt
+es zu verschleiern. Das Prüfrezept steht weiter unten unter "Ob Windows dazugekommen ist".
 
 ### Einstellung `zustellung`
 
@@ -492,8 +493,97 @@ or other Claude sessions", denn er listet auch Subagenten. Belastbar sind:
 ss -xlp | grep cc-socks
 ```
 
-**Retest geplant für Ende August 2026:** ob Anthropic den `/list-agents`-Test brauchbar macht
-und ob natives Windows dazukommt. Bis dahin bleibt es bei den beiden Prüfungen oben.
+### Ob Windows dazugekommen ist: das Prüfrezept
+
+Der für Ende August geplante Retest ist am **20.08.2026 gelaufen, mit 2.1.238** - der zu dem
+Zeitpunkt aktuellen Version, und zwar auf einem RAINBOW, auf dem 18 claude-Prozesse liefen.
+**Ergebnis negativ auf allen vier Wegen:**
+
+| Prüfung | Ergebnis |
+|---|---|
+| `CLAUDE_CODE_MESSAGING_SOCKET` in der Sitzungsumgebung | nicht gesetzt |
+| Named Pipes, 947 Stück | kein Treffer auf `claude`, `cc-sock`, `anthropic`, `messaging` |
+| AF_UNIX-Dateien (`cc-socks` in `%TEMP%`, `~/.claude`, `/tmp`) | keine Ablage vorhanden |
+| lauschende TCP-Ports der claude-Prozesse | keiner lauscht |
+
+**Die Sperre ist aber nicht mehr dieselbe.** In 2.1.228 stand dort eine harte Zeile
+(`if (Kt()==="windows") return false`, vor jedem Flag). In **2.1.233** sieht die Gate-Funktion
+so aus, wortwoertlich aus dem Binary geholt:
+
+```js
+function jh(){
+  if (V.CLAUDE_CODE_HARBOR_KITE) return true;                              // vor allem anderen
+  if (Gt()==="windows" && !nt("tengu_harbor_kite_win", false)) return false;
+  return nt("tengu_harbor_kite", false);
+}
+```
+
+Damit gibt es **zwei neue Wege**: das serverseitige Flag `tengu_harbor_kite_win`, und die
+Umgebungsvariable **`CLAUDE_CODE_HARBOR_KITE`**, die noch vor der Windows-Prüfung greift. Der
+Rest des Windows-Codes war schon am 12.08.2026 vollständig vorhanden, Named Pipes
+eingeschlossen.
+
+**Offen und lohnend zu testen:** eine **interaktive** Windows-Sitzung mit gesetzter Variable:
+
+```powershell
+$env:CLAUDE_CODE_HARBOR_KITE=1 ; claude      # in einem neuen Fenster
+```
+
+danach die Pipe-Prüfung von oben. Sollte dort `\\.\pipe\...claude...` erscheinen, ist die
+Sofortzustellung unter Windows erreichbar und `sockelFaehig()` in `socket.mjs` (heute schlicht
+`process.platform !== 'win32'`) muss umgebaut werden.
+
+⚠ **Mit `claude -p` lässt sich das NICHT prüfen.** Ein nicht-interaktiver Lauf bindet keinen
+Socket - nachgemessen auf senza, wo die Socket-Zahl während eines `-p`-Laufs unverändert bei 1
+blieb (und diese eine gehörte einer anderen, interaktiven Sitzung). Ein `-p`-Test auf Windows
+liefert deshalb ein Negativ, das nichts bedeutet. Genau darauf bin ich am 20.08.2026 zuerst
+hereingefallen.
+
+Windows 10 und 11 könnten AF_UNIX mit Dateipfaden - deshalb wird auch danach gesucht und nicht
+nur nach Named Pipes. Ebenso fehlt auf RAINBOW jede `sockets.json`: der SessionStart-Hook hat
+hier nie einen Socketpfad zu sehen bekommen.
+
+```bash
+In PowerShell - die drei Prüfungen, die Windows-Bordmittel brauchen:
+
+```powershell
+$env:CLAUDE_CODE_MESSAGING_SOCKET                       # leer = kein Socket
+[IO.Directory]::GetFiles('\\.\pipe\') | ? { $_ -match 'claude|cc-sock' }
+$p = (Get-Process claude).Id
+Get-NetTCPConnection -State Listen | ? { $p -contains $_.OwningProcess }
+```
+
+In Bash die Dateisuche und die Positivkontrolle:
+
+```bash
+ls -d "$TEMP"/cc-socks* ~/.claude/cc-socks* /tmp/cc-socks* 2>/dev/null
+ssh senza 'ss -xlp | grep -c cc-socks; ls -d /run/user/*/cc-socks'   # MUSS Treffer liefern
+```
+
+⚠ **Den Pipe-Befehl nicht als `powershell -c "..."` aus Bash starten.** Die Bash-Ebene frisst
+die Backslashes, PowerShell bekommt `\.\pipe\` statt `\\.\pipe\` und sucht in
+`C:\pipe`:
+
+```
+Ausnahme beim Aufrufen von "GetFiles" mit 1 Argument(en):
+"Ein Teil des Pfades "C:\pipe" konnte nicht gefunden werden."
+```
+
+Das sieht wie "keine Pipe gefunden" aus, ist aber ein Pfadfehler - also ein falsches Negativ
+genau bei der Prüfung, die ein Negativ belegen soll. Beim Retest am 20.08.2026 selbst
+hineingelaufen. Der Aufruf gehört in eine echte PowerShell-Sitzung.
+```
+
+**Die Positivkontrolle ist Pflicht, nicht Zierrat.** Vier leere Ergebnisse beweisen ohne sie
+nur, dass die Suche nichts gefunden hat - nicht, dass sie etwas hätte finden können. Auf senza
+liefert dieselbe Methode `/run/user/1000/cc-socks` und einen lauschenden Socket.
+
+**Nächster Retest: Ende November 2026**, oder früher, sobald Anthropics Änderungsprotokoll
+Windows im Zusammenhang mit Messaging oder Peer-Sitzungen nennt. Drei Monate statt einem sind
+Absicht: zwei Prüfungen im Abstand von elf Tagen (09.08. und 20.08.) haben dasselbe Ergebnis
+gebracht, und die Frage kostet jedes Mal denselben Aufwand.
+
+Ebenfalls unverändert: `/list-agents` taugt weiterhin nicht als Test, siehe oben.
 
 ## Derselbe Name auf zwei Rechnern - erlaubt, aber zu qualifizieren
 
