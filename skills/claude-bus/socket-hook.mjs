@@ -51,13 +51,19 @@ async function aufraeumen(datenDir) {
 
 const sessionId = process.env.CLAUDE_CODE_SESSION_ID;
 const socket = process.env.CLAUDE_CODE_MESSAGING_SOCKET;
+// Der Token beglaubigt eine von aussen eingespeiste Nachricht als "eigenes
+// Kind". Fehlt er, gilt sie als unbeglaubigt und wird in einer Sitzung mit
+// uebersprungenen Rueckfragen zur Freigabe zurueckgehalten - Anthropics Doku,
+// Abschnitt "own-child messages". Auf Linux rettet dort die Pruefung ueber
+// den Prozessbaum, unter Windows gibt es die nicht.
+const token = process.env.CLAUDE_CODE_MESSAGING_TOKEN || '';
 
 // Kein Socket heisst: natives Windows, oder das Feature ist noch nicht scharf.
 // Beides ist normal und keine Meldung wert.
 if (sessionId && socket) {
   try {
     const datenDir = datenVerzeichnis();
-    merkeSocket(datenDir, sessionId, socket);
+    merkeSocket(datenDir, sessionId, socket, token);
     await aufraeumen(datenDir);
   } catch { /* siehe Kommentarkopf */ }
 }

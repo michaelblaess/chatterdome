@@ -41,7 +41,12 @@ const FRIST = 3000;
  * true auf macOS und Linux, false auf nativem Windows.
  */
 export function sockelFaehig() {
-  return process.platform !== 'win32';
+  // Nicht mehr die Plattform, sondern der Eintrag entscheidet: mit gesetztem
+  // CLAUDE_CODE_HARBOR_KITE bindet Claude Code auch unter Windows einen Kanal,
+  // dort eine Named Pipe (cc-msg-<32 hex> statt cc-socks/<pid>.sock). Node
+  // verbindet sich mit connect() auf beide gleich. Ob es im Einzelfall geht,
+  // beantwortet sockets.json - und ob es ANKOMMT, nur die Zielsitzung.
+  return true;
 }
 
 const pfadTabelle = (datenDir) => join(datenDir, 'sockets.json');
@@ -87,17 +92,43 @@ export function ladeSockets(datenDir) {
  * @returns {boolean}
  * true, wenn geschrieben wurde.
  */
-export function merkeSocket(datenDir, sessionId, pfad) {
+export function merkeSocket(datenDir, sessionId, pfad, token = '') {
   if (!sessionId || !pfad) return false;
   const tabelle = ladeSockets(datenDir);
-  if (tabelle[sessionId] === pfad) return true;
-  tabelle[sessionId] = pfad;
+  const vorher = eintrag(tabelle[sessionId]);
+  if (vorher.pfad === pfad && vorher.token === token) return true;
+  // Seit dem 21.08.2026 ein Objekt statt eines blossen Pfades: der Token
+  // gehoert dazu, siehe eintrag(). Gelesen werden weiterhin beide Formen.
+  tabelle[sessionId] = token ? { pfad, token } : { pfad };
   try {
-    writeFileSync(pfadTabelle(datenDir), `${JSON.stringify(tabelle, null, 1)}\n`, 'utf8');
+    writeFileSync(pfadTabelle(datenDir), JSON.stringify(tabelle, null, 1) + '\n', 'utf8');
     return true;
   } catch {
     return false;
   }
+}
+
+/**
+ * Normalisiert einen Tabelleneintrag auf { pfad, token }.
+ *
+ * Bis zum 21.08.2026 stand dort nur der Pfad als Zeichenkette. Beide Formen
+ * muessen lesbar bleiben, sonst verliert jede laufende Sitzung ihren Eintrag
+ * in dem Moment, in dem der Bus aktualisiert wird.
+ *
+ * DER TOKEN IST EIN GEHEIMNIS. Claude Code exportiert ihn je Sitzung als
+ * CLAUDE_CODE_MESSAGING_TOKEN, damit ein eigenes Kind sich beim Einspeisen
+ * ausweisen kann - ohne ihn behandelt die Sitzung die Nachricht als
+ * unbeglaubigt und haelt sie im Bypass-Modus zur Freigabe zurueck (Anthropics
+ * Doku, Abschnitt "own-child messages"). Er gehoert deshalb weder in eine
+ * Ausgabe noch in ein Protokoll, und die Tabelle liegt bewusst unter
+ * ~/.claude/bus, also ausserhalb jedes Repos.
+ */
+export function eintrag(wert) {
+  if (typeof wert === 'string') return { pfad: wert, token: '' };
+  if (wert && typeof wert === 'object') {
+    return { pfad: String(wert.pfad || ''), token: String(wert.token || '') };
+  }
+  return { pfad: '', token: '' };
 }
 
 /**
@@ -168,7 +199,7 @@ export function nutzlast(text) {
  * @returns {Promise<string>}
  * Leerer String bei Erfolg, sonst der Grund.
  */
-export function schreibeInSocket(pfad, text) {
+export function schreibeInSocket(pfad, text, token = '') {
   return new Promise((fertig) => {
     if (!sockelFaehig()) return fertig('auf Windows gibt es keinen Inbox-Socket');
     if (!pfad) return fertig('kein Socket bekannt');
@@ -182,7 +213,10 @@ export function schreibeInSocket(pfad, text) {
     };
 
     const verbindung = connect(pfad, () => {
-      verbindung.write(nutzlast(text), (fehler) => {
+      // Der Auth-Frame MUSS die erste Zeile der Verbindung sein. Ohne ihn
+      // behandelt die Zielsitzung die Nachricht als unbeglaubigt.
+      const auth = token ? JSON.stringify({ type: 'auth', token }) + '\n' : '';
+      verbindung.write(auth + nutzlast(text), (fehler) => {
         // Erst nach dem Schreiben schliessen. Ein sofortiges destroy() nach
         // write() kann die Nutzlast abschneiden, bevor sie den Empfaenger
         // erreicht - write() ist gepuffert.
@@ -221,9 +255,9 @@ export async function sofortZustellen({ datenDir, sessionId, text, modus }) {
   if (!sockelFaehig()) return { zugestellt: false, grund: 'Windows kennt den Inbox-Socket nicht' };
   if (!sessionId) return { zugestellt: false, grund: 'Empfänger ist keiner Sitzung zugeordnet' };
 
-  const pfad = ladeSockets(datenDir)[sessionId];
+  const { pfad, token } = eintrag(ladeSockets(datenDir)[sessionId]);
   if (!pfad) return { zugestellt: false, grund: 'für diese Sitzung ist kein Socket hinterlegt' };
 
-  const fehler = await schreibeInSocket(pfad, text);
+  const fehler = await schreibeInSocket(pfad, text, token);
   return { zugestellt: !fehler, grund: fehler };
 }

@@ -5,9 +5,10 @@
 // die Nutzlast als eine Zeile JSON auf der Leitung landet und der Empfaenger
 // sie an \n trennen kann.
 //
-// Auf Windows gibt es keine Unix-Sockets - die betroffenen Tests werden dort
-// uebersprungen statt zu scheitern. Das ist kein Kneifen: sockelFaehig() meldet
-// dieselbe Plattformgrenze, und die wird hier ausdruecklich mitgeprueft.
+// Auf Windows gibt es keine Unix-SOCKETS - die betroffenen Tests werden dort
+// uebersprungen statt zu scheitern. Der Kanal selbst ist dort inzwischen
+// erreichbar, nur eben als Named Pipe, und die laesst sich in einem Test nicht
+// so billig aufsetzen wie ein Socket im Temp-Verzeichnis.
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
@@ -17,7 +18,7 @@ import { join } from 'node:path';
 import { createServer } from 'node:net';
 
 import {
-  sockelFaehig, ladeSockets, merkeSocket, raeumeSockets,
+  sockelFaehig, ladeSockets, merkeSocket, raeumeSockets, eintrag,
   nutzlast, schreibeInSocket, sofortZustellen,
 } from './socket.mjs';
 
@@ -52,7 +53,7 @@ describe('Socket-Tabelle', () => {
     try {
       assert.deepEqual(ladeSockets(dir), {}, 'ohne Datei ist die Tabelle leer');
       assert.equal(merkeSocket(dir, 'sid-1', '/tmp/a.sock'), true);
-      assert.deepEqual(ladeSockets(dir), { 'sid-1': '/tmp/a.sock' });
+      assert.deepEqual(ladeSockets(dir), { 'sid-1': { pfad: '/tmp/a.sock' } });
     } finally { rmSync(dir, { recursive: true, force: true }); }
   });
 
@@ -79,7 +80,7 @@ describe('Socket-Tabelle', () => {
       merkeSocket(dir, 'lebt', '/tmp/a.sock');
       merkeSocket(dir, 'weg', '/tmp/b.sock');
       assert.equal(raeumeSockets(dir, ['lebt']), 1);
-      assert.deepEqual(ladeSockets(dir), { lebt: '/tmp/a.sock' });
+      assert.deepEqual(ladeSockets(dir), { lebt: { pfad: '/tmp/a.sock' } });
     } finally { rmSync(dir, { recursive: true, force: true }); }
   });
 
@@ -91,14 +92,18 @@ describe('Socket-Tabelle', () => {
     try {
       merkeSocket(dir, 'lebt', '/tmp/a.sock');
       assert.equal(raeumeSockets(dir, []), 0);
-      assert.deepEqual(ladeSockets(dir), { lebt: '/tmp/a.sock' });
+      assert.deepEqual(ladeSockets(dir), { lebt: { pfad: '/tmp/a.sock' } });
     } finally { rmSync(dir, { recursive: true, force: true }); }
   });
 });
 
 describe('Zustellung', () => {
-  test('meldet die Plattformgrenze ehrlich', () => {
-    assert.equal(sockelFaehig(), process.platform !== 'win32');
+  test('der Weg ist auf jeder Plattform grundsaetzlich offen', () => {
+    // Bis zum 20.08.2026 stand hier die Plattformgrenze. Sie gilt nicht mehr:
+    // mit CLAUDE_CODE_HARBOR_KITE bindet Claude Code auch unter Windows einen
+    // Kanal, dort eine Named Pipe. Ob eine BESTIMMTE Sitzung erreichbar ist,
+    // entscheidet ihr Eintrag in sockets.json, nicht das Betriebssystem.
+    assert.equal(sockelFaehig(), true);
   });
 
   test('ein unbekannter Pfad ist ein Grund, kein Absturz', async () => {
@@ -175,6 +180,77 @@ describe('Zustellung', () => {
       assert.equal(e.zugestellt, true);
       await new Promise((f) => setTimeout(f, 120));
       assert.equal(JSON.parse(empfangen).message.content, 'los');
+    } finally {
+      server.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('Beglaubigung', () => {
+  // Anthropics Doku, Abschnitt "own-child messages": ein Skript, das in den
+  // Socket seiner eigenen Sitzung schreibt, weist sich mit
+  // {"type":"auth","token":"..."} als ERSTER Zeile aus. Fehlt der Nachweis,
+  // gilt die Nachricht als unbeglaubigt - und eine Sitzung, die Rueckfragen
+  // ueberspringt, haelt sie dann zur Freigabe zurueck, statt sie zuzustellen.
+  test('der Eintrag traegt Pfad und Token', () => {
+    const dir = tempDir();
+    try {
+      merkeSocket(dir, 'sid-1', '/tmp/a.sock', 'geheim');
+      assert.deepEqual(ladeSockets(dir), { 'sid-1': { pfad: '/tmp/a.sock', token: 'geheim' } });
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  test('ohne Token bleibt der Eintrag schlank', () => {
+    // Auf Linux beglaubigt der Prozessbaum, dort braucht es keinen Token.
+    const dir = tempDir();
+    try {
+      merkeSocket(dir, 'sid-1', '/tmp/a.sock');
+      assert.deepEqual(ladeSockets(dir), { 'sid-1': { pfad: '/tmp/a.sock' } });
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  test('die alte Form mit blossem Pfad bleibt lesbar', () => {
+    // Sonst verloere jede laufende Sitzung ihren Eintrag in dem Moment, in dem
+    // der Bus aktualisiert wird.
+    assert.deepEqual(eintrag('/tmp/alt.sock'), { pfad: '/tmp/alt.sock', token: '' });
+  });
+
+  test('ein fehlender Eintrag ergibt kein halbes Objekt', () => {
+    assert.deepEqual(eintrag(undefined), { pfad: '', token: '' });
+  });
+
+  test('der Auth-Frame geht als erste Zeile ueber die Leitung', { skip: WINDOWS }, async () => {
+    const dir = tempDir();
+    const pfad = join(dir, 'auth.sock');
+    const zeilen = [];
+    const server = createServer((s) => {
+      s.on('data', (d) => zeilen.push(...String(d).split('\n').filter(Boolean)));
+    });
+    await new Promise((f) => server.listen(pfad, f));
+    try {
+      assert.equal(await schreibeInSocket(pfad, 'hallo', 'geheim'), '');
+      await new Promise((f) => setTimeout(f, 120));
+      assert.equal(JSON.parse(zeilen[0]).type, 'auth', 'die erste Zeile muss der Nachweis sein');
+      assert.equal(JSON.parse(zeilen[1]).message.content, 'hallo');
+    } finally {
+      server.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('ohne Token faengt die Leitung direkt mit der Nachricht an', { skip: WINDOWS }, async () => {
+    const dir = tempDir();
+    const pfad = join(dir, 'ohne.sock');
+    const zeilen = [];
+    const server = createServer((s) => {
+      s.on('data', (d) => zeilen.push(...String(d).split('\n').filter(Boolean)));
+    });
+    await new Promise((f) => server.listen(pfad, f));
+    try {
+      await schreibeInSocket(pfad, 'hallo');
+      await new Promise((f) => setTimeout(f, 120));
+      assert.equal(JSON.parse(zeilen[0]).type, 'user');
     } finally {
       server.close();
       rmSync(dir, { recursive: true, force: true });
