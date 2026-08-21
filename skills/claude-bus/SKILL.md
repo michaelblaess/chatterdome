@@ -351,11 +351,14 @@ Volltext landet über `bus.mjs read` einmalig im Kontext statt dauerhaft.
 Der Hook ist non-blocking (immer Exit 0). Ein blockierender Stop-Hook würde die Instanz
 zwingen weiterzuarbeiten, und das ist nicht der Sinn einer Zustellung.
 
-### Eine wartende Instanz bekommt nichts - auf Windows
+### Eine wartende Instanz bekommt nichts - ohne Sofortzustellung
 
-⚠ **Seit dem 09.08.2026 gilt das nur noch für natives Windows.** Auf macOS und Linux stellt
-der Bus jetzt sofort zu, siehe [Sofortzustellung](#sofortzustellung-über-den-inbox-socket)
-weiter unten. Der folgende Abschnitt beschreibt den Zustand, der dort weiterhin gilt.
+⚠ **Seit dem 21.08.2026 gilt dieser Abschnitt nur noch für Sitzungen ohne Sofortzustellung.**
+Auf macOS und Linux gibt es sie seit dem 09.08., auf Windows seit dem 21.08. mit gesetztem
+`CLAUDE_CODE_HARBOR_KITE` - siehe [Sofortzustellung](#sofortzustellung-über-den-inbox-socket)
+weiter unten. Betroffen bleiben Sitzungen, die vor dem Setzen der Variable gestartet wurden
+(eine Umgebungsvariable wird beim Start gelesen), und der Fall, dass Anthropic den Weg wieder
+schliesst. Der folgende Abschnitt beschreibt den Zustand, der dann gilt.
 
 **`send Charlene` wirkt erst, wenn Charlene das nächste Mal eine Antwort beendet.** Sitzt
 Charlene im Leerlauf und wartet auf Eingabe, bleibt die Nachricht liegen - beliebig lange.
@@ -393,10 +396,11 @@ den von aussen geschrieben werden darf. Der Bus nutzt das: ein Auftrag landet so
 Zielsitzung, auch wenn sie nur wartet. Damit fällt die Wartezeit auf den nächsten Stop-Hook
 weg - die Bringschuld des Empfängers wird zum echten Push.
 
-**Auf nativem Windows gibt es das nicht.** Anthropic bietet das Feature dort nicht an -
-**nachgeprüft am 20.08.2026 mit 2.1.238**, der zu dem Zeitpunkt aktuellen Version. Es bleibt
-auf RAINBOW und DELL beim Stop-Hook. Die Einstellung erkennt das selbst und meldet es, statt
-es zu verschleiern. Das Prüfrezept steht weiter unten unter "Ob Windows dazugekommen ist".
+**Auf nativem Windows braucht es einen Schalter.** Anthropic bietet das Feature dort
+offiziell nicht an ("Claude Code doesn't offer cross-session messaging on native Windows"),
+der Code ist aber gebaut und lässt sich einschalten - siehe "Windows: der undokumentierte
+Weg" weiter unten. Ohne den Schalter bleibt es beim Stop-Hook, und die Einstellung meldet
+das, statt es zu verschleiern.
 
 ### Einstellung `zustellung`
 
@@ -493,22 +497,21 @@ or other Claude sessions", denn er listet auch Subagenten. Belastbar sind:
 ss -xlp | grep cc-socks
 ```
 
-### Ob Windows dazugekommen ist: das Prüfrezept
+### Windows: der undokumentierte Weg
 
-Der für Ende August geplante Retest ist am **20.08.2026 gelaufen, mit 2.1.238** - der zu dem
-Zeitpunkt aktuellen Version, und zwar auf einem RAINBOW, auf dem 18 claude-Prozesse liefen.
-**Ergebnis negativ auf allen vier Wegen:**
+**Am 21.08.2026 belegt, mit 2.1.238 auf RAINBOW.** Patsy stand auf `idle`, hatte kein
+Transkript, und sprang ohne einen Tastendruck an: Nachricht angekommen, Turn gestartet,
+`200 angekommen, ohne Zutun` quittiert, alles in derselben Minute.
 
-| Prüfung | Ergebnis |
+Es braucht drei Dinge, und keines davon ist offensichtlich:
+
+| Zutat | Warum |
 |---|---|
-| `CLAUDE_CODE_MESSAGING_SOCKET` in der Sitzungsumgebung | nicht gesetzt |
-| Named Pipes, 947 Stück | kein Treffer auf `claude`, `cc-sock`, `anthropic`, `messaging` |
-| AF_UNIX-Dateien (`cc-socks` in `%TEMP%`, `~/.claude`, `/tmp`) | keine Ablage vorhanden |
-| lauschende TCP-Ports der claude-Prozesse | keiner lauscht |
+| `CLAUDE_CODE_HARBOR_KITE=1` | Die Gate-Funktion gibt damit **vor** der Windows-Prüfung `true` zurück. Steht in den Benutzer-Einstellungen unter `env`, gilt also für jede neu gestartete Sitzung. |
+| Der richtige Pipe-Name | Der Kanal heisst dort `\\.\pipe\cc-msg-<32 hex>`, **nicht** `cc-socks/<pid>.sock`. |
+| Der Auth-Frame | `{"type":"auth","token":"..."}` als erste Zeile, Token aus `CLAUDE_CODE_MESSAGING_TOKEN`. Siehe unten. |
 
-**Die Sperre ist aber nicht mehr dieselbe.** In 2.1.228 stand dort eine harte Zeile
-(`if (Kt()==="windows") return false`, vor jedem Flag). In **2.1.233** sieht die Gate-Funktion
-so aus, wortwoertlich aus dem Binary geholt:
+Die Gate-Funktion, wörtlich aus dem Binary (2.1.233):
 
 ```js
 function jh(){
@@ -518,72 +521,66 @@ function jh(){
 }
 ```
 
-Damit gibt es **zwei neue Wege**: das serverseitige Flag `tengu_harbor_kite_win`, und die
-Umgebungsvariable **`CLAUDE_CODE_HARBOR_KITE`**, die noch vor der Windows-Prüfung greift. Der
-Rest des Windows-Codes war schon am 12.08.2026 vollständig vorhanden, Named Pipes
-eingeschlossen.
+In 2.1.228 stand dort noch eine harte Zeile (`if (Kt()==="windows") return false`, vor jedem
+Flag). Der zweite Weg wäre das serverseitige Flag `tengu_harbor_kite_win`, auf das wir keinen
+Einfluss haben.
 
-**Offen und lohnend zu testen:** eine **interaktive** Windows-Sitzung mit gesetzter Variable:
+⚠ **Anthropic unterstützt das nicht.** Die Variable ist undokumentiert und kann mit jedem
+Update wirkungslos werden. Dann fällt der Bus auf den Stop-Hook zurück wie bisher - es geht
+nichts verloren, nur die Geschwindigkeit ist wieder die alte. Nichts in diesem Repo darf
+davon abhängen, dass der Weg offen ist.
+
+### Der Auth-Frame - ohne Ausweis wird zurückgehalten
+
+Aus Anthropics Doku, Abschnitt "own-child messages":
+
+> A script posting to its own session's socket can send `{"type":"auth","token":"<token>"}`
+> as the first line of its connection. […] When Claude Code can verify neither way, it treats
+> the message like any other that asserts no permission class, so **a session that bypasses
+> permission prompts holds it for your approval**.
+
+Auf Linux beglaubigt Claude Code eine Einspeisung über den Prozessbaum, unter Windows gibt es
+diese Prüfung nicht. Michaels Sitzungen laufen im Bypass-Modus - eine Nachricht ohne Ausweis
+wird dort also **zurückgehalten**, nicht zugestellt. Genau daran ist der erste Versuch am
+20.08. gescheitert, und zwar lautlos: die Verbindung kam zustande, das Schreiben meldete
+keinen Fehler, im Transkript der Zielsitzung stand nichts.
+
+`socket-hook.mjs` legt den Token deshalb neben dem Pfad ab. Die Tabelle trägt seitdem
+`{ pfad, token }` statt einer blossen Zeichenkette, `eintrag()` liest beide Formen - sonst
+verlöre jede laufende Sitzung ihren Eintrag genau in dem Moment, in dem der Bus aktualisiert
+wird. **Der Token ist ein Geheimnis** und gehört weder in eine Ausgabe noch in ein Protokoll.
+Die Tabelle liegt unter `~/.claude/bus`, also ausserhalb jedes Repos.
+
+### Das Prüfrezept, und warum es beim ersten Mal log
+
+Ob eine Sitzung erreichbar ist, beantwortet ihr Eintrag in `sockets.json`. Für die Frage, ob
+die Plattform überhaupt mitspielt:
 
 ```powershell
-$env:CLAUDE_CODE_HARBOR_KITE=1 ; claude      # in einem neuen Fenster
+$env:CLAUDE_CODE_MESSAGING_SOCKET                       # leer = kein Kanal
+[IO.Directory]::GetFiles('\\.\pipe\') | ? { $_ -match 'cc-msg' }
 ```
-
-danach die Pipe-Prüfung von oben. Sollte dort `\\.\pipe\...claude...` erscheinen, ist die
-Sofortzustellung unter Windows erreichbar und `sockelFaehig()` in `socket.mjs` (heute schlicht
-`process.platform !== 'win32'`) muss umgebaut werden.
-
-⚠ **Mit `claude -p` lässt sich das NICHT prüfen.** Ein nicht-interaktiver Lauf bindet keinen
-Socket - nachgemessen auf senza, wo die Socket-Zahl während eines `-p`-Laufs unverändert bei 1
-blieb (und diese eine gehörte einer anderen, interaktiven Sitzung). Ein `-p`-Test auf Windows
-liefert deshalb ein Negativ, das nichts bedeutet. Genau darauf bin ich am 20.08.2026 zuerst
-hereingefallen.
-
-Windows 10 und 11 könnten AF_UNIX mit Dateipfaden - deshalb wird auch danach gesucht und nicht
-nur nach Named Pipes. Ebenso fehlt auf RAINBOW jede `sockets.json`: der SessionStart-Hook hat
-hier nie einen Socketpfad zu sehen bekommen.
-
-```bash
-In PowerShell - die drei Prüfungen, die Windows-Bordmittel brauchen:
-
-```powershell
-$env:CLAUDE_CODE_MESSAGING_SOCKET                       # leer = kein Socket
-[IO.Directory]::GetFiles('\\.\pipe\') | ? { $_ -match 'claude|cc-sock' }
-$p = (Get-Process claude).Id
-Get-NetTCPConnection -State Listen | ? { $p -contains $_.OwningProcess }
-```
-
-In Bash die Dateisuche und die Positivkontrolle:
 
 ```bash
 ls -d "$TEMP"/cc-socks* ~/.claude/cc-socks* /tmp/cc-socks* 2>/dev/null
-ssh senza 'ss -xlp | grep -c cc-socks; ls -d /run/user/*/cc-socks'   # MUSS Treffer liefern
+ssh senza 'ss -xlp | grep -c cc-socks; ls -d /run/user/*/cc-socks'   # Linux-Gegenprobe
 ```
+
+⚠ **Der Retest am 20.08.2026 kam zu einem falschen Negativ**, und die Lehre daraus ist
+teurer als der Fehler: Ich hatte nach `claude|cc-sock` gesucht - dem Namen, den der Kanal
+**auf Linux** trägt. Unter Windows heisst er `cc-msg-...`, also fand die Suche nichts, und
+das Ergebnis las sich wie ein Beweis. Die Positivkontrolle auf senza lief sauber durch und
+half kein bisschen, denn sie prüfte das System, dessen Namensschema ich bereits kannte.
+
+**Eine Positivkontrolle auf einem anderen System ist keine Kontrolle für dieses hier.** Wer
+ein Negativ auf Plattform A behauptet, muss auf Plattform A etwas finden können - sonst prüft
+er nur seine eigene Erwartung. Im Zweifel breiter suchen (hier hätte `cc-` genügt) und die
+Trefferzahl der Gesamtmenge danebenstellen: "0 von 947 Pipes" ist eine Aussage, "nichts
+gefunden" ist keine.
 
 ⚠ **Den Pipe-Befehl nicht als `powershell -c "..."` aus Bash starten.** Die Bash-Ebene frisst
-die Backslashes, PowerShell bekommt `\.\pipe\` statt `\\.\pipe\` und sucht in
-`C:\pipe`:
-
-```
-Ausnahme beim Aufrufen von "GetFiles" mit 1 Argument(en):
-"Ein Teil des Pfades "C:\pipe" konnte nicht gefunden werden."
-```
-
-Das sieht wie "keine Pipe gefunden" aus, ist aber ein Pfadfehler - also ein falsches Negativ
-genau bei der Prüfung, die ein Negativ belegen soll. Beim Retest am 20.08.2026 selbst
-hineingelaufen. Der Aufruf gehört in eine echte PowerShell-Sitzung.
-```
-
-**Die Positivkontrolle ist Pflicht, nicht Zierrat.** Vier leere Ergebnisse beweisen ohne sie
-nur, dass die Suche nichts gefunden hat - nicht, dass sie etwas hätte finden können. Auf senza
-liefert dieselbe Methode `/run/user/1000/cc-socks` und einen lauschenden Socket.
-
-**Nächster Retest: Ende November 2026**, oder früher, sobald Anthropics Änderungsprotokoll
-Windows im Zusammenhang mit Messaging oder Peer-Sitzungen nennt. Drei Monate statt einem sind
-Absicht: zwei Prüfungen im Abstand von elf Tagen (09.08. und 20.08.) haben dasselbe Ergebnis
-gebracht, und die Frage kostet jedes Mal denselben Aufwand.
-
-Ebenfalls unverändert: `/list-agents` taugt weiterhin nicht als Test, siehe oben.
+die Backslashes, PowerShell sucht dann in `C:\pipe` und meldet einen Pfadfehler - wieder ein
+falsches Negativ genau dort, wo ein Negativ belegt werden soll.
 
 ## Derselbe Name auf zwei Rechnern - erlaubt, aber zu qualifizieren
 
