@@ -71,6 +71,7 @@
   "chat.placeholder_none": "Select an agent first",
   "chat.placeholder_self": "This is the current session - nothing is sent to yourself",
   "chat.send": "Send",
+  "chat.no_reply": "no reply for {dauer}",
   "chat.receipt": "Receipt",
   "state.submitted": "submitted",
   "state.working": "working",

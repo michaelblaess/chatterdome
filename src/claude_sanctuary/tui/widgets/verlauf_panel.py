@@ -8,6 +8,7 @@ tragen die Blasen einen Zustand und keine Haken.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from rich.text import Text
@@ -19,6 +20,7 @@ from textual.widgets import Static
 
 from claude_sanctuary.i18n import format_time, t
 from claude_sanctuary.kern.modelle import Auftrag
+from claude_sanctuary.kern.warten import OFFENE_ZUSTAENDE, dauer_kurz, warteanzeige
 
 ZUSTAND_FARBE = {
     "submitted": "grey62",
@@ -76,6 +78,9 @@ class VerlaufPanel(VerticalScroll):
         super().__init__(**kwargs)
         self._partner = ""
         self._auftraege: list[Auftrag] = []
+        self._takt = 0
+        """Zaehlt die Takte fuer die laufenden Punkte, siehe kern/warten.py."""
+
         self._ausgeblendet: set[str] = set()
         """Auftraege, die "Ansicht leeren" verborgen hat.
 
@@ -94,6 +99,23 @@ class VerlaufPanel(VerticalScroll):
         for kind in list(self.children):
             kind.remove()
         self.mount(Static(hinweis, classes="verlauf-hinweis"))
+
+    TAKT_S = 0.5
+    """Wie schnell die Punkte laufen. Halbe Sekunde ist sichtbar, ohne zu flackern."""
+
+    def on_mount(self) -> None:
+        # Der Takt laeuft dauerhaft, das Neuzeichnen NICHT: _tick steigt sofort
+        # wieder aus, wenn nichts offen ist. Ein Panel ohne offene Auftraege
+        # kostet damit nichts ausser dem Weckruf selbst.
+        # Als Attribut, nicht nur als Aufruf: ein Test muss den Takt anhalten
+        # koennen. Ein spaeter zugewiesenes _tick greift NICHT - set_interval
+        # bindet die Methode beim Mounten.
+        self._punkte_timer = self.set_interval(self.TAKT_S, self._tick)
+
+    def _tick(self) -> None:
+        self._takt += 1
+        if any(a.zustand in OFFENE_ZUSTAENDE for a in self._auftraege):
+            self._neu_zeichnen()
 
     def zeigen(self, partner: str, auftraege: list[Auftrag]) -> None:
         """Baut den Verlauf mit einem Agenten neu auf."""
@@ -160,6 +182,30 @@ class VerlaufPanel(VerticalScroll):
         blase = ziel if isinstance(ziel, Blase) else None
         self.post_message(self.MenueGewuenscht((event.screen_x, event.screen_y), blase))
 
+    def _warten_anhaengen(self, kopf: Text, auftrag: Auftrag) -> None:
+        """Haengt laufende Punkte und die verstrichene Zeit an die Zustandszeile.
+
+        Gemessen wird ab der letzten Aenderung, nicht ab dem Absenden: nimmt die
+        Empfaengerin einen Auftrag nach zwei Minuten mit ``202`` an, faengt die
+        Uhr fuer "arbeitet daran" wieder bei null an. Sonst stuende dort eine
+        Zahl, die von der Wartezeit davor handelt.
+        """
+        seit = _sekunden_seit(auftrag.geaendert or auftrag.erstellt)
+        if seit is None:
+            return
+        anzeige = warteanzeige(auftrag.zustand, seit, self._takt)
+        if anzeige is None:
+            return
+        if anzeige.verstummt:
+            kopf.append(
+                f"  {t('chat.no_reply', dauer=dauer_kurz(anzeige.sekunden))}",
+                style=ZUSTAND_FARBE.get("failed", "dim"),
+            )
+            return
+        # Die Punkte in fester Breite, damit die Zeit dahinter nicht wandert.
+        kopf.append(f" {anzeige.punkte:<3}", style="dim")
+        kopf.append(dauer_kurz(anzeige.sekunden), style="dim")
+
     def _blase(self, ereignis: Any, auftrag: Auftrag) -> Text:
         """Setzt eine einzelne Blase aus Kopf und Inhalt zusammen."""
         text = Text()
@@ -182,6 +228,7 @@ class VerlaufPanel(VerticalScroll):
                 t(f"state.{zustand}") if zustand else "",
                 style=ZUSTAND_FARBE.get(zustand, "dim"),
             )
+            self._warten_anhaengen(kopf, auftrag)
             if auftrag.topic:
                 kopf.append(f"  [{auftrag.topic}]", style="dim")
         elif ereignis.status is not None:
@@ -202,3 +249,18 @@ class VerlaufPanel(VerticalScroll):
             text.append("\n")
             text.append(t("chat.receipt"), style="dim italic")
         return text
+
+
+def _sekunden_seit(zeitpunkt: str) -> float | None:
+    """Wie lange ein ISO-Zeitpunkt her ist. None, wenn er unlesbar ist.
+
+    Kein Raten bei kaputten Stempeln: lieber gar keine Wartezeile als eine
+    erfundene Zahl.
+    """
+    if not zeitpunkt:
+        return None
+    try:
+        wert = datetime.fromisoformat(zeitpunkt.replace("Z", "+00:00")).astimezone()
+    except (ValueError, TypeError):
+        return None
+    return (datetime.now().astimezone() - wert).total_seconds()

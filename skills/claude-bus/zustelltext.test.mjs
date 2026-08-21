@@ -7,13 +7,14 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { GRENZMARKE, absenderName, zustelltext } from './zustelltext.mjs';
+import { GRENZMARKE, absenderName, empfaengerName, zustelltext } from './zustelltext.mjs';
 
 const AUFTRAG = {
   auftrag_id: 'a1b2c3',
   von: 'Sanctuary',
   von_host: 'rainbow',
   an: 'Operator',
+  host: 'RAINBOW',
   topic: 'allgemein',
   text: 'Bitte das aktuelle Datum nennen',
   quittung_erwartet: false,
@@ -35,6 +36,20 @@ describe('Absender', () => {
   });
 });
 
+describe('Empfaenger', () => {
+  test('wird mit dem Zielrechner qualifiziert', () => {
+    assert.equal(empfaengerName(AUFTRAG), 'Operator@RAINBOW');
+  });
+
+  test('ohne Zielrechner bleibt der blosse Name', () => {
+    assert.equal(empfaengerName({ ...AUFTRAG, host: '' }), 'Operator');
+  });
+
+  test('ohne Empfaenger wird nichts erfunden', () => {
+    assert.equal(empfaengerName({}), '?');
+  });
+});
+
 describe('Zustelltext', () => {
   test('nennt Absender und Auftrags-ID', () => {
     const t = zustelltext(AUFTRAG);
@@ -42,14 +57,24 @@ describe('Zustelltext', () => {
     assert.match(t, /a1b2c3/);
   });
 
-  test('traegt die Grenzmarke', () => {
-    assert.ok(zustelltext(AUFTRAG).includes(GRENZMARKE));
+  test('nennt auch den Empfaenger', () => {
+    // Patsy hielt sich am 21.08.2026 fuer eine Sitzung auf DELL, obwohl sie auf
+    // RAINBOW lief - und schrieb das in ihre Quittung. Wer angeschrieben wird,
+    // soll seine eigene Adresse nicht erschliessen muessen.
+    assert.match(zustelltext(AUFTRAG), /an Operator@RAINBOW/);
   });
 
-  test('der Auftragstext steht vor der Belehrung', () => {
-    // Die Empfaengerin soll den Auftrag lesen, nicht die Grenzmarke.
-    const t = zustelltext(AUFTRAG);
-    assert.ok(t.indexOf(AUFTRAG.text) < t.indexOf(GRENZMARKE));
+  test('traegt KEINE eigene Grenzmarke mehr', () => {
+    // Claude Code haengt bei einer Einspeisung ueber den Peer-Kanal selbst
+    // einen Hinweis an, und der ist der bessere. Zwei Belehrungen in einer
+    // Nachricht sind eine zu viel - belegt an Patsys Ausgabe vom 21.08.2026,
+    // wo beide untereinander standen und sich im Ton widersprachen.
+    assert.ok(!zustelltext(AUFTRAG).includes(GRENZMARKE));
+  });
+
+  test('die Grenzmarke gibt es weiterhin - fuer den Weg ueber "read"', () => {
+    // Dort rahmt Claude Code nichts, die Instanz liest den Text selbst.
+    assert.ok(GRENZMARKE.length > 0);
   });
 
   test('zeigt einen ausfuehrbaren Weg zur Antwort', () => {
@@ -71,7 +96,7 @@ describe('Zustelltext', () => {
   test('ein leerer Text laesst den Aufbau heil', () => {
     const t = zustelltext({ ...AUFTRAG, text: '' });
     assert.match(t, /a1b2c3/);
-    assert.ok(t.includes(GRENZMARKE));
+    assert.match(t, /Sanctuary@RAINBOW an Operator@RAINBOW/);
   });
 
   test('die Grenzmarke bleibt kurz - sie geht in jeden Kontext', () => {

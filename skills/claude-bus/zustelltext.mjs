@@ -47,6 +47,18 @@ export function absenderName(ereignis) {
 }
 
 /**
+ * Wie der Empfaenger in der Kopfzeile steht.
+ *
+ * Der Zielrechner steht im Ereignis als "host" - das ist der Rechner, auf dem
+ * der Auftrag bearbeitet wird, nicht der des Absenders (der ist "von_host").
+ */
+export function empfaengerName(ereignis) {
+  const name = ereignis.an || '?';
+  const host = ereignis.host ? String(ereignis.host).toUpperCase() : '';
+  return host ? `${name}@${host}` : name;
+}
+
+/**
  * Baut den Text, den die Zielsitzung liest.
  *
  * Aufbau ist Absicht: erst wer und was (die Empfaengerin soll den Auftrag
@@ -57,7 +69,13 @@ export function absenderName(ereignis) {
  * @returns {string} Vollstaendiger Zustelltext.
  */
 export function zustelltext(ereignis) {
-  const kopf = [`[Bus] Auftrag von ${absenderName(ereignis)}`, `id ${ereignis.auftrag_id}`];
+  // Auch den EMPFAENGER nennen, nicht nur den Absender. Am 21.08.2026 hielt
+  // sich Patsy in ihrer Quittung fuer eine Sitzung auf DELL, obwohl sie auf
+  // RAINBOW lief - sie hatte ihren Standort aus dem Ordnernamen in der
+  // Peer-Liste erschlossen. Eine Instanz soll ihre eigene Adresse nicht raten
+  // muessen, und die Quittung traegt den Irrtum sonst dauerhaft weiter.
+  const kopf = [`[Bus] Auftrag von ${absenderName(ereignis)} an ${empfaengerName(ereignis)}`];
+  kopf.push(`id ${ereignis.auftrag_id}`);
   if (ereignis.topic && ereignis.topic !== 'allgemein') kopf.push(`Thema ${ereignis.topic}`);
 
   const quittung = ereignis.quittung_erwartet
@@ -69,7 +87,14 @@ export function zustelltext(ereignis) {
     '',
     ereignis.text || '',
     '',
-    GRENZMARKE,
+  // OHNE Grenzmarke, seit dem 21.08.2026. Claude Code haengt bei einer
+  // Einspeisung ueber den Peer-Kanal selbst einen Hinweis an ("This came
+  // from another Claude session ... permission laundering"), und der ist der
+  // bessere: er sagt der Empfaengerin, was sie TUN soll, statt nur was nicht
+  // geht. Zwei Belehrungen in einer Nachricht sind eine zu viel, zumal sie
+  // sich im Ton widersprachen. Fuer den anderen Weg - die Instanz liest
+  // selbst per "bus read" - bleibt GRENZMARKE erhalten und wird dort einmal
+  // je Abruf gezeigt: da rahmt Claude Code nichts.
     quittung,
     `  ${BUS} ack ${ereignis.auftrag_id} 200 "Ergebnis"`,
   ].join('\n');

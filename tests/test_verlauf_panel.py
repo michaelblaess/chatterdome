@@ -314,3 +314,97 @@ class TestRechtsklick:
             await pilot.pause()
 
             assert app.meldungen == []
+
+
+def _offener_auftrag(zustand: str = "submitted", vor_sekunden: int = 8) -> Auftrag:
+    """Ein Auftrag, dessen Zustandswechsel gerade eben war."""
+    from datetime import datetime, timedelta
+
+    stempel = (datetime.now().astimezone() - timedelta(seconds=vor_sekunden)).isoformat()
+    return Auftrag(
+        auftrag_id="offen",
+        zustand=zustand,
+        an="Patsy",
+        text="Bitte die Tests laufen lassen",
+        erstellt=stempel,
+        geaendert=stempel,
+        verlauf=[
+            Ereignis(
+                art="auftrag",
+                ts=stempel,
+                von="Sanctuary",
+                host="RAINBOW",
+                an="Patsy",
+                an_host="RAINBOW",
+                text="Bitte die Tests laufen lassen",
+            )
+        ],
+    )
+
+
+class TestWarteanzeigeInDerBlase:
+    """Michaels Wunsch vom 21.08.2026: sehen, dass etwas passiert.
+
+    Geprueft wird der gerenderte Text, nicht die Logik dahinter - die hat
+    ihren eigenen Test in ``test_warten.py``.
+    """
+
+    async def test_offener_auftrag_zeigt_die_wartezeit(self) -> None:
+        app = NurVerlauf()
+        async with app.run_test(size=(120, 40)) as pilot:
+            panel = app.query_one("#verlauf", VerlaufPanel)
+            panel.zeigen("Patsy@RAINBOW", [_offener_auftrag(vor_sekunden=8)])
+            blasen = await _blasen(panel, pilot)
+
+            assert "0:0" in blasen[0].klartext, blasen[0].klartext
+
+    async def test_die_punkte_kommen_im_gerenderten_text_an(self) -> None:
+        """Der eigene Takt wird angehalten, sonst zaehlt er bis zur Pruefung
+        weiter - und das Mounten ist asynchron, ein Blick ohne Warten traefe
+        noch die alte Blase. Ein spaeter zugewiesenes _tick genuegt nicht:
+        set_interval haelt die beim Mounten gebundene Methode fest."""
+        app = NurVerlauf()
+        async with app.run_test(size=(120, 40)) as pilot:
+            panel = app.query_one("#verlauf", VerlaufPanel)
+            panel._punkte_timer.stop()
+            panel._takt = 2
+            panel.zeigen("Patsy@RAINBOW", [_offener_auftrag()])
+            blasen = await _blasen(panel, pilot)
+
+            assert ".." in blasen[0].klartext, blasen[0].klartext
+
+    async def test_erledigter_auftrag_bekommt_keine_punkte(self) -> None:
+        """Sonst liefe die Animation neben einem Ergebnis, das schon da ist."""
+        app = NurVerlauf()
+        async with app.run_test(size=(120, 40)) as pilot:
+            panel = app.query_one("#verlauf", VerlaufPanel)
+            panel._takt = 2
+            panel.zeigen("Patsy@RAINBOW", [_offener_auftrag(zustand="completed")])
+            blasen = await _blasen(panel, pilot)
+
+            assert ".." not in blasen[0].klartext
+
+    async def test_nach_der_frist_steht_die_stille_da(self) -> None:
+        app = NurVerlauf()
+        async with app.run_test(size=(120, 40)) as pilot:
+            panel = app.query_one("#verlauf", VerlaufPanel)
+            panel.zeigen("Patsy@RAINBOW", [_offener_auftrag(vor_sekunden=300)])
+            blasen = await _blasen(panel, pilot)
+
+            text = blasen[0].klartext
+            # Nicht auf die Sekunde genau pruefen: zwischen dem Bauen des
+            # Auftrags und dem Zeichnen vergeht echte Zeit.
+            assert "keine Reaktion seit 5:0" in text, text
+            assert "..." not in text, "nach der Frist wird nicht mehr animiert"
+
+    async def test_ohne_zeitstempel_keine_erfundene_zahl(self) -> None:
+        app = NurVerlauf()
+        async with app.run_test(size=(120, 40)) as pilot:
+            panel = app.query_one("#verlauf", VerlaufPanel)
+            auftrag = _offener_auftrag()
+            auftrag.erstellt = ""
+            auftrag.geaendert = ""
+            panel.zeigen("Patsy@RAINBOW", [auftrag])
+            blasen = await _blasen(panel, pilot)
+
+            assert "0:" not in blasen[0].klartext

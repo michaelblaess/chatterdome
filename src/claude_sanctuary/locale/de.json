@@ -71,6 +71,7 @@
   "chat.placeholder_none": "Erst einen Agenten auswählen",
   "chat.placeholder_self": "Das ist diese Sitzung - an sich selbst wird nichts gesendet",
   "chat.send": "Senden",
+  "chat.no_reply": "keine Reaktion seit {dauer}",
   "chat.receipt": "Quittung",
   "state.submitted": "abgelegt",
   "state.working": "in Arbeit",
