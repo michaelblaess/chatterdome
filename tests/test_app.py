@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 import pytest
 from textual.widgets import Button, DataTable, Input
 
+from claude_sanctuary.i18n import t
 from claude_sanctuary.kern.modelle import Agent, Auftrag, Bestand, Ereignis, Namenspool
 from claude_sanctuary.kern.protokolle import Quelle
 from claude_sanctuary.tui import starter as starter_modul
@@ -344,10 +345,24 @@ class TestBedienung:
         app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
         async with app.run_test(size=(160, 50)) as pilot:
             await _gefuellt(app, pilot)
-            app._schnellbefehl("compact")
+            app._schnellbefehl("status")
             await pilot.pause()
-            assert "compact" in app.query_one("#eingabe", Input).value
+            assert "Zwischenstand" in app.query_one("#eingabe", Input).value
             assert quelle.gesendet == []
+
+    async def test_kein_schnellbefehl_verlangt_einen_slash_befehl(self) -> None:
+        """Bis zum 22.08.2026 gab es "/compact" als Schnellbefehl.
+
+        Der konnte nie funktionieren: ein Slash-Befehl ist ein Bedienelement des
+        Terminals, kein Werkzeug des Modells - Claude Code fuehrt ihn aus einer
+        Peer-Nachricht grundsaetzlich nicht aus. Der Auftrag endete jedes Mal mit
+        einer Absage. Was hier steht, muss ein Agent auch tun koennen.
+        """
+        from claude_sanctuary.tui.app import SCHNELLBEFEHLE
+
+        for schluessel in SCHNELLBEFEHLE:
+            text = t(f"quick.{schluessel}_text")
+            assert "/" not in text, f"{schluessel}: {text}"
 
     async def test_statusleiste_zeigt_kennzahlen(self, quelle: FakeQuelle) -> None:
         from textual_widgets import StatusBar

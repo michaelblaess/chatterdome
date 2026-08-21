@@ -63,12 +63,18 @@ Sie ist keine Claude-Sitzung und hat deshalb keine Session-ID, aus der der
 Bus sonst den Namen zieht. Ohne die Angabe stand in jedem Auftrag "unbekannt".
 """
 
-SCHNELLBEFEHLE = ("compact", "status", "pause", "done")
+SCHNELLBEFEHLE = ("status", "pause", "done")
 """Vorformulierte Auftragstexte.
 
-Sie fuellen NUR das Eingabefeld - abgeschickt wird weiter bewusst. Und sie
-sind Text, keine Fernsteuerung: ein "/compact" kann der Agent nur selbst
-ausloesen, der Auftrag bittet ihn darum.
+Sie fuellen NUR das Eingabefeld - abgeschickt wird weiter bewusst.
+
+HIER STEHT NUR, WAS EIN AGENT AUCH TUN KANN. Bis zum 22.08.2026 gab es einen
+Schnellbefehl "/compact", und der konnte nie funktionieren: ein Slash-Befehl
+ist ein Bedienelement des Terminals, kein Werkzeug des Modells. Anthropics Doku
+sagt es fuer Peer-Nachrichten ausdruecklich - "a command in the message's text,
+such as /compact, arrives as plain text. Claude Code never executes it" - und
+das gilt auch ueber den Inbox-Socket. Der Auftrag endete deshalb jedes Mal mit
+einer Absage. Ausloesen kann /compact nur ein Mensch im Zielfenster.
 """
 
 
@@ -605,7 +611,6 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         eintraege = [
             ContextMenuItem("details", t("menu.details")),
             ContextMenuItem("senden", t("menu.send"), enabled=not agent.selbst),
-            ContextMenuItem("compact", t("menu.compact"), enabled=not agent.selbst),
             ContextMenuItem("report", t("menu.report"), enabled=not agent.selbst),
             ContextMenuItem.separator(),
             ContextMenuItem("kopiere_name", t("menu.copy_name")),
@@ -635,8 +640,6 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
             self._detail_zeigen(agent)
         elif auswahl == "senden":
             self.set_focus(self.query_one("#eingabe", Input))
-        elif auswahl == "compact":
-            self._schnellbefehl("compact")
         elif auswahl == "report":
             self._schnellbefehl("status")
         elif auswahl == "kopiere_name":

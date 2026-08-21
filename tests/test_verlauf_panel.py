@@ -18,6 +18,7 @@ Stylesheet, aber niemand raeumt dazwischen.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -407,4 +408,8 @@ class TestWarteanzeigeInDerBlase:
             panel.zeigen("Patsy@RAINBOW", [auftrag])
             blasen = await _blasen(panel, pilot)
 
-            assert "0:" not in blasen[0].klartext
+            # NICHT auf "0:" pruefen - das trifft nachts die Uhrzeit im Kopf
+            # (00:54). Gemeint ist die Wartezeit HINTER dem Zustandswort.
+            text = blasen[0].klartext
+            assert not re.search(r"abgelegt\s+\.*\s*\d+:\d\d", text), text
+            assert "keine Reaktion" not in text, text

@@ -27,7 +27,7 @@ import { dirname } from 'node:path';
 import { ladePool, aktivesMotiv, alleMotive, setzeMotiv } from './pool.mjs';
 import { ladeInstanzen } from './instanzen.mjs';
 import { prozessName } from './prozess.mjs';
-import { findeTranskript } from './transkript.mjs';
+import { findeTranskript, letzteZeilen } from './transkript.mjs';
 import { aufgabeAusInhalt } from './aufgabe.mjs';
 // Nur zum Anzeigen wartender Post. bus.mjs fuehrt beim Import nichts aus.
 import { offeneNachrichten } from '../claude-bus/bus.mjs';
@@ -92,32 +92,8 @@ function vergibName(tabelle, sessionId) {
 // findeTranskript kommt aus transkript.mjs - dieselbe Suche braucht der
 // Neustart, um vorher zu wissen, ob es ueberhaupt etwas fortzusetzen gibt.
 
-/**
- * Liest die letzten Zeilen einer Datei, ohne sie komplett zu laden. Wichtig,
- * weil Transkripte zweistellige MB erreichen: eine fortgesetzte Sitzung hatte
- * 8,3 MB, und der Vollread lief je Instanz und je Aufruf erneut.
- */
-function letzteZeilen(pfad, anzahl) {
-  const groesse = statSync(pfad).size;
-  const fenster = Math.min(groesse, 400_000);
-  let fd;
-  try {
-    fd = openSync(pfad, 'r');
-    const puffer = Buffer.alloc(fenster);
-    const gelesen = readSync(fd, puffer, 0, fenster, groesse - fenster);
-    const zeilen = puffer.toString('utf8', 0, gelesen).trimEnd().split('\n');
-    // Die erste Zeile im Fenster ist angeschnitten, sobald nicht die ganze
-    // Datei gelesen wurde - sie waere kein gueltiges JSON.
-    if (fenster < groesse) zeilen.shift();
-    return zeilen.slice(-anzahl);
-  } catch {
-    return [];
-  } finally {
-    if (undefined !== fd) {
-      try { closeSync(fd); } catch { /* egal */ }
-    }
-  }
-}
+// letzteZeilen kommt aus transkript.mjs - dort ist es testbar und faengt
+// den Fall ab, dass eine einzelne Zeile groesser ist als das Lesefenster.
 
 /**
  * Zeitstempel des ersten Transkript-Eintrags, also der Beginn des Gespraechs.
