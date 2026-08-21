@@ -448,6 +448,38 @@ mitzugeben ist also Pflicht, kein Komfort.
   deshalb über `[System.IO.File]::WriteAllText(..., New-Object System.Text.UTF8Encoding $false)`,
   und die Node-Seite schneidet eine BOM zusätzlich ab.
 
+## Transkripte lesen: eine Zeile kann riesig sein
+
+`letzteZeilen()` in `transkript.mjs` liest nur das Dateiende, weil Transkripte zweistellige
+MB erreichen. Das Fenster beginnt bei 400 KB - und **eine einzelne Zeile kann grösser sein
+als das Fenster.** Gemessen am 22.08.2026 über 34.846 Zeilen aus zwölf echten Transkripten:
+
+| | |
+|---|---|
+| grösste Zeile | 1.454 KB |
+| Zeilen über 64 KB | 291 |
+
+Claude Code schreibt Dateisnapshots und eingefügte Inhalte als je **eine** JSON-Zeile.
+Dieselbe Grössenordnung setzt `pradipta/wallfacer` für seinen Zeilenpuffer an (16 MB), und
+aus demselben Grund - dort ist die Beobachtung hergekommen.
+
+**Was ohne Behandlung passiert wäre:** Liegt am Dateiende so eine Zeile, bleibt nach dem
+Abschneiden der angeschnittenen ersten Zeile NICHTS übrig. Die Sitzung stünde ohne Modell,
+Kontext und Werkzeug in der Tabelle - und zwar lautlos, denn ein leeres Ergebnis sieht aus
+wie "keine Daten". Deshalb vervierfacht `letzteZeilen()` das Fenster, bis etwas kommt, bis
+zur Obergrenze von 16 MB.
+
+**Im Normalfall bleibt es bei einem Lesevorgang:** von 42 Transkripten oberhalb des
+Startfensters brauchte am 22.08.2026 keines einen zweiten Versuch. Der Fall ist also möglich,
+aber selten - genau die Sorte Fehler, die man ohne Messung für ausgeschlossen hält.
+
+**Und der Ordnername unter `~/.claude/projects/` taugt nicht als Pfadangabe.** Er kodiert
+Trennzeichen und Bindestriche gleich, `C--Users-Michael-Repos-textual-themes` lässt also
+nicht entscheiden, ob dort `textual-themes` oder `textual/themes` stand. Der Operator liest
+das Arbeitsverzeichnis deshalb aus dem `cwd`-Feld im Transkript (`sammle()`:
+`cwd: t.cwd || i.cwd`). Wer den Ordnernamen dekodiert, rät - und genau daraus ist am
+21.08.2026 eine falsche Rechnerangabe in einer Quittung geworden.
+
 ## Ausgabe für Werkzeuge: `--json` und der Strom
 
 Die Tabelle ist für Menschen gebaut. Wer sie zurückparst, hat ANSI-Farben im Text und bricht

@@ -398,6 +398,37 @@ Gegenstück im Prozess, der Inbox-Socket bleibt das Nächstliegende. Deren Herzs
 Dauerschreiber je Sitzung, und dieselbe Frage beantworten `post` plus das Alter der letzten
 Aktivität schon.
 
+## Was ein Auftrag NICHT bewirken kann
+
+Der Bus transportiert Aufträge, keine Tastendrücke. Vier Dinge gehen nie, unabhängig vom
+Transportweg - auch nicht über den Inbox-Socket:
+
+| | Warum |
+|---|---|
+| **Jeder Slash-Befehl** (`/compact`, `/clear`, `/model`, `/config`) | Bedienelemente des Terminals, keine Werkzeuge des Modells. Anthropics Doku: *"a command in the message's text, such as `/compact`, arrives as plain text. Claude Code never executes it."* |
+| **Berechtigungen erteilen** | Ein Peer kann keine offene Rückfrage beantworten und keine Freigabe geben. Der Versuch ist genau das, was Anthropic "permission laundering" nennt. |
+| **Konfiguration ändern** | `settings.json`, `CLAUDE.md`, Berechtigungsregeln - auf Zuruf eines Peers verboten, von beiden Seiten aus. |
+| **Sich selbst beenden oder neu starten** | Der Bus verweigert es schon beim Stop ("Selbstmord wird nicht angeboten"), und ein `--resume` auf die eigene Sitzung wäre sinnlos. |
+
+**Merksatz: Alles, was ein Mensch im Zielfenster tun müsste, kann der Bus nicht.**
+
+### Der Fall, an dem das aufgefallen ist
+
+Bis zum 22.08.2026 hatte die Oberfläche einen Schnellbefehl `/compact` und einen
+Menüeintrag "Um /compact bitten". Beide füllten den Text *"Bitte führe /compact aus - dein
+Kontext ist fast voll"* ins Eingabefeld. Der Auftrag kam an, die Empfängerin las ihn - und
+musste jedes Mal absagen. Ein Bedienelement, das strukturell nie funktionieren konnte, mit
+einer Begründung im Code, die das Gegenteil behauptete ("kann der Agent nur selbst
+auslösen"). Derselbe falsche Satz stand im Tooltip der Kontextspalte.
+
+Beides ist entfernt (`243343a`), und ein Test hält die Regel fest: **kein Schnellbefehl darf
+einen Slash enthalten.** Was dort steht, muss ein Agent auch tun können.
+
+**Eine Einschränkung, die keine Verweigerung ist:** "Pause" wirkt nicht sofort. Arbeitet der
+Agent gerade, kommt die Nachricht erst zwischen zwei Werkzeugaufrufen an - ein laufender
+Befehl wird nicht abgebrochen. Das ist Absicht von Claude Code: ein Peer soll keine laufende
+Arbeit unterbrechen können.
+
 ## Zustellung: Stop-Hook statt Polling
 
 `hooks/bus-deliver.sh` läuft, wenn eine Instanz eine Antwort beendet hat, und stellt dann
