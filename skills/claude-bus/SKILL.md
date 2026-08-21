@@ -327,6 +327,26 @@ Claude Code nichts. Gezeigt wird sie dort **einmal je Abruf**, nicht je Nachrich
 Die Grenzmarke bleibt unter 400 Zeichen, und ein Test hält das fest. Das ist keine Stilfrage,
 sondern eine Kostenschranke: der Block läuft bei jeder Zustellung mit.
 
+### Was die Oberflaeche waehrend des Wartens zeigt
+
+Ein Auftrag kann zwanzig bis dreissig Sekunden brauchen, bis eine Antwort kommt. Die
+Verlaufsblase in `claude-sanctuary` haengt deshalb an offene Auftraege eine Wartezeile:
+
+```
+Sanctuary@RAINBOW -> Patsy@RAINBOW  02:59   abgelegt ..   0:07
+Sanctuary@RAINBOW -> Patsy@RAINBOW  02:53   abgelegt   keine Reaktion seit 5:01
+```
+
+**Die Punkte haengen am Zustand, nicht an einer Uhr.** Eine Animation, die einfach laeuft,
+behauptet Fortschritt - sie liefe genauso munter, wenn die Empfaengerin den Auftrag nie
+bekommen hat. Der Bus kennt den echten Zustand, also zeigt die Oberflaeche den, und die
+Uhr laeuft ab der letzten Aenderung: wer nach zwei Minuten mit `202` annimmt, laesst
+"in Arbeit" wieder bei null beginnen.
+
+Nach zwei Minuten ohne Zustandswechsel hoert die Animation auf. Punkte, die ewig laufen,
+sind schlimmer als gar keine - und genau dieser Fall ist haeufig, siehe die Instanzen ohne
+Sofortzustellung weiter oben. Die Entscheidung liegt in `kern/warten.py` und ist UI-frei.
+
 ## Schleifenbremse: `bremse.mjs`
 
 Zwei Sitzungen, die sich beim Empfang gegenseitig antworten, bilden eine Schleife - und die
