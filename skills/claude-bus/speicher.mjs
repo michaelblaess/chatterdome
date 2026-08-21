@@ -20,7 +20,61 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 /**
- * Oeffnet die Bus-Datenbank und legt das Schema an, falls noetig.
+ * Ist das ein voruebergehendes "gerade belegt"?
+ *
+ * SQLite haengt an SQLITE_BUSY (5) eine Unterart in den oberen Bits an, und
+ * die entscheidet ueber die Behandlung:
+ *
+ *   5    SQLITE_BUSY            - der Normalfall, den busy_timeout abfaengt
+ *   261  SQLITE_BUSY_RECOVERY   - ein anderer stellt gerade den WAL-Index her
+ *   517  SQLITE_BUSY_SNAPSHOT   - Hochstufen einer Lesetransaktion misslang
+ *   773  SQLITE_BUSY_TIMEOUT    - die Frist ist wirklich abgelaufen
+ *
+ * Die unteren acht Bit tragen den Grundcode, deshalb die Maske.
+ */
+export function istBusy(fehler) {
+  return Boolean(fehler) && (Number(fehler.errcode) & 0xff) === 5;
+}
+
+/** Kurze Pause ohne async - oeffne() ist synchron und soll es bleiben. */
+function schlafe(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+const BUSY_VERSUCHE = 5;
+const BUSY_PAUSE_MS = 120;
+
+/**
+ * Oeffnet die Datenbank und wiederholt, solange sie nur belegt ist.
+ *
+ * WARUM EIN RETRY, OBWOHL busy_timeout GESETZT IST: der Timeout deckt nicht
+ * alles ab. Am 21.08.2026 scheiterte ein "bus.mjs verlauf" mit errcode 261
+ * (SQLITE_BUSY_RECOVERY), waehrend eine andere Instanz gerade ihre Quittung
+ * schrieb - beim Wiederherstellen des WAL-Index laeuft der Busy-Handler nicht.
+ * Der zweite Versuch von Hand ging sofort durch, der Fehler ist also
+ * voruebergehend. Genau dafuer ist die Wiederholung da.
+ *
+ * Nur bei BUSY wird wiederholt. Eine kaputte Datei oder ein Rechtefehler
+ * kaeme sonst fuenfmal langsamer heraus, ohne dass es hilft.
+ */
+export function oeffne(verzeichnis) {
+  let letzter;
+  for (let versuch = 0; versuch < BUSY_VERSUCHE; versuch++) {
+    try {
+      return oeffneEinmal(verzeichnis);
+    } catch (fehler) {
+      if (!istBusy(fehler)) throw fehler;
+      letzter = fehler;
+      // Linear statt exponentiell: die Sperre einer Quittung ist in
+      // Millisekunden wieder weg, und der Aufrufer wartet an der Konsole.
+      schlafe(BUSY_PAUSE_MS * (versuch + 1));
+    }
+  }
+  throw letzter;
+}
+
+/**
+ * Ein Oeffnungsversuch samt Schema. Wiederholt wird in oeffne().
  *
  * Die drei PRAGMAs sind Pflicht, nicht Geschmack:
  * - WAL, damit Leser und Schreiber sich nicht gegenseitig sperren.
@@ -36,12 +90,12 @@ import { join } from 'node:path';
  * @param {string} verzeichnis
  * Host-Zweig des Bus, also .../bus/<RECHNER>.
  */
-export function oeffne(verzeichnis) {
+function oeffneEinmal(verzeichnis) {
   const db = new DatabaseSync(join(verzeichnis, 'bus.db'));
   db.exec(`
+    PRAGMA busy_timeout = 5000;
     PRAGMA journal_mode = WAL;
     PRAGMA synchronous  = NORMAL;
-    PRAGMA busy_timeout = 5000;
 
     CREATE TABLE IF NOT EXISTS ereignis (
       id          INTEGER PRIMARY KEY,

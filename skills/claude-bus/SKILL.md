@@ -150,6 +150,44 @@ Abhängigkeit, auf dem Kunden-Rechner zulässig. Gegenprobe mit demselben Aufbau
 3.200** Ereignissen, lückenfreie IDs, `integrity_check: ok`, 418 ms. Details in
 [[reference_lokale_persistenz]].
 
+### Wenn zwei Instanzen gleichzeitig zugreifen
+
+`busy_timeout` deckt **nicht alles** ab. Am 21.08.2026 brach ein
+`bus.mjs verlauf` mit "database is locked" ab, während Patsy gerade ihre Quittung schrieb -
+Fehlercode **261**, also `SQLITE_BUSY_RECOVERY`. Beim Wiederherstellen des WAL-Index läuft
+der Busy-Handler nicht, der eingestellte Timeout half also nichts. Der zweite Versuch von
+Hand ging sofort durch: der Fehler ist vorübergehend.
+
+Deshalb wiederholt `oeffne()` seit dem 21.08. bei BUSY, fünfmal mit wachsender Pause
+(120, 240, 360, 480, 600 ms). Entscheidend ist die Abgrenzung: `istBusy()` maskiert die
+unteren acht Bit, weil SQLite die Unterart in den oberen Bits mitschickt.
+
+| Code | Bedeutung |
+|---|---|
+| `5` | `SQLITE_BUSY` - der Normalfall, den `busy_timeout` abfängt |
+| `261` | `SQLITE_BUSY_RECOVERY` - ein anderer stellt gerade den WAL-Index her |
+| `517` | `SQLITE_BUSY_SNAPSHOT` - Hochstufen einer Lesetransaktion misslang |
+| `773` | `SQLITE_BUSY_TIMEOUT` - die Frist ist wirklich abgelaufen |
+
+**Nur bei BUSY wird wiederholt.** Ein Rechte- oder Pfadfehler (`14`) käme sonst fünfmal
+langsamer heraus, ohne dass es hilft - ein eigener Test hält das fest.
+
+Zwei Dinge, die beim Bauen des Tests aufgefallen sind und für jeden Nebenläufigkeitstest
+gelten:
+
+- **Zwei Prozesse sind Pflicht.** Die Pause in `oeffne()` blockiert synchron
+  (`Atomics.wait`), im selben Prozess käme ein Timer also nie zum Zug. Die erste Fassung des
+  Tests scheiterte genau daran und sah dabei aus wie ein Fehler im Code.
+- **Windows gibt die Datei erst frei, wenn der haltende Prozess wirklich weg ist.** Ein
+  `rmSync` unmittelbar nach `kill()` scheitert mit `EPERM`, und weil das im `finally`
+  passiert, fällt ein völlig gesunder Test um. Der Test wartet deshalb auf das `exit` und
+  räumt danach fehlertolerant auf.
+
+Und noch eine Beobachtung zum Pragma selbst: `PRAGMA journal_mode = WAL` braucht den
+**exklusiven** Zugriff, aber nur für den WECHSEL. Steht die Datei schon auf WAL, ist es ein
+No-Op und läuft auch unter fremder Schreibsperre durch - nachgemessen. Der Fehler trifft
+also vor allem eine frisch angelegte Datenbank.
+
 Drei Einstellungen sind Pflicht, nicht Geschmack: `busy_timeout=5000` (ohne den Wert kamen im
 Test nur 1.022 von 9.000 Inserts an), **`BEGIN IMMEDIATE`** für jeden Schreibvorgang (sonst
 `SQLITE_BUSY_SNAPSHOT` beim Hochstufen einer Lesetransaktion) und `synchronous=NORMAL`.
