@@ -139,24 +139,33 @@ class Suchindex:
     def __init__(self, datei: Path | None = None) -> None:
         self.datei = datei if datei is not None else index_datei()
         self._angelegt = False
-        # Nur EIN Schreiber. Ein Thread-Worker laesst sich nicht abbrechen:
-        # startet die Oberflaeche den Aufbau zweimal (Tastenkuerzel UND
-        # Reiterwechsel), laufen beide zu Ende und treffen sich in der Datei.
-        # SQLite meldet dann "database is locked", und zwar genau beim ersten
-        # Oeffnen des Reiters. Die Sperre haelt das aus dem Kern heraus, statt
-        # sich auf die Aufrufdisziplin der Oberflaeche zu verlassen.
+        # Nur EIN Schreiber - das ist die Ursache des "database is locked",
+        # gemessen am 24.08.2026. Ein Thread-Worker laesst sich nicht
+        # abbrechen: startet die Oberflaeche den Aufbau zweimal
+        # (Tastenkuerzel UND Reiterwechsel loesen aus), laufen beide zu Ende
+        # und schreiben gleichzeitig. Die Sperre haelt das aus dem Kern
+        # heraus, statt sich auf die Aufrufdisziplin der Oberflaeche zu
+        # verlassen - die Oberflaeche hat zusaetzlich ihren eigenen Riegel.
         self._schreibsperre = threading.Lock()
 
     def _verbindung(self, schreibend: bool = False) -> sqlite3.Connection:
         """Eine Verbindung zum Index.
 
-        ``executescript(SCHEMA)`` bei JEDEM Verbindungsaufbau war ein Fehler:
-        auch ein ``CREATE TABLE IF NOT EXISTS`` nimmt eine Schreibsperre. Sucht
-        der Anwender, waehrend der Indexlauf im Hintergrund noch schreibt,
-        treffen zwei Schreiber aufeinander und SQLite meldet ``database is
-        locked`` - im Betrieb genau dann, wenn der Reiter zum ersten Mal
-        geoeffnet wird. Das Anlegen passiert deshalb nur einmal je Instanz und
-        nur auf einem schreibenden Weg.
+        Das Schema wird nur einmal je Instanz angelegt und nur auf einem
+        schreibenden Weg - ein Lesezugriff braucht es nicht, die Tabellen
+        stehen dann laengst.
+
+        **Korrektur zur urspruenglichen Begruendung (24.08.2026):** Hier stand,
+        ``CREATE TABLE IF NOT EXISTS`` nehme auch beim Lesen eine Schreibsperre
+        und sei damit die Ursache des ``database is locked``. Das ist WIDERLEGT.
+        Nachgestellt mit einem Schreiber, der eine Transaktion 1,5 s offen
+        haelt: ein Lesezugriff mit Schema-Anlage kam nach 15 ms durch, einer
+        ohne nach 2 ms. Kein Lock. Dasselbe in Node mit ``node:sqlite`` - 12 ms.
+        Die Ursache war allein der doppelte Indexlauf (siehe
+        ``_schreibsperre``); mit dem Riegel dort laufen die Tests auch dann
+        durch, wenn das Schema bei jeder Verbindung angelegt wird. Der Verzicht
+        bleibt trotzdem richtig, er spart je Lesezugriff die unnoetige Arbeit -
+        aber er loest nichts.
         """
         if schreibend:
             self.datei.parent.mkdir(parents=True, exist_ok=True)
