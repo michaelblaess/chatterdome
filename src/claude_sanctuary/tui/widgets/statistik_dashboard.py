@@ -106,9 +106,16 @@ class StatistikDashboard(VerticalScroll):
 
     def _kopfzeile(self, s: Statistik) -> str:
         zeitraum = f"{s.von:%d.%m.} - {s.bis:%d.%m.%Y}" if s.von and s.bis else ""
+        # Die Subagenten stehen nur da, wenn es welche gibt. Ein "davon 0" in
+        # jeder Kopfzeile waere Rauschen - die meisten Zeitraeume haben keine.
+        subagenten = (
+            f"  ·  [dim]{t('stats.head.subagents', n=format_number(s.subagent_anfragen, 0))}[/]"
+            if s.subagent_anfragen
+            else ""
+        )
         return (
             f"[b]{escape(zeitraum)}[/]"
-            f"  ·  {t('stats.head.requests', n=format_number(s.anfragen_gesamt, 0))}"
+            f"  ·  {t('stats.head.requests', n=format_number(s.anfragen_gesamt, 0))}{subagenten}"
             f"  ·  {t('stats.head.tokens', n=format_number(s.tokens_gesamt / 1e6, 1))}"
             f"  ·  [#f1c40f]{t('stats.head.cache', p=format_number(s.cache_anteil * 100, 1))}[/]"
             f"  ·  {t('stats.head.sessions', n=len(s.sitzungen))}"

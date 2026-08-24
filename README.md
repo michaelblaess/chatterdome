@@ -22,6 +22,8 @@ telemetry. What crosses machine boundaries goes over SSH inside your own Tailnet
 | `skills/claude-bus` | Tasks between sessions, with state and receipts. SQLite, append-only events |
 | `kern/gedaechtnis.py` | Memory analysis: index versus collection, links, checks, actual recalls from the transcripts |
 | `kern/busansicht.py` | Selection and figures for the bus tab: period, state, address kind, free-text search |
+| `kern/transkripte.py` | Where the transcripts live and how to read them: Claude Code including subagents, Codex CLI. One source for statistics and search |
+| `kern/suche.py` | Full-text index across all transcripts, SQLite with FTS5, incremental via file time |
 | `kern/statistik.py` | Analysis of transcripts and bus: fleet, spend by kind, session duration, early warning |
 | `kern/` | UI-free Python core - one source for both frontends |
 | `tui/` | Textual interface for the terminal |
@@ -124,9 +126,41 @@ mistake that delivered the bus task to the wrong Marga.
 
 Two limitations appear as a footnote in the tab, because they shape the
 figures: what is measured is the **active** span, first to last request - not
-how long a window stayed open. And **subagents do not appear in the
-transcripts** (`isSidechain` is false for 35,498 of 35,498 requests), so their
-share is not measurable and is not estimated.
+how long a window stayed open.
+
+**Subagents have been counted since 24.08.2026.** This section used to say
+their share was not measurable - `isSidechain` is false for 35,498 of 35,498
+requests in the main transcripts. That is true but misleading: subagents live
+one level deeper, under `<project>/<session>/subagents/*.jsonl`, and there the
+field is true. The glob never reached that level. Measured on 24.08.2026: 634
+requests across 12 files against 27,042 in the main body - plus 2.3 percent of
+requests and 0.6 percent of output tokens. They count towards the parent
+session, since their `sessionId` is the parent's. The header line lists them
+separately whenever the period contains any.
+
+## The search tab
+
+Key `f`. Full-text search across all transcripts - Claude Code and Codex CLI -
+using SQLite with FTS5. The index lives at `~/.claude-sanctuary/suche.db` and
+is disposable at any time: it holds nothing that is not also in the
+transcripts.
+
+Measured on 24.08.2026 on RAINBOW: 98 transcripts with 7,600 passages, initial
+build **1.8 s**, index 22.9 MB. Every later run only compares modification
+time and size per file and finishes in **0.01 s**. A query takes 1 to 2 ms,
+which is why the tab searches as you type instead of asking for Enter.
+
+Two things the index deliberately does not do:
+
+- **Tool calls and their output stay out.** They make up most of the
+  characters, and what is in them - file contents, command output - is better
+  found where it came from. The search covers what was said.
+- **Results are ranked by relevance, not by date.** Whoever searches wants the
+  best match. A list sorted by date would answer a different question.
+
+Diacritics are folded, so `koln` finds `Köln`. The sharp s is untouched:
+`grusse` does not find `Grüße`. Enter on a result opens the transcript in the
+associated program.
 
 ## The memory tab
 

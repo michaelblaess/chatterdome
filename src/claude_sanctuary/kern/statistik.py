@@ -11,9 +11,14 @@ Michaels Bestand (116 Transkripte, 369 MB, 105.122 Zeilen):
   Transkript. **96 bis 98 Prozent aller Token sind Cache-Lesungen**, deshalb
   werden die vier Arten ueberall getrennt gefuehrt. Eine Summe ueber alles
   misst hauptsaechlich Wiederholung.
-- `isSidechain` steht bei 35.498 von 35.498 Anfragen auf false. Subagenten
-  tauchen in diesen Dateien NICHT auf - eine Kennzahl ueber ihren Anteil waere
-  frei erfunden.
+- `isSidechain` steht in den HAUPTTRANSKRIPTEN bei 35.498 von 35.498 Anfragen
+  auf false. Daraus stand hier bis zum 24.08.2026 der falsche Schluss, eine
+  Kennzahl ueber Subagenten waere frei erfunden. Sie liegen aber DANEBEN, unter
+  ``<projekt>/<sitzung>/subagents/*.jsonl``, und dort steht das Feld auf true.
+  Der alte Glob ``*/*.jsonl`` traf eine Ebene und hat sie uebersehen. Gemessen am
+  24.08.2026: 634 Anfragen in 12 Dateien, gegenueber 27.042 im Hauptbestand -
+  plus 2,3 Prozent Anfragen und 0,6 Prozent Ausgabe-Token. Sie zaehlen zur
+  ELTERNSITZUNG, denn ihre ``sessionId`` ist deren Id.
 
 **Ausgewertet wird je Sitzung, nie je Agentenname.** Ein Name ist eine Pacht:
 gemessen trugen fuenf Namen bereits je zwei verschiedene Sitzungen. Eine
@@ -23,10 +28,8 @@ Auswertung je Name wuerde sie zusammenwerfen - derselbe Denkfehler, der am
 
 from __future__ import annotations
 
-import json
 import statistics as stat
 from collections import Counter, defaultdict
-from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -35,6 +38,12 @@ from claude_sanctuary.kern.modelle import (
     GESCHEITERTE_ZUSTAENDE,
     OFFENE_ZUSTAENDE,
     Auftrag,
+)
+from claude_sanctuary.kern.transkripte import (
+    Anfrage,
+    _zeitpunkt,
+    lies_anfragen,
+    lies_namen,
 )
 
 FENSTER_TAGE = 14
@@ -64,144 +73,10 @@ LIEGEKOERBE: tuple[tuple[str, float, float], ...] = (
 # ---------------------------------------------------------------------------
 # Rohdaten
 # ---------------------------------------------------------------------------
-
-
-@dataclass(slots=True)
-class Anfrage:
-    """Eine einzelne Anfrage an das Modell, wie sie im Transkript steht."""
-
-    ts: datetime
-    sitzung: str
-    ordner: str
-    frisch: int = 0
-    cache_neu: int = 0
-    cache_gelesen: int = 0
-    aus: int = 0
-
-    @property
-    def gesamt(self) -> int:
-        return self.frisch + self.cache_neu + self.cache_gelesen + self.aus
-
-    @property
-    def echt(self) -> int:
-        """Alles ausser der Cache-Lesung - also das, was neu verarbeitet wurde."""
-        return self.frisch + self.cache_neu + self.aus
-
-
-def _zeitpunkt(roh: object) -> datetime | None:
-    if not isinstance(roh, str) or not roh:
-        return None
-    try:
-        wert = datetime.fromisoformat(roh.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    return wert if wert.tzinfo else wert.replace(tzinfo=UTC)
-
-
-def lies_anfragen(projekte: Path) -> Iterator[Anfrage]:
-    """Liest alle Modellanfragen aus den Transkripten.
-
-    Der Vorfilter auf die Zeichenkette spart das Zerlegen von rund zwei
-    Dritteln der Zeilen - ohne ihn dauert der Durchgang ein Vielfaches. Eine
-    unlesbare Zeile wird uebersprungen und nicht gemeldet: Transkripte werden
-    waehrend des Lesens weitergeschrieben, eine halbe letzte Zeile ist normal.
-    """
-    if not projekte.is_dir():
-        return
-    # Ordnername je cwd zwischenspeichern. Ohne diesen Zwischenspeicher baut
-    # die Schleife 35.616 Path-Objekte fuer eine Handvoll verschiedener Pfade -
-    # gemessen 7,7 s gegenueber 2,3 s mit.
-    ordnernamen: dict[str, str] = {}
-    for datei in sorted(projekte.glob("*/*.jsonl")):
-        try:
-            with datei.open(encoding="utf-8", errors="replace") as strom:
-                for zeile in strom:
-                    if '"assistant"' not in zeile:
-                        continue
-                    try:
-                        satz = json.loads(zeile)
-                    except (ValueError, TypeError):
-                        continue
-                    if not isinstance(satz, dict) or satz.get("type") != "assistant":
-                        continue
-                    wann = _zeitpunkt(satz.get("timestamp"))
-                    nachricht = satz.get("message")
-                    verbrauch = nachricht.get("usage") if isinstance(nachricht, dict) else None
-                    if wann is None or not isinstance(verbrauch, dict):
-                        continue
-                    roh_ordner = satz.get("cwd")
-                    ordner = ""
-                    if roh_ordner:
-                        schluessel = str(roh_ordner)
-                        ordner = ordnernamen.get(schluessel, "")
-                        if not ordner:
-                            ordner = Path(schluessel).name or schluessel
-                            ordnernamen[schluessel] = ordner
-                    yield Anfrage(
-                        ts=wann,
-                        sitzung=str(satz.get("sessionId") or ""),
-                        ordner=ordner,
-                        frisch=_zahl(verbrauch.get("input_tokens")),
-                        cache_neu=_zahl(verbrauch.get("cache_creation_input_tokens")),
-                        cache_gelesen=_zahl(verbrauch.get("cache_read_input_tokens")),
-                        aus=_zahl(verbrauch.get("output_tokens")),
-                    )
-        except OSError:
-            # Eine Datei, die gerade ersetzt wird, darf die Auswertung nicht
-            # abbrechen - die uebrigen 115 sind trotzdem auswertbar.
-            continue
-
-
-def _zahl(roh: object) -> int:
-    """Eine Zahl aus dem Transkript, oder 0. Fehlende Felder sind normal."""
-    if isinstance(roh, bool) or not isinstance(roh, int | float | str):
-        return 0
-    try:
-        return int(roh)
-    except (TypeError, ValueError):
-        return 0
-
-
-def lies_namen(projekte: Path) -> dict[str, str]:
-    """Sitzung auf Agentennamen, aus den Transkripten.
-
-    Der Name steht als eigener Datensatz ``agent-name`` in den ersten Zeilen,
-    mit dem Ordner als Zusatz (``Marga · BUERO_PC2``). Nur der Teil vor dem
-    Trenner ist der Poolname.
-
-    Gemessen tragen 22 von 100 Transkripten einen Namen - der SessionStart-Hook
-    ist juenger als der Bestand. Jede Auswertung darauf ist also eine
-    Untergrenze und muss so beschriftet werden.
-    """
-    namen: dict[str, str] = {}
-    if not projekte.is_dir():
-        return namen
-    for datei in sorted(projekte.glob("*/*.jsonl")):
-        try:
-            with datei.open(encoding="utf-8", errors="replace") as strom:
-                for nummer, zeile in enumerate(strom):
-                    # Der Datensatz steht immer im Kopf der Datei. Ohne diese
-                    # Grenze liest die Funktion 369 MB fuer 100 Zeichenketten.
-                    if nummer > 60:
-                        break
-                    if '"agent-name"' not in zeile:
-                        continue
-                    try:
-                        satz = json.loads(zeile)
-                    except (ValueError, TypeError):
-                        continue
-                    if not isinstance(satz, dict) or satz.get("type") != "agent-name":
-                        continue
-                    roh = str(satz.get("agentName") or "")
-                    name = roh.split("·")[0].strip()
-                    sitzung = str(satz.get("sessionId") or datei.stem)
-                    if name:
-                        namen[sitzung] = name
-                    break
-        except OSError:
-            continue
-    return namen
-
+#
+# Das Auffinden und Zerlegen der Transkripte liegt seit dem 24.08.2026 in
+# ``kern/transkripte.py``. Hier stehen nur noch die Verdichtungen. Die Namen
+# werden weiter exportiert, damit Bestandscode und Tests unveraendert laufen.
 
 # ---------------------------------------------------------------------------
 # Verdichtungen
@@ -328,6 +203,14 @@ class Statistik:
     dauer_s: float = 0.0
     namen_bekannt: int = 0
     """Wie viele Sitzungen einen Agentennamen tragen - Nenner der Recyclingquote."""
+    subagent_anfragen: int = 0
+    """Wie viele der Anfragen im Fenster aus einem Subagenten stammen.
+
+    Bis zum 24.08.2026 fielen sie ganz aus der Auswertung - siehe Modulkopf.
+    """
+    subagent_aus: int = 0
+    """Ausgabe-Token der Subagenten. Getrennt gefuehrt, weil nur die Ausgabe
+    unmittelbar Arbeit ist - die Cache-Lesung misst hauptsaechlich Wiederholung."""
 
     @property
     def leer(self) -> bool:
@@ -345,6 +228,11 @@ class Statistik:
     @property
     def hoechste_gleichzeitig(self) -> int:
         return max((t.hoechste_gleichzeitig for t in self.tage), default=0)
+
+    @property
+    def subagent_anteil(self) -> float:
+        """Anteil der Subagenten an den Anfragen des Fensters, 0.0 bei leerem Bestand."""
+        return self.subagent_anfragen / self.anfragen_gesamt if self.anfragen_gesamt else 0.0
 
 
 def _median(werte: list[float]) -> float:
@@ -578,9 +466,7 @@ def fruehwarnung(
 
     je_name: Counter[str] = Counter(s.name for s in spannen_liste if s.name)
     warnung.namen_mehrfach = sum(1 for anzahl in je_name.values() if anzahl > 1)
-    warnung.lange_sitzungen = sum(
-        1 for s in spannen_liste if s.stunden > LANGE_SITZUNG_STUNDEN
-    )
+    warnung.lange_sitzungen = sum(1 for s in spannen_liste if s.stunden > LANGE_SITZUNG_STUNDEN)
     return warnung
 
 
@@ -636,6 +522,8 @@ def lade_statistik(
         annahme_median_h=annahme,
         warnung=fruehwarnung(liste, im_fenster, laufende or set()),
         anfragen_gesamt=len(anfragen),
+        subagent_anfragen=sum(1 for a in anfragen if a.subagent),
+        subagent_aus=sum(a.aus for a in anfragen if a.subagent),
         dauer_s=monotonic() - start,
         namen_bekannt=sum(1 for s in im_fenster if s.name),
     )

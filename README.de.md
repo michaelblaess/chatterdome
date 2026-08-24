@@ -22,6 +22,8 @@ keine Telemetrie. Was über Rechnergrenzen geht, geht über SSH im eigenen Tailn
 | `skills/claude-bus` | Aufträge zwischen Instanzen, mit Zustand und Quittungen. SQLite, append-only Ereignisse |
 | `kern/gedaechtnis.py` | Analyse der Gedächtnisnotizen: Index gegen Bestand, Verweise, Prüfungen, tatsächliche Abrufe aus den Transkripten |
 | `kern/busansicht.py` | Auswahl und Kennzahlen für den Bus-Tab: Zeitraum, Status, Adressart, Freitextsuche |
+| `kern/transkripte.py` | Wo die Transkripte liegen und wie sie zu lesen sind: Claude Code samt Subagenten, Codex CLI. Eine Quelle für Statistik und Suche |
+| `kern/suche.py` | Volltextindex über alle Transkripte, SQLite mit FTS5, inkrementell über die Dateizeit |
 | `kern/statistik.py` | Auswertung der Transkripte und des Bus: Flotte, Verbrauch nach Art, Sitzungsdauer, Frühwarnung |
 | `kern/` | UI-freier Python-Kern - eine Quelle für beide Oberflächen |
 | `tui/` | Textual-Oberfläche fürs Terminal |
@@ -128,11 +130,46 @@ verschiedene Sitzungen. Eine Rangliste je Name würde sie zusammenwerfen, und
 das ist derselbe Denkfehler, der den Busauftrag an die falsche Marga
 geliefert hat.
 
-Zwei Einschränkungen stehen als Fussnote im Tab, weil sie die Zahlen prägen:
+Eine Einschränkung steht als Fussnote im Tab, weil sie die Zahlen prägt:
 Gemessen wird die **aktive** Dauer, also erste bis letzte Anfrage - nicht, wie
-lange ein Fenster offen stand. Und **Subagenten tauchen in den Transkripten
-nicht auf** (`isSidechain` steht bei 35.498 von 35.498 Anfragen auf false),
-ihr Anteil ist deshalb nicht messbar und wird nicht geschätzt.
+lange ein Fenster offen stand.
+
+**Subagenten zählen seit dem 24.08.2026 mit.** Vorher stand hier, ihr Anteil
+sei nicht messbar - `isSidechain` steht in den Haupttranskripten bei 35.498 von
+35.498 Anfragen auf false. Das stimmt, führt aber in die Irre: die Subagenten
+liegen eine Ebene tiefer, unter `<projekt>/<sitzung>/subagents/*.jsonl`, und
+dort steht das Feld auf true. Der Glob traf diese Ebene nicht. Gemessen am
+24.08.2026 waren es 634 Anfragen in 12 Dateien gegenüber 27.042 im
+Hauptbestand - plus 2,3 Prozent Anfragen und 0,6 Prozent Ausgabe-Token. Sie
+zählen zur Elternsitzung, denn ihre `sessionId` ist deren Id. Die Kopfzeile
+weist sie getrennt aus, sobald welche im Zeitraum liegen.
+
+## Der Suchreiter
+
+Taste `f`. Volltextsuche über alle Transkripte - Claude Code und Codex CLI -
+mit SQLite und FTS5. Der Index liegt unter `~/.claude-sanctuary/suche.db` und
+ist jederzeit wegwerfbar: er enthält nichts, was nicht auch in den
+Transkripten steht.
+
+Gemessen am 24.08.2026 auf RAINBOW: 98 Transkripte mit 7.600 Textstellen,
+Erstaufbau **1,8 s**, Index 22,9 MB. Jeder weitere Lauf vergleicht nur
+Änderungszeit und Grösse je Datei und ist nach **0,01 s** durch. Eine Abfrage
+dauert 1 bis 2 ms, deshalb sucht der Reiter schon beim Tippen und verlangt
+kein Enter.
+
+Zwei Dinge, die der Index bewusst nicht tut:
+
+- **Werkzeugaufrufe und deren Ausgaben bleiben draussen.** Sie machen den
+  Grossteil der Zeichen aus, und was darin steht - Dateiinhalte,
+  Befehlsausgaben - findet man besser dort, wo es herkommt. Gesucht wird in
+  dem, was gesagt wurde.
+- **Sortiert wird nach Relevanz, nicht nach Zeit.** Wer sucht, will den besten
+  Treffer sehen. Eine nach Datum sortierte Trefferliste wäre eine andere Frage
+  als die gestellte.
+
+Umlaute werden normalisiert, `koln` findet also `Köln`. Das scharfe s bleibt
+davon unberührt: `grusse` findet `Grüße` nicht. Enter auf einem Treffer öffnet
+das Transkript im zuständigen Programm.
 
 ## Der Gedächtnis-Tab
 

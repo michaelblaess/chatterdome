@@ -266,3 +266,27 @@ Screen {
 #stats-warnung {
     height: auto;
 }
+
+/* -- Volltextsuche ------------------------------------------------------ */
+
+#suche {
+    height: 1fr;
+}
+
+/* Feste Hoehe: das Eingabefeld traegt einen Rahmen und braucht drei Zeilen.
+   Mit "auto" faellt der Rahmen zusammen und der Knopf zum Leeren verschwindet. */
+#such-zeile {
+    height: 3;
+    margin-bottom: 1;
+}
+
+#such-treffer {
+    height: 1fr;
+}
+
+/* Die Fusszeile traegt Bestand und Trefferzahl - eine Zeile, kein Rahmen. */
+#such-fuss {
+    height: auto;
+    padding: 0 1;
+    color: $text-muted;
+}

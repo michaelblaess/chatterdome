@@ -44,6 +44,7 @@ from claude_sanctuary.kern.lokale_quelle import LokaleQuelle
 from claude_sanctuary.kern.modelle import Agent, Auftrag, Bestand, Busbestand, Namenspool
 from claude_sanctuary.kern.protokolle import Quelle
 from claude_sanctuary.kern.statistik import Statistik, lade_statistik
+from claude_sanctuary.kern.suche import Bilanz, Suchindex
 from claude_sanctuary.tui.schutz import klartext
 from claude_sanctuary.tui.starter import oeffne_ordner
 from claude_sanctuary.tui.widgets.agenten_tabelle import AgentenTabelle
@@ -54,6 +55,7 @@ from claude_sanctuary.tui.widgets.kopf_panel import KopfPanel
 from claude_sanctuary.tui.widgets.notizen_tabelle import NotizenTabelle
 from claude_sanctuary.tui.widgets.statistik_dashboard import StatistikDashboard
 from claude_sanctuary.tui.widgets.status_zeile import StatusZeile
+from claude_sanctuary.tui.widgets.such_panel import SuchPanel
 from claude_sanctuary.tui.widgets.verlauf_panel import Blase, VerlaufPanel
 
 ABSENDER = "Sanctuary"
@@ -118,6 +120,8 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         Binding("b,B", "broadcast", "broadcast", key_display="b"),
         Binding("r,R", "restart_agent", "restart", key_display="r"),
         Binding("m,M", "show_memory", "memory", key_display="m"),
+        # "s" liegt bei den Einstellungen - fuer die Volltextsuche bleibt "f".
+        Binding("f,F", "show_search", "search", key_display="f"),
         # "b" liegt beim Rundruf und "n" beim Starten - fuer den Bus bleibt "u".
         Binding("u,U", "show_bus", "bus", key_display="u"),
         # "s" liegt bei den Einstellungen, "t" beim Thema - bleibt "k" fuer Kennzahlen.
@@ -144,6 +148,7 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         "broadcast": "broadcast",
         "restart_agent": "restart",
         "show_memory": "memory",
+        "show_search": "search",
         "show_bus": "bus",
         "show_stats": "stats",
         "bildschirmfoto": "screenshot",
@@ -192,6 +197,9 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         self._auftrag: Auftrag | None = None
 
         self._statistik: Statistik | None = None
+        self._suchindex = Suchindex()
+        self._index_gebaut = False
+        self._index_laeuft = False
         """Die Auswertung. None, solange der Tab nie geoeffnet wurde."""
 
         self._neustart_kandidat: Agent | None = None
@@ -212,9 +220,7 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
                 yield VerticalSplitter(target_id="agenten", min_size=40, id="mitte-splitter")
                 with Vertical(id="verlauf-raum"):
                     yield VerlaufPanel(id="verlauf")
-                    yield HorizontalSplitter(
-                        target_id="verlauf", min_size=5, id="eingabe-splitter"
-                    )
+                    yield HorizontalSplitter(target_id="verlauf", min_size=5, id="eingabe-splitter")
                     with Vertical(id="eingabe-raum"):
                         # input_id="eingabe": das innere Feld behaelt die ID,
                         # damit query_one("#eingabe", Input) ueberall gilt.
@@ -239,6 +245,8 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
                 yield BusDetail(id="bus-detail")
             with TabPane(t("tab.stats"), id="tab-statistik"):
                 yield StatistikDashboard(id="statistik")
+            with TabPane(t("tab.search"), id="tab-suche"):
+                yield SuchPanel(id="suche")
             with (
                 TabPane(t("tab.memory"), id="tab-gedaechtnis"),
                 Horizontal(id="gedaechtnis-raum"),
@@ -409,6 +417,8 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
             self.gedaechtnis_laden()
         elif ereignis.pane.id == "tab-bus" and self._busbestand is None:
             self.bus_laden()
+        elif ereignis.pane.id == "tab-suche":
+            self.index_vorbereiten()
         elif ereignis.pane.id == "tab-statistik" and self._statistik is None:
             self.query_one("#statistik", StatistikDashboard).setze_laeuft(True)
             self.statistik_laden()
@@ -417,6 +427,92 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         """Zeigt den Gedaechtnis-Tab und liest den Bestand neu ein."""
         self.query_one("#bereiche", TabbedContent).active = "tab-gedaechtnis"
         self.gedaechtnis_laden()
+
+    # -- Volltextsuche --------------------------------------------------
+
+    def action_show_search(self) -> None:
+        """Zeigt den Suchreiter und setzt den Cursor gleich ins Eingabefeld."""
+        self.query_one("#bereiche", TabbedContent).active = "tab-suche"
+        self.index_vorbereiten()
+        self.query_one("#suche", SuchPanel).fokussiere()
+
+    def index_vorbereiten(self) -> None:
+        """Startet den Aufbau genau einmal.
+
+        Der Reiter hat zwei Wege hinein - das Tastenkuerzel und der Wechsel per
+        Maus. Der Wechsel loest ``TabActivated`` aus, das Kuerzel ebenfalls,
+        weil es den Reiter setzt. Ohne diesen Riegel liefen zwei Aufbauten
+        gleichzeitig.
+
+        Das ist NICHT die bekannte Falle "exclusive=True plus eigener Guard":
+        dort blockiert ein Merker den Nachfolger eines abgebrochenen Laufs.
+        Hier wird nie abgebrochen und nie wiederholt - der Index wird einmal
+        gebaut, danach steht ``_index_gebaut``.
+        """
+        if self._index_gebaut or self._index_laeuft:
+            return
+        self._index_laeuft = True
+        self.index_bauen()
+
+    @work(thread=True, exclusive=True, group="suchindex")
+    def index_bauen(self) -> None:
+        """Bringt den Suchindex auf Stand.
+
+        Im Thread, weil der erste Lauf ueber den ganzen Bestand geht - gemessen
+        1,8 s fuer 98 Transkripte. Jeder weitere Lauf fasst nur an, was sich
+        geaendert hat, und ist damit unter einer Hundertstelsekunde durch.
+        """
+        panel = self.query_one("#suche", SuchPanel)
+
+        def melde(erledigt: int, gesamt: int) -> None:
+            self.call_from_thread(panel.zeige_aufbau, erledigt, gesamt)
+
+        try:
+            bilanz = self._suchindex.aktualisiere(melde=melde)
+            dateien, stuecke = self._suchindex.bestand()
+        except Exception:
+            # Ohne das bliebe der Merker stehen und der Reiter dauerhaft leer.
+            self.call_from_thread(self._index_gescheitert)
+            raise
+        self.call_from_thread(self._index_fertig, bilanz, dateien, stuecke)
+
+    def _index_gescheitert(self) -> None:
+        self._index_laeuft = False
+
+    def _index_fertig(self, bilanz: Bilanz, dateien: int, stuecke: int) -> None:
+        self._index_gebaut = True
+        self._index_laeuft = False
+        self.query_one("#suche", SuchPanel).zeige_bestand(bilanz, dateien, stuecke)
+        # Nur melden, wenn wirklich etwas passiert ist - ein Lauf ohne Aenderung
+        # ist der Regelfall und gehoert nicht ins Protokoll.
+        if bilanz.neu or bilanz.aktualisiert or bilanz.entfernt:
+            self._schreibe_log(
+                t(
+                    "log.index_done",
+                    dateien=dateien,
+                    neu=bilanz.neu,
+                    aktualisiert=bilanz.aktualisiert,
+                    entfernt=bilanz.entfernt,
+                    s=f"{bilanz.dauer_s:.1f}",
+                )
+            )
+
+    def on_such_panel_suche_geaendert(self, ereignis: SuchPanel.SucheGeaendert) -> None:
+        """Beantwortet eine Eingabe. Laeuft im Ereignisstrang - 1 bis 2 ms."""
+        panel = self.query_one("#suche", SuchPanel)
+        panel.zeige(self._suchindex.suche(ereignis.text), ereignis.text)
+
+    def on_such_panel_treffer_gewaehlt(self, ereignis: SuchPanel.TrefferGewaehlt) -> None:
+        """Oeffnet das Transkript hinter einem Treffer im zustaendigen Programm.
+
+        Ein eigener Transkriptleser waere der naechste Schritt - bis dahin ist
+        die Datei selbst der ehrlichste Weg: sie ist da, sie ist lesbar, und
+        niemand muss einen Pfad abtippen. Geoeffnet wird ueber die Mechanik des
+        ClickableLinksMixin, damit es nur EINE plattformabhaengige Stelle gibt.
+        """
+        self._link_counter += 1
+        self._link_registry[self._link_counter] = str(ereignis.treffer.pfad)
+        self.action_open_link(str(self._link_counter))
 
     # -- Message-Bus ----------------------------------------------------
 
@@ -557,7 +653,8 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
             # aus - und man wuesste beim Tippen nicht, wen man anschreibt.
             beschriftung = self.query_one("#agenten", AgentenTabelle).beschriftung(agent)
             eingabe.placeholder = (
-                t("chat.placeholder_self") if agent.selbst
+                t("chat.placeholder_self")
+                if agent.selbst
                 else t("chat.placeholder", name=beschriftung)
             )
             self.verlauf_laden(agent.name)
@@ -600,9 +697,7 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         elif aktion == "kopieren":
             self._angaben_kopieren(agent)
 
-    def on_agenten_tabelle_menue_gewuenscht(
-        self, ereignis: AgentenTabelle.MenueGewuenscht
-    ) -> None:
+    def on_agenten_tabelle_menue_gewuenscht(self, ereignis: AgentenTabelle.MenueGewuenscht) -> None:
         from textual_widgets import ContextMenuItem, ContextMenuScreen
 
         agent = ereignis.agent
@@ -669,9 +764,7 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
 
     # -- Verlauf: Kontextmenue ------------------------------------------
 
-    def on_verlauf_panel_menue_gewuenscht(
-        self, ereignis: VerlaufPanel.MenueGewuenscht
-    ) -> None:
+    def on_verlauf_panel_menue_gewuenscht(self, ereignis: VerlaufPanel.MenueGewuenscht) -> None:
         from textual_widgets import ContextMenuItem, ContextMenuScreen
 
         panel = self.query_one("#verlauf", VerlaufPanel)
@@ -847,8 +940,9 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
     def _bild_fertig(self, pfad: str, fehler: str, rechner: str) -> None:
         if fehler or not pfad:
             self._schreibe_log(t("log.shot_failed", rechner=rechner, fehler=fehler), "error")
-            self.notify(fehler or t("log.shot_failed", rechner=rechner, fehler="-"),
-                        severity="error")
+            self.notify(
+                fehler or t("log.shot_failed", rechner=rechner, fehler="-"), severity="error"
+            )
             return
         from claude_sanctuary.tui.screens.bild_screen import BildScreen
 
@@ -894,9 +988,7 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         """
         fehler: list[str] = []
         for name, rechner in ziele:
-            meldung = self._quelle.senden(
-                name, text, quittung=True, host=rechner, von=ABSENDER
-            )
+            meldung = self._quelle.senden(name, text, quittung=True, host=rechner, von=ABSENDER)
             if meldung:
                 fehler.append(f"{name}@{rechner.upper()}: {meldung}")
         self.call_from_thread(self._rundruf_fertig, len(ziele), fehler)
@@ -952,9 +1044,7 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
             self._neustart_ausfuehren(agent.name, agent.session_id, agent.cwd, agent.rechner)
 
     @work(thread=True, group="neustart")
-    def _neustart_ausfuehren(
-        self, name: str, session_id: str, cwd: str, rechner: str = ""
-    ) -> None:
+    def _neustart_ausfuehren(self, name: str, session_id: str, cwd: str, rechner: str = "") -> None:
         from claude_sanctuary.tui.starter import starte_resume
 
         # Auf einem anderen Rechner macht das dortige CLI beides in einem Zug -
