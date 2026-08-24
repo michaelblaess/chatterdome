@@ -231,6 +231,24 @@ class TestKoerbe:
         assert [o.ordner for o in werte] == ["gross", "klein"]
         assert werte[0].anfragen == 2
 
+    def test_sortiert_nach_verarbeitetem_nicht_nach_gesamtsumme(self) -> None:
+        """Die Anzeige zeigt das Verarbeitete - die Reihenfolge muss dazu passen.
+
+        Sonst stehen die Balken nicht absteigend, und die Auswahl der ersten
+        sechs trifft die falschen Ordner. Gemessen am 24.08.2026 stand der
+        groesste Ordner dadurch auf Platz 6.
+        """
+        anfragen = [
+            # Viel gelesener Kontext, wenig echte Arbeit.
+            _anfrage(1, ordner="cache-lastig", frisch=1, cache_gelesen=9_000_000, aus=1),
+            # Wenig Kontext, viel Arbeit.
+            _anfrage(1, ordner="arbeitsam", frisch=500, cache_gelesen=10, aus=500),
+        ]
+
+        werte = ordnerwerte(anfragen)
+
+        assert [o.ordner for o in werte] == ["arbeitsam", "cache-lastig"]
+
 
 # ---------------------------------------------------------------------------
 # Bus

@@ -354,7 +354,16 @@ def alterskoerbe(spannen_liste: list[Sitzungsspanne]) -> list[Korb]:
 
 
 def ordnerwerte(anfragen: list[Anfrage], grenze: int = 8) -> list[Ordnerwert]:
-    """Verbrauch je Arbeitsordner, die groessten zuerst."""
+    """Verbrauch je Arbeitsordner, die groessten zuerst.
+
+    Sortiert nach dem VERARBEITETEN, nicht nach der Gesamtsumme - dasselbe Mass,
+    das die Anzeige zeigt. Bis zum 24.08.2026 lief beides auseinander: die
+    Anzeige war laengst auf ``echt`` umgestellt, die Sortierung blieb auf
+    ``tokens``. Damit standen die Balken nicht absteigend, und die Auswahl der
+    ersten sechs traf die falschen - gemessen stand der groesste Ordner auf
+    Platz 6, und ein Ordner mit 3,05 Millionen fiel zugunsten eines mit 0,84
+    heraus, weil dessen Cache-Anteil hoeher war.
+    """
     gesammelt: dict[str, Ordnerwert] = {}
     for a in anfragen:
         name = a.ordner or "?"
@@ -365,7 +374,7 @@ def ordnerwerte(anfragen: list[Anfrage], grenze: int = 8) -> list[Ordnerwert]:
         eintrag.tokens += a.gesamt
         eintrag.echt += a.echt
         eintrag.anfragen += 1
-    geordnet = sorted(gesammelt.values(), key=lambda o: -o.tokens)
+    geordnet = sorted(gesammelt.values(), key=lambda o: -o.echt)
     return geordnet[:grenze]
 
 
