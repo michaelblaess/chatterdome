@@ -132,11 +132,19 @@ how long a window stayed open.
 their share was not measurable - `isSidechain` is false for 35,498 of 35,498
 requests in the main transcripts. That is true but misleading: subagents live
 one level deeper, under `<project>/<session>/subagents/*.jsonl`, and there the
-field is true. The glob never reached that level. Measured on 24.08.2026: 634
-requests across 12 files against 27,042 in the main body - plus 2.3 percent of
-requests and 0.6 percent of output tokens. They count towards the parent
-session, since their `sessionId` is the parent's. The header line lists them
-separately whenever the period contains any.
+field is true. The glob never reached that level. Measured on 24.08.2026: 255
+requests against 14,608 in the main body - 1.7 percent of requests and 1.3
+percent of output tokens. They count towards the parent session, since their
+`sessionId` is the parent's. The header line lists them separately whenever the
+period contains any. The agent type and a readable task description live in a
+`*.meta.json` next to the file.
+
+**One assistant turn spans several lines**, and each repeats the same cumulative
+usage. Until 24.08.2026 the analysis summed per line and counted it several
+times - measured factor 2.25, i.e. 30.45 instead of 13.51 million output tokens.
+Since then it counts only the last state per `requestId`. **All figures in the
+statistics tab have shrunk accordingly and are not comparable to earlier
+snapshots.**
 
 ## The search tab
 

@@ -147,6 +147,134 @@ class TestClaudeQuelle:
         assert stuecke[0].rolle == "assistant"
 
 
+class TestZugDeduplizierung:
+    """Ein Antwortzug steht auf mehreren Zeilen und wiederholt seinen Verbrauch.
+
+    Gemessen am 24.08.2026 ueber den Hauptbestand: pro Zeile summiert ergaeben
+    sich 30,45 Mio Ausgabe-Token, je Zug gezaehlt 13,51 Mio - Faktor 2,25. Der
+    Wert ist KUMULATIV, deshalb gewinnt der letzte Stand.
+    """
+
+    def _zug(self, kennung: str, aus: int, stunden: float) -> dict[str, object]:
+        return {
+            "type": "assistant",
+            "timestamp": _iso(stunden),
+            "sessionId": "s1",
+            "requestId": kennung,
+            "message": {"usage": _verbrauch(output_tokens=aus)},
+        }
+
+    def test_zaehlt_je_zug_einmal(self, tmp_path: Path) -> None:
+        _schreibe(
+            tmp_path / "projekt" / "s1.jsonl",
+            [self._zug("req-1", 10, 3), self._zug("req-1", 40, 2), self._zug("req-2", 7, 1)],
+        )
+
+        gelesen = list(lies_anfragen(tmp_path))
+
+        assert len(gelesen) == 2
+        assert sum(a.aus for a in gelesen) == 47
+
+    def test_der_letzte_stand_gewinnt(self, tmp_path: Path) -> None:
+        """Der Wert waechst waehrend des Zuges - der erste Stand ist unvollstaendig."""
+        _schreibe(
+            tmp_path / "projekt" / "s1.jsonl",
+            [self._zug("req-1", 3, 3), self._zug("req-1", 28, 2)],
+        )
+
+        gelesen = list(lies_anfragen(tmp_path))
+
+        assert [a.aus for a in gelesen] == [28]
+
+    def test_zeilen_ohne_kennung_zaehlen_einzeln(self, tmp_path: Path) -> None:
+        """Ohne requestId gibt es nichts zusammenzufassen - jede Zeile bleibt."""
+        ohne = {
+            "type": "assistant",
+            "timestamp": _iso(1),
+            "sessionId": "s1",
+            "message": {"usage": _verbrauch(output_tokens=5)},
+        }
+        _schreibe(tmp_path / "projekt" / "s1.jsonl", [ohne, dict(ohne)])
+
+        gelesen = list(lies_anfragen(tmp_path))
+
+        assert len(gelesen) == 2
+        assert sum(a.aus for a in gelesen) == 10
+
+    def test_message_id_dient_als_rueckfall(self, tmp_path: Path) -> None:
+        satz = {
+            "type": "assistant",
+            "timestamp": _iso(1),
+            "sessionId": "s1",
+            "message": {"id": "msg-1", "usage": _verbrauch(output_tokens=9)},
+        }
+        _schreibe(tmp_path / "projekt" / "s1.jsonl", [satz, dict(satz)])
+
+        assert len(list(lies_anfragen(tmp_path))) == 1
+
+
+class TestSubagentMetadaten:
+    def _mit_meta(self, wurzel: Path, meta: dict[str, object] | None) -> None:
+        ziel = wurzel / "projekt" / "s1" / "subagents" / "agent-a.jsonl"
+        _schreibe(
+            ziel,
+            [
+                {
+                    "type": "assistant",
+                    "timestamp": _iso(1),
+                    "sessionId": "s1",
+                    "message": {"usage": _verbrauch(output_tokens=3)},
+                }
+            ],
+        )
+        if meta is not None:
+            ziel.with_suffix(".meta.json").write_text(
+                json.dumps(meta), encoding="utf-8", newline="\n"
+            )
+
+    def test_liest_typ_auftrag_und_tiefe(self, tmp_path: Path) -> None:
+        """Ohne die Metadatei heisst ein Subagent nur nach seiner Kennung."""
+        self._mit_meta(
+            tmp_path,
+            {
+                "agentType": "general-purpose",
+                "description": "Domain-Namen recherchieren",
+                "spawnDepth": 2,
+            },
+        )
+
+        subagent = next(t for t in ClaudeQuelle(tmp_path).dateien() if t.subagent)
+
+        assert subagent.art == "general-purpose"
+        assert subagent.auftrag == "Domain-Namen recherchieren"
+        assert subagent.tiefe == 2
+
+    def test_typ_wandert_in_die_anfrage(self, tmp_path: Path) -> None:
+        """Sonst laesst sich der Verbrauch nicht nach Agententyp aufschluesseln."""
+        self._mit_meta(tmp_path, {"agentType": "Explore", "description": "x"})
+
+        gelesen = list(lies_anfragen(tmp_path))
+
+        assert [a.art for a in gelesen] == ["Explore"]
+
+    def test_fehlende_metadatei_ist_kein_fehler(self, tmp_path: Path) -> None:
+        """Aeltere Bestaende haben sie nicht."""
+        self._mit_meta(tmp_path, None)
+
+        subagent = next(t for t in ClaudeQuelle(tmp_path).dateien() if t.subagent)
+
+        assert (subagent.art, subagent.auftrag, subagent.tiefe) == ("", "", 0)
+
+    def test_kaputte_metadatei_ist_kein_fehler(self, tmp_path: Path) -> None:
+        self._mit_meta(tmp_path, None)
+        ziel = tmp_path / "projekt" / "s1" / "subagents" / "agent-a.meta.json"
+        ziel.write_text("{kein json", encoding="utf-8", newline="\n")
+
+        subagent = next(t for t in ClaudeQuelle(tmp_path).dateien() if t.subagent)
+
+        assert subagent.art == ""
+
+
 class TestCodexQuelle:
     def _sitzung(self, wurzel: Path, name: str, zeilen: list[dict[str, object]]) -> None:
         _schreibe(wurzel / "2026" / "01" / "03" / f"rollout-{name}.jsonl", zeilen)

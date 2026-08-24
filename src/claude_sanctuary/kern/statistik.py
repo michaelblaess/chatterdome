@@ -11,14 +11,21 @@ Michaels Bestand (116 Transkripte, 369 MB, 105.122 Zeilen):
   Transkript. **96 bis 98 Prozent aller Token sind Cache-Lesungen**, deshalb
   werden die vier Arten ueberall getrennt gefuehrt. Eine Summe ueber alles
   misst hauptsaechlich Wiederholung.
-- `isSidechain` steht in den HAUPTTRANSKRIPTEN bei 35.498 von 35.498 Anfragen
-  auf false. Daraus stand hier bis zum 24.08.2026 der falsche Schluss, eine
-  Kennzahl ueber Subagenten waere frei erfunden. Sie liegen aber DANEBEN, unter
+- `isSidechain` steht in den HAUPTTRANSKRIPTEN immer auf false. Daraus stand
+  hier bis zum 24.08.2026 der falsche Schluss, eine Kennzahl ueber Subagenten
+  waere frei erfunden. Sie liegen aber DANEBEN, unter
   ``<projekt>/<sitzung>/subagents/*.jsonl``, und dort steht das Feld auf true.
-  Der alte Glob ``*/*.jsonl`` traf eine Ebene und hat sie uebersehen. Gemessen am
-  24.08.2026: 634 Anfragen in 12 Dateien, gegenueber 27.042 im Hauptbestand -
-  plus 2,3 Prozent Anfragen und 0,6 Prozent Ausgabe-Token. Sie zaehlen zur
-  ELTERNSITZUNG, denn ihre ``sessionId`` ist deren Id.
+  Der alte Glob ``*/*.jsonl`` traf eine Ebene und hat sie uebersehen. Gemessen
+  am 24.08.2026: 255 Anfragen gegenueber 14.608 im Hauptbestand - 1,7 Prozent
+  der Anfragen und 1,3 Prozent der Ausgabe-Token. Sie zaehlen zur
+  ELTERNSITZUNG, denn ihre ``sessionId`` ist deren Id. Ihr Agententyp steht in
+  einer ``*.meta.json`` neben der Datei.
+- **Ein Antwortzug steht auf MEHREREN Zeilen**, und jede wiederholt denselben
+  kumulativen Verbrauch. Bis zum 24.08.2026 summierte die Auswertung pro Zeile
+  und zaehlte ihn damit mehrfach - gemessen Faktor 2,25 (30,45 Mio statt 13,51
+  Mio Ausgabe-Token). Seitdem zaehlt ``transkripte.py`` je ``requestId`` nur
+  den LETZTEN Stand. Alle Zahlen dieses Moduls sind dadurch kleiner geworden
+  und vorher-nachher NICHT vergleichbar.
 
 **Ausgewertet wird je Sitzung, nie je Agentenname.** Ein Name ist eine Pacht:
 gemessen trugen fuenf Namen bereits je zwei verschiedene Sitzungen. Eine

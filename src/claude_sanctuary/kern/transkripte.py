@@ -67,6 +67,8 @@ class Anfrage:
     Der Verbrauch zaehlt zur Elternsitzung - ``sitzung`` traegt deren Id, nicht
     die des Subagenten.
     """
+    art: str = ""
+    """Agententyp bei Subagenten (aus der Metadatei), sonst leer."""
 
     @property
     def gesamt(self) -> int:
@@ -86,6 +88,19 @@ class Transkript:
     pfad: Path
     sitzung: str
     subagent: bool = False
+    art: str = ""
+    """Der Agententyp eines Subagenten (``general-purpose``, ``Explore``, ...).
+
+    Steht in der ``*.meta.json`` neben der Transkriptdatei. Leer bei
+    Haupttranskripten und bei Subagenten ohne Metadatei.
+    """
+    auftrag: str = ""
+    """Die Aufgabenbeschreibung des Subagenten, ein lesbarer Titel.
+
+    Ohne sie heisst ein Subagent in jeder Anzeige nur ``agent-abb2fa67d7c631703``.
+    """
+    tiefe: int = 0
+    """Verschachtelungstiefe (``spawnDepth``). 0 fuer das Haupttranskript."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -174,7 +189,10 @@ class ClaudeQuelle:
         # aus dem Ordnernamen - der Dateiname traegt die des Subagenten.
         for datei in sorted(self.wurzel.glob("*/*/subagents/*.jsonl")):
             eltern = datei.parent.parent.name
-            yield Transkript(CLAUDE, datei, eltern, subagent=True)
+            art, auftrag, tiefe = _subagent_meta(datei)
+            yield Transkript(
+                CLAUDE, datei, eltern, subagent=True, art=art, auftrag=auftrag, tiefe=tiefe
+            )
 
     def anfragen(
         self, t: Transkript, ordnernamen: dict[str, str] | None = None
@@ -187,6 +205,13 @@ class ClaudeQuelle:
         halbe letzte Zeile ist normal.
         """
         merker = ordnernamen if ordnernamen is not None else {}
+        # Ein logischer Antwortzug steht auf MEHREREN Zeilen, und jede wiederholt
+        # denselben kumulativen Verbrauch. Wer pro Zeile summiert, zaehlt ihn
+        # mehrfach - gemessen am 24.08.2026 ueber den Hauptbestand Faktor 2,25
+        # (30,45 Mio statt 13,51 Mio Ausgabe-Token). Deshalb je requestId nur der
+        # LETZTE Stand: er traegt den vollstaendigen Zug. Wer den ersten nimmt
+        # (so macht es zoetrope), unterschaetzt bei Subagenten um das Siebenfache.
+        letzte: dict[str, Anfrage] = {}
         try:
             with t.pfad.open(encoding="utf-8", errors="replace") as strom:
                 for zeile in strom:
@@ -203,7 +228,7 @@ class ClaudeQuelle:
                     verbrauch = nachricht.get("usage") if isinstance(nachricht, dict) else None
                     if wann is None or not isinstance(verbrauch, dict):
                         continue
-                    yield Anfrage(
+                    anfrage = Anfrage(
                         ts=wann,
                         sitzung=str(satz.get("sessionId") or t.sitzung),
                         ordner=_ordnername(satz.get("cwd"), merker),
@@ -213,11 +238,19 @@ class ClaudeQuelle:
                         aus=_zahl(verbrauch.get("output_tokens")),
                         agent=CLAUDE,
                         subagent=t.subagent,
+                        art=t.art,
                     )
+                    # Ohne Kennung bleibt nur die Zeile selbst - eine eigene,
+                    # nie kollidierende Schluesselung.
+                    kennung = satz.get("requestId") or (
+                        nachricht.get("id") if isinstance(nachricht, dict) else None
+                    )
+                    letzte[str(kennung) if kennung else f"zeile-{len(letzte)}"] = anfrage
         except OSError:
             # Eine Datei, die gerade ersetzt wird, darf den Durchgang nicht
-            # abbrechen - die uebrigen sind trotzdem auswertbar.
-            return
+            # abbrechen - die bereits gelesenen Zuege sind trotzdem auswertbar.
+            pass
+        yield from letzte.values()
 
     def texte(self, t: Transkript) -> Iterator[Textstueck]:
         try:
@@ -274,6 +307,31 @@ class ClaudeQuelle:
         except OSError:
             return "", ""
         return "", ""
+
+
+def _subagent_meta(transkript: Path) -> tuple[str, str, int]:
+    """Liest ``<name>.meta.json`` neben einem Subagenten-Transkript.
+
+    Claude legt neben jede Subagenten-Datei eine Metadatei mit ``agentType``,
+    ``description``, ``toolUseId`` und ``spawnDepth``. Ohne sie heisst ein
+    Subagent in jeder Anzeige nur nach seiner Kennung, und der Agententyp - die
+    interessantere Groesse - fehlt ganz.
+
+    Fehlt die Datei oder ist sie unlesbar, sind die Werte leer. Das ist kein
+    Fehler: aeltere Bestaende haben sie nicht.
+    """
+    neben = transkript.with_suffix(".meta.json")
+    try:
+        roh = json.loads(neben.read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        return "", "", 0
+    if not isinstance(roh, dict):
+        return "", "", 0
+    return (
+        str(roh.get("agentType") or ""),
+        str(roh.get("description") or ""),
+        _zahl(roh.get("spawnDepth")),
+    )
 
 
 def _ordnername(roh: object, merker: dict[str, str]) -> str:

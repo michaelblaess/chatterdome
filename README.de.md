@@ -139,10 +139,18 @@ sei nicht messbar - `isSidechain` steht in den Haupttranskripten bei 35.498 von
 35.498 Anfragen auf false. Das stimmt, führt aber in die Irre: die Subagenten
 liegen eine Ebene tiefer, unter `<projekt>/<sitzung>/subagents/*.jsonl`, und
 dort steht das Feld auf true. Der Glob traf diese Ebene nicht. Gemessen am
-24.08.2026 waren es 634 Anfragen in 12 Dateien gegenüber 27.042 im
-Hauptbestand - plus 2,3 Prozent Anfragen und 0,6 Prozent Ausgabe-Token. Sie
-zählen zur Elternsitzung, denn ihre `sessionId` ist deren Id. Die Kopfzeile
-weist sie getrennt aus, sobald welche im Zeitraum liegen.
+24.08.2026 waren es 255 Anfragen gegenüber 14.608 im Hauptbestand - 1,7 Prozent
+der Anfragen und 1,3 Prozent der Ausgabe-Token. Sie zählen zur Elternsitzung,
+denn ihre `sessionId` ist deren Id. Die Kopfzeile weist sie getrennt aus, sobald
+welche im Zeitraum liegen. Der Agententyp und eine lesbare Aufgabenbeschreibung
+stehen in einer `*.meta.json` neben der Datei.
+
+**Ein Antwortzug steht auf mehreren Zeilen**, und jede wiederholt denselben
+kumulativen Verbrauch. Bis zum 24.08.2026 summierte die Auswertung pro Zeile
+und zählte ihn damit mehrfach - gemessen Faktor 2,25, also 30,45 statt 13,51
+Millionen Ausgabe-Token. Seitdem zählt sie je `requestId` nur den letzten Stand.
+**Alle Zahlen des Statistik-Tabs sind dadurch kleiner geworden und mit früheren
+Ständen nicht vergleichbar.**
 
 ## Der Suchreiter
 
