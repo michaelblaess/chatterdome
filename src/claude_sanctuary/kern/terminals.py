@@ -15,6 +15,7 @@ zerbrochen. Eine Datei kennt dieses Problem nicht.
 
 from __future__ import annotations
 
+import os
 import shutil
 import stat
 import sys
@@ -39,6 +40,9 @@ class Terminal:
     system: str
     """``win32``, ``linux`` oder ``darwin``."""
 
+    fenster: bool = True
+    """Ob das Terminal ein Fenster oeffnet und dafuer eine Anzeige braucht."""
+
     @property
     def vorhanden(self) -> bool:
         """Wahr, wenn das Programm auf diesem Rechner gefunden wird."""
@@ -62,8 +66,22 @@ TERMINALS: tuple[Terminal, ...] = (
     Terminal("kitty", "kitty", "kitty", "linux"),
     Terminal("xfce4-terminal", "Xfce Terminal", "xfce4-terminal", "linux"),
     Terminal("xterm", "xterm", "xterm", "linux"),
+    # Ohne Fenster: der Agent laeuft in einer tmux-Sitzung im Hintergrund. Steht
+    # hinten, damit mit Anzeige weiterhin ein echtes Fenster aufgeht.
+    Terminal("tmux", "tmux", "tmux", "linux", fenster=False),
     Terminal("terminal-app", "Terminal", "open", "darwin"),
 )
+
+
+def anzeige_vorhanden() -> bool:
+    """Ob ein Terminalfenster ueberhaupt aufgehen kann.
+
+    Nur unter Linux eine Frage: ohne ``DISPLAY`` oder ``WAYLAND_DISPLAY`` - etwa in
+    einem systemd-Dienst - gibt es keinen Bildschirm dafuer.
+    """
+    if sys.platform != "linux":
+        return True
+    return bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
 
 
 def verfuegbare() -> list[Terminal]:
@@ -80,6 +98,11 @@ def finde(schluessel: str) -> Terminal | None:
     """Das Terminal zu einem Schluessel, oder None bei "automatisch"."""
     if not schluessel or schluessel == AUTOMATISCH:
         gefunden = verfuegbare()
+        # Ohne Anzeige kann kein Fenster aufgehen - dann nur, was keins braucht.
+        # Sonst startet der Browser-Zugang auf senza (Dienst ohne DISPLAY) ein
+        # gnome-terminal, das still scheitert (Michaels Test am 15.09.2026).
+        if not anzeige_vorhanden():
+            gefunden = [t for t in gefunden if not t.fenster]
         return gefunden[0] if gefunden else None
     for kandidat in TERMINALS:
         if kandidat.schluessel == schluessel:

@@ -51,6 +51,7 @@ from claude_sanctuary.kern.modelle import (
 from claude_sanctuary.kern.protokolle import Quelle
 from claude_sanctuary.kern.statistik import Statistik, lade_statistik
 from claude_sanctuary.kern.suche import Bilanz, Suchindex
+from claude_sanctuary.kern.terminals import finde
 from claude_sanctuary.tui import keymap
 from claude_sanctuary.tui.schutz import klartext
 from claude_sanctuary.tui.starter import oeffne_ordner
@@ -1306,6 +1307,11 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
             self.notify(fehler, severity="error", markup=False)
             return
         self._schreibe_log(t("log.started_agent", name="-"), "success")
+        terminal = finde(str(self._einstellungen.laden().get("terminal", "")))
+        if terminal is not None and not terminal.fenster:
+            # Ohne Fenster sieht man vom Start nichts - also sagen, wo er laeuft.
+            self.notify(t("notify.agent_in_tmux"))
+            self._schreibe_log(t("notify.agent_in_tmux"))
         self.set_timer(3.0, self.aktualisieren)
         self.set_timer(3.5, self.namen_laden)
 

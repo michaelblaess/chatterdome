@@ -267,6 +267,7 @@
   "notify.updated": "{rechner}: Claude {version}",
   "notify.keymap_restart": "The new key bindings apply from the next start.",
   "notify.web_quit": "In the browser, q does not end the session. Close the tab to end it.",
+  "notify.agent_in_tmux": "The agent runs in tmux without a window. Show it with tmux ls and tmux attach -t agent-HHMMSS.",
   "log.update_started": "Update started on {rechner} ({verfahren})",
   "log.updated": "{rechner}: Claude {version}",
   "log.update_failed": "Update on {rechner} failed: {fehler}",

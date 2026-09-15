@@ -1,8 +1,8 @@
 """Startet einen neuen Agenten in einem eigenen Terminalfenster.
 
 Nur lokal. Ein Fernstart braeuchte ein TTY, das ``ssh host "befehl"`` nicht
-liefert - dafuer waere tmux noetig, und das ist bewusst nicht Teil dieser
-Fassung.
+liefert - dafuer waere tmux noetig. Ohne Anzeige - der Browser-Zugang als
+Dienst - startet der Agent dagegen lokal in einer tmux-Sitzung, siehe ``_zeile``.
 
 Welches Terminal genommen wird und was vorher darin laufen soll, steht in den
 Einstellungen. Der eigentliche Aufruf laeuft ueber eine erzeugte Startdatei,
@@ -15,6 +15,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -110,6 +111,13 @@ def _zeile(terminal: Terminal, datei: Path, ordner: str) -> list[str]:
         return ["cmd", "/c", "start", "", programm, "-NoExit", "-NoProfile", "-File", pfad]
     if terminal.schluessel == "cmd":
         return ["cmd", "/c", "start", "", "cmd", "/k", pfad]
+    if terminal.schluessel == "tmux":
+        # Ohne Fenster: eigene Sitzung im Hintergrund, spaeter mit
+        # "tmux attach -t agent-..." anzusehen. exec bash haelt die Sitzung
+        # offen, wenn Claude endet - wie bei den Fenster-Terminals.
+        sitzung = f"agent-{time.strftime('%H%M%S')}"
+        return [programm, "new-session", "-d", "-s", sitzung, "-c", ordner,
+                "bash", "-lc", f"{pfad}; exec bash"]
     if terminal.schluessel == "gnome-terminal":
         return [programm, "--working-directory", ordner, "--",
                 "bash", "-lc", f"{pfad}; exec bash"]
@@ -129,9 +137,7 @@ def terminal_vorhanden() -> bool:
     """Wahr, wenn ueberhaupt ein Terminal gestartet werden kann."""
     if sys.platform == "win32":
         return True  # cmd gibt es immer
-    if os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"):
-        return finde("") is not None
-    return False
+    return finde("") is not None
 
 
 def oeffne_ordner(pfad: str) -> None:
