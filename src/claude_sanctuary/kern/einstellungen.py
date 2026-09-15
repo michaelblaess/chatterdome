@@ -37,6 +37,12 @@ VORGABEN: dict[str, Any] = {
     # Verzeichnis der Gedaechtnisnotizen. Leer heisst ~/.claude/memory. Wer
     # je Projekt ein eigenes Verzeichnis fuehrt, traegt es hier ein.
     "gedaechtnis_pfad": "",
+    # Tastenbelegung. Leer heisst: nach Betriebssystem (macOS klassisch, sonst
+    # F-Tasten). Die Tabellen dazu stehen in tui/keymap.py.
+    "keymap_style": "",
+    "keymap_vim": False,
+    # Eigene Belegungen, Aktion auf Tastenliste, etwa {"toggle_log": ["alt+l"]}.
+    "keymap_custom": {},
 }
 
 

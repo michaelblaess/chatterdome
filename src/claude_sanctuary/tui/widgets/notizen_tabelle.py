@@ -6,13 +6,14 @@ from collections.abc import Callable
 from typing import Any, ClassVar
 
 from rich.text import Text
+from textual import events
 from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import Vertical
 from textual.coordinate import Coordinate
 from textual.message import Message
 from textual.widgets import DataTable, Static
-from textual_widgets import SearchInputWithHistory
+from textual_widgets import SearchInputWithHistory, vim_navigation_bindings
 
 from claude_sanctuary.i18n import t
 from claude_sanctuary.kern.gedaechtnis import Notiz
@@ -59,6 +60,13 @@ def zustand(notiz: Notiz) -> str:
 
 class NotizenDaten(DataTable[Any]):
     """DataTable, die den vollen Inhalt gekuerzter Zellen als Hinweis zeigt."""
+
+    def _on_mount(self, event: events.Mount) -> None:
+        # Vim-Ebene am Widget, siehe AgentenDaten._on_mount.
+        if not getattr(self.app, "vim_navigation", False):
+            return
+        for key, action in vim_navigation_bindings():
+            self._bindings.bind(key, action, show=False)
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)

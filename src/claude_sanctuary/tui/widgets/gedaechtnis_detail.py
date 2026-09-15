@@ -225,6 +225,11 @@ class GedaechtnisDetail(VerticalScroll):
         zeilen.append("")
         return zeilen
 
+    def _tastenhinweis(self, action: str) -> str:
+        # Die Taste haengt am gewaehlten Stil - die App kennt sie, das Widget nicht.
+        hinweis = getattr(self.app, "tastenhinweis", None)
+        return str(hinweis(action)) if callable(hinweis) else ""
+
     def _abrufe(self, bestand: Gedaechtnis) -> list[str]:
         zeilen = [f"[bold]{t('mem.recall.title')}[/]", ""]
         bericht = bestand.recall_bericht
@@ -232,7 +237,8 @@ class GedaechtnisDetail(VerticalScroll):
             zeilen += [f"  [dim]{t('mem.recall.pending')}[/]", ""]
             return zeilen
         if bericht is None:
-            zeilen += [f"  [dim]{t('mem.recall.none')}[/]", ""]
+            hinweis = t("mem.recall.none", shortcut=self._tastenhinweis("show_memory"))
+            zeilen += [f"  [dim]{hinweis}[/]", ""]
             return zeilen
 
         nie = sum(1 for n in bestand.notizen if n.recalls == 0)

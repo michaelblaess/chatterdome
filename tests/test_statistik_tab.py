@@ -97,7 +97,12 @@ def projekte(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
-def app(projekte: Path, monkeypatch: pytest.MonkeyPatch) -> SanctuaryApp:
+def app(
+    projekte: Path, monkeypatch: pytest.MonkeyPatch, _eigene_einstellungen: Path
+) -> SanctuaryApp:
+    # Den Stil festlegen statt ihn der Plattform zu ueberlassen - sonst haengt
+    # die Taste, mit der der Test den Reiter oeffnet, am Rechner.
+    _eigene_einstellungen.write_text('{"keymap_style": "function_keys"}', encoding="utf-8")
     # Ohne diese Ersatzfunktion liest der Test die ECHTEN Transkripte unter
     # ~/.claude/projects - hunderte Megabyte, abhaengig vom Rechner.
     monkeypatch.setattr(
@@ -111,7 +116,7 @@ def app(projekte: Path, monkeypatch: pytest.MonkeyPatch) -> SanctuaryApp:
 
 
 async def _oeffnen(pilot: object, app: SanctuaryApp) -> None:
-    await pilot.press("k")  # type: ignore[attr-defined]
+    await pilot.press("f8")  # type: ignore[attr-defined]
     for _ in range(300):
         await pilot.pause()  # type: ignore[attr-defined]
         if app._statistik is not None:

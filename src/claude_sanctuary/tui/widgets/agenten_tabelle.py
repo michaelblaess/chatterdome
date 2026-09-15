@@ -13,7 +13,7 @@ from textual.containers import Vertical
 from textual.coordinate import Coordinate
 from textual.message import Message
 from textual.widgets import DataTable
-from textual_widgets import SearchInputWithHistory
+from textual_widgets import SearchInputWithHistory, vim_navigation_bindings
 
 from claude_sanctuary.i18n import format_datetime, t
 from claude_sanctuary.kern.modelle import Agent, Ampel, geteilte_namen, kennung
@@ -143,6 +143,15 @@ class AgentenDaten(DataTable[Any]):
     Hinweis gehoert immer dem ganzen Widget, also wird er beim Wandern der
     Maus umgeschrieben.
     """
+
+    def _on_mount(self, event: events.Mount) -> None:
+        # Bewusst _on_mount: in Textual laeuft jeder _on_*-Haken der MRO, ein
+        # oeffentliches on_mount verdeckte das einer Ableitung. Die Vim-Ebene
+        # haengt am Widget, damit sie nur gilt, solange die Tabelle den Fokus hat.
+        if not getattr(self.app, "vim_navigation", False):
+            return
+        for key, action in vim_navigation_bindings():
+            self._bindings.bind(key, action, show=False)
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)

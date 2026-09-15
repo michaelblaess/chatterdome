@@ -6,11 +6,10 @@ import contextlib
 import dataclasses
 import time
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any
 
 from textual import work
 from textual.app import App, ComposeResult
-from textual.binding import Binding, BindingType
 from textual.containers import Horizontal, Vertical
 from textual.widgets import Button, Footer, Header, Input, TabbedContent, TabPane
 from textual_themes import THEME_DISPLAY_NAMES, register_all
@@ -52,6 +51,7 @@ from claude_sanctuary.kern.modelle import (
 from claude_sanctuary.kern.protokolle import Quelle
 from claude_sanctuary.kern.statistik import Statistik, lade_statistik
 from claude_sanctuary.kern.suche import Bilanz, Suchindex
+from claude_sanctuary.tui import keymap
 from claude_sanctuary.tui.schutz import klartext
 from claude_sanctuary.tui.starter import oeffne_ordner
 from claude_sanctuary.tui.widgets.agenten_tabelle import AgentenTabelle
@@ -112,61 +112,18 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
     CSS_PATH = "app.tcss"
     TITLE = "Claude Sanctuary"
 
-    BINDINGS: ClassVar[list[BindingType]] = [
-        Binding("q,Q", "quit", "quit", key_display="q"),
-        Binding("f5", "refresh_now", "refresh"),
-        Binding("s,S", "show_settings", "settings", key_display="s"),
-        Binding("l,L", "toggle_log", "log", key_display="l"),
-        Binding("t,T", "cycle_theme", "theme", key_display="t"),
-        Binding("i,I", "show_about", "about", key_display="i"),
-        Binding("h,H", "show_help", "help", key_display="h"),
-        Binding("n,N", "start_agent", "start", key_display="n"),
-        Binding("delete", "stop_agent", "stop", key_display="DEL"),
-        Binding("o,O", "toggle_local", "local", key_display="o"),
-        Binding("v,V", "show_usage", "usage", key_display="v"),
-        Binding("b,B", "broadcast", "broadcast", key_display="b"),
-        Binding("r,R", "restart_agent", "restart", key_display="r"),
-        Binding("m,M", "show_memory", "memory", key_display="m"),
-        # "s" liegt bei den Einstellungen - fuer die Volltextsuche bleibt "f".
-        Binding("f,F", "show_search", "search", key_display="f"),
-        # "b" liegt beim Rundruf und "n" beim Starten - fuer den Bus bleibt "u".
-        Binding("u,U", "show_bus", "bus", key_display="u"),
-        # "s" liegt bei den Einstellungen, "t" beim Thema - bleibt "k" fuer Kennzahlen.
-        Binding("k,K", "show_stats", "stats", key_display="k"),
-        # NICHT "screenshot": diesen Aktionsnamen belegt Textual selbst, dort
-        # speichert er ein SVG der Oberflaeche. Hier geht es um ein Foto des
-        # ganzen Bildschirms - zwei verschiedene Dinge.
-        Binding("p,P", "bildschirmfoto", "screenshot", key_display="p"),
-        Binding("slash", "focus_filter", "filter", key_display="/", show=False),
-    ]
-
-    _BINDING_I18N: ClassVar[dict[str, str]] = {
-        "quit": "quit",
-        "refresh_now": "refresh",
-        "show_settings": "settings",
-        "toggle_log": "log",
-        "cycle_theme": "theme",
-        "show_about": "about",
-        "show_help": "help",
-        "start_agent": "start",
-        "stop_agent": "stop",
-        "toggle_local": "local",
-        "show_usage": "usage",
-        "broadcast": "broadcast",
-        "restart_agent": "restart",
-        "show_memory": "memory",
-        "show_search": "search",
-        "show_bus": "bus",
-        "show_stats": "stats",
-        "bildschirmfoto": "screenshot",
-        "focus_filter": "filter",
-    }
+    # Keine Klassen-BINDINGS: die Belegung haengt am gewaehlten Stil, und der
+    # steht erst fest, wenn die Einstellungen geladen sind. Siehe tui/keymap.py.
 
     def __init__(self, quelle: Quelle | None = None, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         register_all(self)
         self._einstellungen = Einstellungen()
         werte = self._einstellungen.laden()
+        self._keymap_vim = keymap.vim_from_settings(werte)
+        self._keymap_stil = keymap.style_from_settings(werte)
+        self._keymap_ergebnis = keymap.resolve(werte)
+        self._tasten_binden()
         self._nur_lokal = bool(werte.get("nur_lokal", False))
         self._takt = max(2, int(werte.get("aktualisierung_sekunden", 5)))
         # Composition Root: hier wird verdrahtet. Der Parameter erlaubt es,
@@ -269,6 +226,9 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
     def on_mount(self) -> None:
         self._binding_texte()
         self._schreibe_log(t("log.started", version=__version__))
+        # Erst hier gemeldet: beim Binden gab es das Log noch nicht.
+        for problem in self._keymap_ergebnis.problems:
+            self._schreibe_log(f"[!] {problem.message}")
         self._theme_melden()
         self.set_interval(self._takt, self._takt_abfrage)
         self.aktualisieren()
@@ -276,17 +236,44 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         self._frage_disclaimer()
 
     def _binding_texte(self) -> None:
-        """Setzt Beschriftung und Tooltip der Bindings zur Laufzeit."""
+        """Setzt Beschriftung und Tooltip der Bindings zur Laufzeit.
+
+        ``BindingsMap.bind()`` nimmt kein Tooltip-Argument, deshalb hier per
+        ``dataclasses.replace``. Die Beschriftung wird mit gesetzt, damit ein
+        spaeter geladenes Sprachpaket auch den Footer erreicht.
+        """
         for taste, liste in self._bindings.key_to_bindings.items():
             for i, binding in enumerate(liste):
-                schluessel = self._BINDING_I18N.get(binding.action)
-                if schluessel is None:
+                beschriftung = keymap.LABEL_KEYS.get(binding.action)
+                if beschriftung is None:
                     continue
+                tooltip = keymap.TOOLTIP_KEYS.get(binding.action)
                 self._bindings.key_to_bindings[taste][i] = dataclasses.replace(
                     binding,
-                    description=t(f"binding.{schluessel}"),
-                    tooltip=t(f"tooltip.{schluessel}"),
+                    description=t(beschriftung),
+                    tooltip=t(tooltip) if tooltip else binding.tooltip,
                 )
+
+    def _tasten_binden(self) -> None:
+        """Bindet die Tasten der aktiven Belegung, siehe ``tui/keymap.py``."""
+        for action, binding in self._keymap_ergebnis.bindings.items():
+            self._bindings.bind(
+                ",".join(binding.keys),
+                action,
+                t(keymap.LABEL_KEYS.get(action, action)),
+                key_display=keymap.key_display(binding.keys[0]),
+                show=binding.show,
+                priority=binding.priority,
+            )
+
+    @property
+    def vim_navigation(self) -> bool:
+        """Ob die Tabellen die Vim-Ebene bekommen. Sie fragen das beim Einhaengen ab."""
+        return self._keymap_vim
+
+    def tastenhinweis(self, action: str) -> str:
+        """Die Taste einer Aktion, so wie sie in einer Meldung stehen soll."""
+        return keymap.key_hint(self._keymap_ergebnis.bindings, action)
 
     def _frage_disclaimer(self) -> None:
         if self._disclaimer.accepted_version == DISCLAIMER_VERSION:
@@ -1137,7 +1124,7 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         self.notify(t("notify.updated", rechner=rechner, version=version or "?"))
         self.aktualisieren()
 
-    def action_refresh_now(self) -> None:
+    def action_refresh(self) -> None:
         self.aktualisieren()
 
     def action_show_usage(self) -> None:
@@ -1221,7 +1208,12 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
     def action_show_help(self) -> None:
         from claude_sanctuary.tui.screens.hilfe_screen import HilfeScreen
 
-        self.push_screen(HilfeScreen())
+        self.push_screen(HilfeScreen(self._keymap_ergebnis, self._keymap_stil, self._keymap_vim))
+
+    def action_show_details(self) -> None:
+        # Dasselbe wie Doppelklick und Kontextmenue, jetzt auch ueber d bzw. F6.
+        if self._gewaehlt is not None:
+            self._detail_zeigen(self._gewaehlt)
 
     def action_show_settings(self) -> None:
         from claude_sanctuary.tui.screens.einstellungen_screen import EinstellungenScreen
@@ -1235,6 +1227,14 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         if werte is None:
             return
         self._einstellungen.speichern(werte)
+        gespeichert = self._einstellungen.laden()
+        if (
+            dict(keymap.resolve(gespeichert).bindings) != dict(self._keymap_ergebnis.bindings)
+            or keymap.vim_from_settings(gespeichert) != self._keymap_vim
+        ):
+            # Die Tasten werden beim Start gebunden - die neue Belegung gilt
+            # erst ab dem naechsten Start, und das soll man erfahren.
+            self.notify(t("notify.keymap_restart"))
         self._nur_lokal = bool(werte.get("nur_lokal", self._nur_lokal))
         self.notify(t("notify.settings_saved"))
         self.aktualisieren()
@@ -1311,7 +1311,7 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         # Modale Dialoge sollen die App-Tasten nicht durchreichen.
         if len(self.screen_stack) > 1:
             return None
-        if action in {"stop_agent", "restart_agent"} and self._gewaehlt is None:
+        if action in {"stop_agent", "restart_agent", "show_details"} and self._gewaehlt is None:
             return None
         return True
 

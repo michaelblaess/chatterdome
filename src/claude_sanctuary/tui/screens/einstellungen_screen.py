@@ -12,6 +12,7 @@ from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import Button, Checkbox, Input, Label, Select, Static, TabPane, TextArea
 from textual_widgets import BaseSettingsScreen
+from textual_widgets.keymap import KeymapStyle
 
 from claude_sanctuary.i18n import t
 from claude_sanctuary.kern.absturz import PROTOKOLL
@@ -135,6 +136,12 @@ class EinstellungenScreen(BaseSettingsScreen):  # type: ignore[misc]
         vorhanden = {schluessel for _, schluessel in auswahl()}
         return gespeichert if gespeichert in vorhanden else AUTOMATISCH
 
+    def _keymap_stil_wert(self) -> str:
+        """Gespeicherter Stil, sofern die Auswahl ihn kennt - sonst nach Betriebssystem."""
+        gespeichert = str(self._settings.get("keymap_style", "") or "")
+        erlaubt = {"", *(stil.value for stil in KeymapStyle)}
+        return gespeichert if gespeichert in erlaubt else ""
+
     def _update_wert(self) -> str:
         gespeichert = str(self._settings.get("update_verfahren", "claude"))
         return gespeichert if gespeichert in VERFAHREN else "claude"
@@ -241,6 +248,31 @@ class EinstellungenScreen(BaseSettingsScreen):  # type: ignore[misc]
                 )
             yield Static(t("settings.update_hint"), classes="hint")
 
+        with TabPane(t("settings.tab_keyboard"), id="tab-tastatur"), VerticalScroll():
+            yield Static(t("settings.keymap_intro"), classes="hint")
+            with Horizontal(classes="settings-row"):
+                yield Label(t("settings.keymap_style"))
+                yield Select(
+                    [
+                        (t("settings.keymap_style_auto"), ""),
+                        (t("settings.keymap_style_classic"), KeymapStyle.CLASSIC.value),
+                        (
+                            t("settings.keymap_style_function_keys"),
+                            KeymapStyle.FUNCTION_KEYS.value,
+                        ),
+                    ],
+                    value=self._keymap_stil_wert(),
+                    id="set-keymap-style",
+                )
+            vim = Checkbox(
+                t("settings.keymap_vim"),
+                value=bool(self._settings.get("keymap_vim", False)),
+                id="set-keymap-vim",
+            )
+            vim.tooltip = t("settings.keymap_vim_tip")
+            yield vim
+            yield Static(t("settings.keymap_custom_hint"), classes="hint")
+
         with TabPane(t("settings.tab_database"), id="tab-datenbank"), VerticalScroll():
             yield Checkbox(
                 t("settings.show_ids"),
@@ -252,6 +284,9 @@ class EinstellungenScreen(BaseSettingsScreen):  # type: ignore[misc]
     def collect_app_settings(self, settings: dict[str, Any]) -> None:
         settings["nur_lokal"] = self.query_one("#set-nur-lokal", Checkbox).value
         settings["id_spalte"] = self.query_one("#set-ids", Checkbox).value
+        stil = self.query_one("#set-keymap-style", Select).value
+        settings["keymap_style"] = stil if isinstance(stil, str) else ""
+        settings["keymap_vim"] = self.query_one("#set-keymap-vim", Checkbox).value
         settings["proxy_url"] = self.query_one("#set-proxy", Input).value.strip()
         settings["terminal_skript"] = self.query_one("#set-terminal-skript", Input).value.strip()
         settings["terminal_vorbereitung"] = self.query_one(

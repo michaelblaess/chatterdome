@@ -1,4 +1,4 @@
-"""Uebersicht der Kommandozeilenbefehle."""
+"""Hilfe: die geltende Tastenbelegung und die Kommandozeilenbefehle."""
 
 from __future__ import annotations
 
@@ -11,8 +11,10 @@ from textual.binding import Binding, BindingType
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Button, Static
+from textual_widgets.keymap import KeymapStyle, ResolvedKeymap
 
 from claude_sanctuary.i18n import t
+from claude_sanctuary.tui import keymap
 
 BEFEHLE: list[tuple[str, str]] = [
     ("sanctuary status", "cmd.status"),
@@ -44,8 +46,35 @@ bleibt natuerlich, wie er ist.
 """
 
 
+def _ist_grossschreibung(key: str) -> bool:
+    """Ob eine Taste nur die Grossschreibung einer anderen ist.
+
+    Die Belegung fuehrt Buchstaben doppelt (``q`` und ``Q``), damit sie
+    unabhaengig von der Umschalttaste wirken. In der Hilfe waere das Rauschen.
+    """
+    return len(key) == 1 and key.isupper()
+
+
+def tastenzeilen(belegung: ResolvedKeymap) -> list[tuple[str, str]]:
+    """Taste und Beschriftung je Aktion, so wie die Hilfe sie zeigt.
+
+    Gelesen wird die fertige Belegung, keine gepflegte Liste daneben - so zeigt
+    die Hilfe zwangslaeufig das, was die Anwendung tatsaechlich gebunden hat.
+    """
+    zeilen: list[tuple[str, str]] = []
+    for action, binding in belegung.bindings.items():
+        tasten = " / ".join(
+            keymap.key_display(key) for key in binding.keys if not _ist_grossschreibung(key)
+        )
+        beschriftung = t(keymap.LABEL_KEYS.get(action, action))
+        if not binding.show:
+            beschriftung = f"{beschriftung}  ({t('keymap.hidden')})"
+        zeilen.append((tasten, beschriftung))
+    return zeilen
+
+
 class HilfeScreen(ModalScreen[None]):
-    """Listet auf, was auch ohne Oberfläche geht."""
+    """Zeigt, welche Taste was tut, und was auch ohne Oberfläche geht."""
 
     DEFAULT_CSS = """
     HilfeScreen {
@@ -65,6 +94,13 @@ class HilfeScreen(ModalScreen[None]):
         color: $accent;
         margin-bottom: 1;
     }
+    HilfeScreen .hilfe-abschnitt {
+        text-style: bold;
+        margin-top: 1;
+    }
+    HilfeScreen #hilfe-modus {
+        color: $text-muted;
+    }
     HilfeScreen #hilfe-scroll {
         height: auto;
         max-height: 90%;
@@ -78,20 +114,49 @@ class HilfeScreen(ModalScreen[None]):
 
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("escape", "close", "ESC"),
-        Binding("h,H", "close", "ESC", show=False),
+        Binding("h,H,question_mark", "close", "ESC", show=False),
     ]
 
-    def __init__(self, **kwargs: Any) -> None:
+    def __init__(
+        self,
+        belegung: ResolvedKeymap | None = None,
+        stil: KeymapStyle | None = None,
+        vim: bool = False,
+        **kwargs: Any,
+    ) -> None:
         super().__init__(**kwargs)
+        self._belegung = belegung
+        self._stil = stil
+        self._vim = vim
 
     def compose(self) -> ComposeResult:
         with Vertical():
             yield Static(t("help.title"), id="hilfe-titel")
             with VerticalScroll(id="hilfe-scroll"):
+                if self._belegung is not None:
+                    yield Static(t("help.keys_title"), classes="hilfe-abschnitt")
+                    yield Static(self._modus(), id="hilfe-modus")
+                    yield Static(self._tastentabelle(self._belegung))
+                    yield Static(t("help.commands_title"), classes="hilfe-abschnitt")
                 yield Static(t("help.intro"))
                 yield Static(self._tabelle())
             with Horizontal(id="hilfe-knoepfe"):
                 yield Button(t("help.close"), variant="primary", id="hilfe-zu")
+
+    def _modus(self) -> str:
+        vim = t("keymap.vim_on") if self._vim else t("keymap.vim_off")
+        if self._stil is None:
+            return vim
+        return f"{t(keymap.STYLE_LABEL_KEYS[self._stil])} - {vim}"
+
+    @staticmethod
+    def _tastentabelle(belegung: ResolvedKeymap) -> Table:
+        tabelle = Table(show_header=False, box=None, padding=(0, 2, 0, 0))
+        tabelle.add_column(style="bold cyan", no_wrap=True)
+        tabelle.add_column(overflow="fold")
+        for tasten, beschriftung in tastenzeilen(belegung):
+            tabelle.add_row(tasten, beschriftung)
+        return tabelle
 
     @staticmethod
     def _tabelle() -> Table:

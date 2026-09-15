@@ -269,7 +269,8 @@ class TestOberflaeche:
         app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
         async with app.run_test(size=(160, 50)) as pilot:
             await _gefuellt(app, pilot)
-            await pilot.press("h")
+            # "?" oeffnet die Hilfe in beiden Stilen, "h" nur noch im klassischen.
+            await pilot.press("question_mark")
             await pilot.pause()
             assert type(app.screen).__name__ == "HilfeScreen"
             await pilot.press("escape")
