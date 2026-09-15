@@ -864,6 +864,26 @@ class TestQImBrowser:
             assert not app.is_running
 
 
+class TestAuswahlBeimAbbau:
+    """Eine Auswahl-Nachricht darf nach dem Abbau der Eingabe nichts umreissen.
+
+    Belegt in der CI (windows-latest, Python 3.12) am 15.09.2026: beim Beenden
+    kam ``AgentenTabelle.Ausgewaehlt`` noch an, als ``#eingabe`` schon weg war.
+    """
+
+    async def test_fehlende_eingabe_bricht_den_handler_nicht(self, quelle: FakeQuelle) -> None:
+        app = SanctuaryApp(quelle=quelle)
+        app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
+        agent = Agent(name="Klara", status="idle", rechner="TESTHOST")
+        async with app.run_test(size=(160, 50)) as pilot:
+            await _gefuellt(app, pilot)
+            await app.query_one("#eingabe", Input).remove()
+            await pilot.pause()
+            app.on_agenten_tabelle_ausgewaehlt(AgentenTabelle.Ausgewaehlt(agent))
+            assert app._gewaehlt is agent
+            assert app.is_running
+
+
 class SitzungsQuelle(FakeQuelle):
     """Ein Agent mit Sitzung und Laufzeit, wie ihn der echte Status liefert."""
 

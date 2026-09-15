@@ -11,6 +11,7 @@ from typing import Any
 from textual import work
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
+from textual.css.query import NoMatches
 from textual.widgets import Button, Footer, Header, Input, TabbedContent, TabPane
 from textual_themes import THEME_DISPLAY_NAMES, register_all
 from textual_widgets import (
@@ -632,8 +633,14 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
 
     def on_agenten_tabelle_ausgewaehlt(self, ereignis: AgentenTabelle.Ausgewaehlt) -> None:
         self._gewaehlt = ereignis.agent
-        eingabe = self.query_one("#eingabe", Input)
-        knopf = self.query_one("#senden", Button)
+        try:
+            eingabe = self.query_one("#eingabe", Input)
+            knopf = self.query_one("#senden", Button)
+        except NoMatches:
+            # Beim Beenden kann eine Auswahl-Nachricht noch ankommen, wenn der
+            # Bildschirm schon abgebaut ist - belegt in der CI (windows-latest,
+            # Python 3.12) am 15.09.2026. Dann gibt es nichts mehr zu fuellen.
+            return
         agent = ereignis.agent
 
         # An die eigene Sitzung wird nichts gesendet: der Auftrag laege im
