@@ -27,8 +27,16 @@ class Quelle(Protocol):
         """Aktives Namensmotiv und freie Namen."""
         ...
 
-    def verlauf(self, name: str) -> list[Auftrag]:
-        """Auftraege und Quittungen mit einem bestimmten Agenten."""
+    def verlauf(self, name: str, *, session_id: str = "", seit: str = "") -> list[Auftrag]:
+        """Auftraege und Quittungen mit einem bestimmten Agenten.
+
+        :param name: Name des Agenten.
+        :param session_id: nur was dieser Sitzung zuzuordnen ist. Leer heisst:
+            alles unter dem Namen, auch von frueheren Traegern.
+        :param seit: Startzeit der Sitzung als ISO-Zeitstempel. Grenzt Auftraege
+            ohne Bindung und ohne Quittung ab, die sich sonst keiner Sitzung
+            zuordnen lassen.
+        """
         ...
 
     def bestandsverlauf(self, grenze: int = 0) -> Busbestand:

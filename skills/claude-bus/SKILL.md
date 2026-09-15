@@ -19,7 +19,8 @@ node $BUS send Marga "..." --rolle     # an den NAMEN statt an die Sitzung, sieh
 node $BUS read                          # neue Nachrichten holen (schiebt den Lesezeiger)
 node $BUS tasks                         # Warteschlange - unabhängig vom Lesezeiger
 node $BUS tasks --all                   # auch erledigte
-node $BUS history <Name>                # Aufträge und Quittungen mit einem Agenten
+node $BUS history <Name>                # Aufträge und Quittungen unter einem Namen, aller Träger
+node $BUS history <Name> --session <ID> [--since <ISO>]   # nur die dieser Sitzung zuzuordnenden
 node $BUS ack <msgId> 202 "mache ich"   # quittieren, setzt zugleich den Zustand
 node $BUS open                          # Stand der eigenen Nachrichten
 node $BUS log --json --limit 200        # gesamter Bestand, ohne Namensfilter

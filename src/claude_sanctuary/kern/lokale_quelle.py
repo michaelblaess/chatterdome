@@ -159,8 +159,15 @@ class LokaleQuelle:
             vergeben={str(k): str(v) for k, v in (roh.get("vergeben") or {}).items()},
         )
 
-    def verlauf(self, name: str) -> list[Auftrag]:
-        roh, _fehler = self._json(["history", name, "--json"])
+    def verlauf(self, name: str, *, session_id: str = "", seit: str = "") -> list[Auftrag]:
+        befehl = ["history", name, "--json"]
+        # Der Name allein genuegt nicht, er wird neu vergeben. Ohne Sitzung
+        # stand unter "Charlene" der Verlauf aller frueheren Traeger.
+        if session_id:
+            befehl += ["--session", session_id]
+            if seit:
+                befehl += ["--since", seit]
+        roh, _fehler = self._json(befehl)
         if roh is None:
             return []
         return [self._auftrag(e) for e in roh.get("auftraege", [])]

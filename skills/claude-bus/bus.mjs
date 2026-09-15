@@ -1001,12 +1001,46 @@ function cmdAuftraege(argv) {
  *
  * @param {string|null} name
  * Auf einen Agenten einschraenken, oder null fuer den gesamten Bestand.
+ * @param {{sitzung?: string, seit?: string}} [grenzen]
+ * sitzung: nur was dieser Sitzung zuzuordnen ist, siehe gehoertZuSitzung().
+ * seit: Startzeit der Sitzung als ISO-Zeitstempel (UTC).
  */
-function verlaufListe(d, name = null) {
+function verlaufListe(d, name = null, { sitzung = '', seit = '' } = {}) {
   return auftraege(d, {})
     .filter((a) => !name || a.an === name || a.von === name)
     .sort((x, y) => String(x.erstellt).localeCompare(String(y.erstellt)))
-    .map((a) => ({ ...a, quittungen: quittungenZu(d, a.auftrag_id) }));
+    .map((a) => ({ ...a, quittungen: quittungenZu(d, a.auftrag_id) }))
+    .filter((a) => !sitzung || gehoertZuSitzung(a, sitzung, seit));
+}
+
+/**
+ * Laesst sich ein Auftrag dieser Sitzung zuordnen?
+ *
+ * Der Name allein genuegt nicht, er ist eine Pacht. Am 15.09.2026 zeigte die
+ * Oberflaeche unter "Charlene" Auftraege vom 31.07. - an eine Sitzung, die es
+ * seit Wochen nicht mehr gab. Zugeordnet wird deshalb nur, was sich belegen
+ * laesst, und im Zweifel nichts.
+ *
+ * @param {object} a
+ * Auftrag samt quittungen.
+ * @param {string} sitzung
+ * Session-ID, deren Verlauf gefragt ist.
+ * @param {string} seit
+ * Startzeit der Sitzung, ISO in UTC. Leer heisst: unbekannt.
+ * @returns {boolean}
+ */
+function gehoertZuSitzung(a, sitzung, seit) {
+  if (a.an_session === sitzung || a.von_session === sitzung) return true;
+  if (a.quittungen.some((q) => q.von_session === sitzung)) return true;
+  // Gebunden, aber an eine andere Sitzung.
+  if (a.an_session) return false;
+  // Ungebunden: vor der Bindung vom 09.08.2026, oder die Absenderkopie eines
+  // Auftrags ueber Rechnergrenzen. Hat eine andere Sitzung quittiert, war sie
+  // gemeint.
+  if (a.quittungen.some((q) => q.von_session)) return false;
+  // Ohne jede Antwort bleibt nur die Zeit: vor dem Start dieser Sitzung kann
+  // der Auftrag nicht an sie gegangen sein. Ohne Startzeit keine Behauptung.
+  return Boolean(seit) && String(a.erstellt) >= seit;
 }
 
 /**
@@ -1047,20 +1081,39 @@ function cmdLog(argv) {
 function cmdVerlauf(argv) {
   sicherstellen();
   const alsJson = argv.includes('--json');
-  const name = argv.find((a) => !a.startsWith('--'));
+  const MIT_WERT = ['--session', '--since'];
+  const wert = (flag) => {
+    const i = argv.indexOf(flag);
+    return i >= 0 && argv[i + 1] && !argv[i + 1].startsWith('--') ? argv[i + 1] : '';
+  };
+  // Der Wert hinter einem Schalter ist kein Name - sonst hiesse der Partner
+  // bei "--session <id> Charlene" wie die Session-ID.
+  const name = argv.find((a, i) => !a.startsWith('--') && !MIT_WERT.includes(argv[i - 1]));
   if (!name) {
-    console.error('Aufruf: bus.mjs history <Name> [--json]');
+    console.error('Aufruf: bus.mjs history <Name> [--session <ID> [--since <ISO>]] [--json]');
     console.error('Der gesamte Bestand ohne Namen: bus.mjs log [--json] [--limit N]');
     process.exitCode = 1;
     return;
   }
+  const sitzung = wert('--session');
+  const seitRoh = wert('--since');
+  const seitDatum = seitRoh ? new Date(seitRoh) : null;
+  if (seitDatum && Number.isNaN(seitDatum.getTime())) {
+    // Laut statt still: ein kaputter Zeitpunkt wuerde die Zeitregel lautlos
+    // abschalten, und der Verlauf saehe nur kuerzer aus.
+    console.error(`Ungueltiger Zeitpunkt fuer --since: ${seitRoh}`);
+    process.exitCode = 1;
+    return;
+  }
+  const seit = seitDatum ? seitDatum.toISOString() : '';
 
   const d = db();
-  const liste = verlaufListe(d, name);
+  const liste = verlaufListe(d, name, { sitzung, seit });
 
   if (alsJson) {
     console.log(JSON.stringify({
       rechner: rechner(), ich: selbstName(), partner: name,
+      sitzung: sitzung || null, seit: seit || null,
       zeit: new Date().toISOString(), auftraege: liste,
     }, null, 1));
     return;
@@ -1201,7 +1254,9 @@ function hilfe() {
     send <Name|all> "Text" [--topic t] [--rolle] [--expect-receipt]
     read [--all]                  neue Nachrichten holen (schiebt den Lesezeiger)
     tasks [--all] [--json]        Warteschlange - was liegt an, unabhaengig vom Lesezeiger
-    history <Name> [--json]       Auftraege und Quittungen mit einem Agenten
+    history <Name> [--json]       Auftraege und Quittungen unter einem Namen, aller Traeger
+      --session <ID>              nur was dieser Sitzung zuzuordnen ist
+      --since <ISO>               Startzeit der Sitzung, fuer Auftraege ohne Bindung und Quittung
     log [--json] [--limit N]      der gesamte Bestand, ohne Namensfilter
     ack <msgId> <Code> ["Notiz"]  quittieren, setzt zugleich den Auftragszustand
     open                          Stand der eigenen Nachrichten

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime
+from datetime import date, datetime
 from importlib import resources
 from typing import Any
 
@@ -79,12 +79,22 @@ def format_datetime(zeitpunkt: str, lang: str | None = None) -> str:
     return wert.strftime("%d.%m.%Y %H:%M") if lang == "de" else wert.strftime("%Y-%m-%d %H:%M")
 
 
-def format_time(zeitpunkt: str) -> str:
-    """Nur die Uhrzeit, fuer die Verlaufsansicht."""
+def format_time(zeitpunkt: str, heute: date | None = None) -> str:
+    """Uhrzeit fuer die Verlaufsansicht, bei einem anderen Tag mit Datum.
+
+    Die blosse Uhrzeit liess einen Eintrag vom 31.07. am 15.09. wie einen von
+    heute aussehen - so stand es im Verlauf, und niemand sah es ihm an.
+
+    :param heute: Bezugstag, fuer Tests. Vorgabe ist der heutige Tag in Ortszeit.
+    """
     if not zeitpunkt:
         return ""
     try:
         wert = datetime.fromisoformat(zeitpunkt.replace("Z", "+00:00")).astimezone()
     except (ValueError, TypeError):
         return zeitpunkt[11:16]
-    return wert.strftime("%H:%M")
+    tag = heute if heute is not None else datetime.now().astimezone().date()
+    if wert.date() == tag:
+        return wert.strftime("%H:%M")
+    muster = "%d.%m.%Y %H:%M" if _current_lang == "de" else "%Y-%m-%d %H:%M"
+    return wert.strftime(muster)

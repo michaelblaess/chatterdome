@@ -28,6 +28,9 @@ class FakeQuelle:
 
     def __init__(self) -> None:
         self.gesendet: list[tuple[str, str, str, str]] = []
+        self.verlauf_abfragen: list[tuple[str, str, str]] = []
+        """Je Verlaufsabfrage Name, Sitzung und Startzeit."""
+
         self.gestoppt: list[str] = []
         self.fern_neugestartet: list[tuple[str, str, str]] = []
         self.mit_tokens: list[bool] = []
@@ -77,7 +80,8 @@ class FakeQuelle:
     def namen(self) -> Namenspool:
         return Namenspool(motiv="Comicmotiv", namen=["Lino", "Luzie"], frei=["Luzie"])
 
-    def verlauf(self, name: str) -> list[Auftrag]:
+    def verlauf(self, name: str, *, session_id: str = "", seit: str = "") -> list[Auftrag]:
+        self.verlauf_abfragen.append((name, session_id, seit))
         return [
             Auftrag(
                 auftrag_id="a1",
@@ -829,6 +833,40 @@ class TestDoppelterAgentReisstNichtsMit:
             daten = await _gefuellt(app, pilot)
             assert daten.row_count == 2
             assert app.is_running
+
+
+class SitzungsQuelle(FakeQuelle):
+    """Ein Agent mit Sitzung und Laufzeit, wie ihn der echte Status liefert."""
+
+    def bestand(self, *, mesh: bool = False, tokens: bool = False) -> Bestand:
+        self.mit_tokens.append(tokens)
+        return Bestand(
+            rechner="TESTHOST",
+            zeit="2026-09-15T18:00:00.000Z",
+            agenten=[
+                Agent(
+                    name="Charlene",
+                    status="idle",
+                    rechner="TESTHOST",
+                    session_id="sid-neu",
+                    laufzeit_ms=3_600_000,
+                )
+            ],
+        )
+
+
+class TestVerlaufHaengtAnDerSitzung:
+    """Am 15.09.2026 stand unter Charlene der Verlauf einer frueheren Sitzung."""
+
+    async def test_die_abfrage_nennt_sitzung_und_startzeit(self) -> None:
+        quelle = SitzungsQuelle()
+        app = SanctuaryApp(quelle=quelle)
+        app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
+        async with app.run_test(size=(160, 50)) as pilot:
+            await _gefuellt(app, pilot)
+            for _ in range(60):
+                await pilot.pause()
+            assert ("Charlene", "sid-neu", "2026-09-15T17:00:00+00:00") in quelle.verlauf_abfragen
 
 
 class NochLaufendQuelle(FakeQuelle):

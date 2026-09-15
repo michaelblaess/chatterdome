@@ -41,7 +41,14 @@ from claude_sanctuary.kern.gedaechtnis import (
     zaehle_recalls,
 )
 from claude_sanctuary.kern.lokale_quelle import LokaleQuelle
-from claude_sanctuary.kern.modelle import Agent, Auftrag, Bestand, Busbestand, Namenspool
+from claude_sanctuary.kern.modelle import (
+    Agent,
+    Auftrag,
+    Bestand,
+    Busbestand,
+    Namenspool,
+    startzeit,
+)
 from claude_sanctuary.kern.protokolle import Quelle
 from claude_sanctuary.kern.statistik import Statistik, lade_statistik
 from claude_sanctuary.kern.suche import Bilanz, Suchindex
@@ -609,24 +616,28 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         self.query_one("#kopf", KopfPanel).namen_setzen(pool.motiv, len(pool.frei))
 
     @work(thread=True, exclusive=True, group="verlauf")
-    def verlauf_laden(self, name: str) -> None:
-        auftraege = self._quelle.verlauf(name)
-        self.call_from_thread(self._verlauf_zeigen, name, auftraege)
+    def verlauf_laden(self, agent: Agent) -> None:
+        # Der Verlauf haengt an der SITZUNG, nicht am Namen. Bis zum 15.09.2026
+        # ging hier nur der Name hinaus, und unter "Charlene" standen Auftraege
+        # vom 31.07. an eine Sitzung, die es seit Wochen nicht mehr gab.
+        seit = startzeit(self._bestand.zeit, agent.laufzeit_ms)
+        auftraege = self._quelle.verlauf(agent.name, session_id=agent.session_id, seit=seit)
+        self.call_from_thread(self._verlauf_zeigen, agent, auftraege)
 
-    def _verlauf_zeigen(self, name: str, auftraege: list[Any]) -> None:
-        # Verglichen wird der NAME, und das genuegt hier auch: der Verlauf
-        # haengt am Namen, nicht am Rechner. Der Bus fuehrt beim Absender eine
-        # Kopie jedes Auftrags, also stuende ein Auftrag an Petra@SENZA auch
-        # dann in diesem Bestand, wenn man ihn nach Rechner filtern wollte.
-        #
-        # WICHTIG war der zweite Teil der Bedingung: bis zum 09.08.2026 hiess
+    def _verlauf_zeigen(self, agent: Agent, auftraege: list[Any]) -> None:
+        # Die Sperre prueft Name, Rechner UND Sitzung. Bis zum 09.08.2026 hiess
         # es hier nur "!= name", und beim Sprung von Petra@SENZA auf
-        # Petra@RAINBOW griff die Sperre nicht - der Verlauf des einen blieb
-        # neben der Zeile des anderen stehen. Michael hat das an zwei
-        # Bildschirmfotos gezeigt.
-        if self._gewaehlt is None or self._gewaehlt.name != name:
+        # Petra@RAINBOW blieb der Verlauf des einen neben der Zeile des anderen
+        # stehen. Seit der Verlauf an der Sitzung haengt, gehoert sie dazu.
+        gewaehlt = self._gewaehlt
+        if (
+            gewaehlt is None
+            or gewaehlt.name != agent.name
+            or gewaehlt.rechner != agent.rechner
+            or gewaehlt.session_id != agent.session_id
+        ):
             return  # Auswahl hat sich waehrenddessen geaendert
-        titel = self.query_one("#agenten", AgentenTabelle).beschriftung(self._gewaehlt)
+        titel = self.query_one("#agenten", AgentenTabelle).beschriftung(gewaehlt)
         self.query_one("#verlauf", VerlaufPanel).zeigen(titel, auftraege)
 
     # -- Ereignisse -----------------------------------------------------
@@ -657,7 +668,7 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
                 if agent.selbst
                 else t("chat.placeholder", name=beschriftung)
             )
-            self.verlauf_laden(agent.name)
+            self.verlauf_laden(agent)
         self.refresh_bindings()
 
     def on_button_pressed(self, ereignis: Button.Pressed) -> None:
@@ -744,7 +755,7 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         elif auswahl == "ordner":
             self._ordner_oeffnen(agent)
         elif auswahl == "neu_laden":
-            self.verlauf_laden(agent.name)
+            self.verlauf_laden(agent)
         elif auswahl == "bild":
             self._bild_holen(agent.rechner)
         elif auswahl == "nur_host":

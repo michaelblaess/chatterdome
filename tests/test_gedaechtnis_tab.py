@@ -31,7 +31,7 @@ class StilleQuelle:
     def namen(self) -> Namenspool:
         return Namenspool()
 
-    def verlauf(self, name: str) -> list[object]:
+    def verlauf(self, name: str, *, session_id: str = "", seit: str = "") -> list[object]:
         return []
 
 

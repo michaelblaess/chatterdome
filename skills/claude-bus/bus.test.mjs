@@ -32,6 +32,8 @@ function busUmgebung(t) {
   t.after(() => rmSync(wurzel, { recursive: true, force: true }));
 
   return {
+    /** Verzeichnis dieses Rechners, dort liegt bus.db. */
+    hostDir,
     /** Schreibt die Zuordnung Session-ID zu Name neu - das ist die Pacht. */
     namen(tabelle) {
       writeFileSync(join(hostDir, 'namen.json'), JSON.stringify(tabelle, null, 1), 'utf8');
@@ -169,5 +171,70 @@ describe('Zeitangaben', () => {
     assert.doesNotMatch(aus, /Invalid Date/, aus);
     // dd.mm.yy - das Kurzformat von toLocaleString('de-DE').
     assert.match(aus, /\d{2}\.\d{2}\.\d{2}/, aus);
+  });
+});
+
+// Aufgefallen am 15.09.2026: die Oberflaeche zeigte unter "Charlene" Auftraege
+// vom 31.07. - der Verlauf hing am Namen, und der Name gehoerte laengst einer
+// ganz anderen Sitzung.
+describe('Verlauf je Sitzung', () => {
+  /** Auftrag an Charlene, quittiert von der damaligen Sitzung, dann neu vergeben. */
+  function auftragDerVorgaengerin(bus) {
+    bus.namen({ [SITZUNG_ALT]: 'Charlene' });
+    const gesendet = bus.lauf(['send', 'Charlene', 'Bitte gib das aktuelle Datum aus', '--von', 'Snorre', '--host', RECHNER]);
+    assert.equal(gesendet.code, 0, gesendet.aus);
+    const [auftrag] = bus.warteschlange(SITZUNG_ALT).meine;
+    const quittiert = bus.lauf(['ack', auftrag.auftrag_id, '200', 'Freitag, 31.07.2026'], SITZUNG_ALT);
+    assert.equal(quittiert.code, 0, quittiert.aus);
+    bus.namen({ [SITZUNG_NEU]: 'Charlene' });
+  }
+
+  const verlauf = (bus, ...zusatz) => {
+    const { code, aus } = bus.lauf(['history', 'Charlene', '--json', ...zusatz]);
+    assert.equal(code, 0, aus);
+    return JSON.parse(aus).auftraege;
+  };
+
+  test('der neue Traeger sieht den Verlauf der Vorgaengerin nicht', (t) => {
+    const bus = busUmgebung(t);
+    auftragDerVorgaengerin(bus);
+    assert.deepEqual(verlauf(bus, '--session', SITZUNG_NEU), []);
+  });
+
+  test('Gegenprobe - die damalige Sitzung sieht ihn', (t) => {
+    const bus = busUmgebung(t);
+    auftragDerVorgaengerin(bus);
+    assert.equal(verlauf(bus, '--session', SITZUNG_ALT).length, 1);
+  });
+
+  test('ohne --session bleibt alles unter dem Namen', (t) => {
+    const bus = busUmgebung(t);
+    auftragDerVorgaengerin(bus);
+    assert.equal(verlauf(bus).length, 1);
+  });
+
+  test('ungebunden und ohne Quittung zaehlt nur ab dem Start der Sitzung', async (t) => {
+    const bus = busUmgebung(t);
+    bus.namen({ [SITZUNG_NEU]: 'Charlene' });
+    // So sieht der Bestand vor der Bindung vom 09.08.2026 aus - ueber die
+    // Kommandozeile laesst sich das nicht mehr erzeugen.
+    const { oeffne, schreibe } = await import(new URL('./speicher.mjs', import.meta.url).href);
+    const d = oeffne(bus.hostDir);
+    schreibe(d, {
+      auftrag_id: 'alt0731', ts: '2026-07-31T19:28:46.613Z', art: 'auftrag', host: RECHNER,
+      von: 'Operator', an: 'Charlene', zustand: 'submitted', text: 'Bestandsaufnahme',
+    });
+    d.close();
+
+    assert.deepEqual(verlauf(bus, '--session', SITZUNG_NEU, '--since', '2026-09-15T18:00:00Z'), []);
+    assert.equal(verlauf(bus, '--session', SITZUNG_NEU, '--since', '2026-07-01T00:00:00Z').length, 1);
+    assert.deepEqual(verlauf(bus, '--session', SITZUNG_NEU), [], 'ohne Startzeit keine Behauptung');
+  });
+
+  test('ein kaputter Zeitpunkt bricht laut ab', (t) => {
+    const bus = busUmgebung(t);
+    const { code, aus } = bus.lauf(['history', 'Charlene', '--session', SITZUNG_NEU, '--since', 'gestern']);
+    assert.equal(code, 1, aus);
+    assert.match(aus, /Ungueltiger Zeitpunkt/);
   });
 });

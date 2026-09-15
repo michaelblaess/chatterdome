@@ -24,6 +24,26 @@ niemand angefasst hat, wartet nicht mehr, sondern liegt.
 """
 
 
+def startzeit(bezug: str, laufzeit_ms: int) -> str:
+    """Wann ein Prozess gestartet wurde, als ISO-Zeitstempel.
+
+    :param bezug: Zeitpunkt der Abfrage, auf den sich die Laufzeit bezieht.
+    :param laufzeit_ms: Laufzeit des Prozesses bis zu diesem Zeitpunkt.
+    :returns: leer, wenn sich nichts sagen laesst - nichts wird geraten.
+    """
+    if laufzeit_ms <= 0 or not bezug:
+        return ""
+    try:
+        jetzt = datetime.fromisoformat(bezug.replace("Z", "+00:00"))
+    except ValueError:
+        return ""
+    # Ohne Zeitzone liest Node den Wert als Ortszeit, Python als naiv - der
+    # Vergleich im Bus waere um Stunden verschoben.
+    if jetzt.tzinfo is None:
+        return ""
+    return (jetzt - timedelta(milliseconds=laufzeit_ms)).isoformat()
+
+
 class Ampel(Enum):
     """Verfuegbarkeit eines Agenten. Eine Ampel hat drei Farben, mehr nicht."""
 
