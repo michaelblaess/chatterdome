@@ -30,9 +30,14 @@ dev = [
     "ruff>=0.6",
     "poethepoet>=0.29",
 ]
+web = [
+    "textual-serve>=1.1.3",
+]
 
 [project.scripts]
 sanctuary-tui = "claude_sanctuary.__main__:main"
+# Browser-Zugang ueber textual-serve, braucht das Extra "web".
+sanctuary-web = "claude_sanctuary.web.serve:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

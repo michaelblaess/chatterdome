@@ -266,6 +266,7 @@
   "notify.update_running": "Claude auf {rechner} wird aktualisiert...",
   "notify.updated": "{rechner}: Claude {version}",
   "notify.keymap_restart": "Die neue Tastenbelegung gilt ab dem nächsten Start.",
+  "notify.web_quit": "Im Browser beendet q die Sitzung nicht. Zum Beenden den Tab schließen.",
   "log.update_started": "Aktualisierung auf {rechner} gestartet ({verfahren})",
   "log.updated": "{rechner}: Claude {version}",
   "log.update_failed": "Aktualisierung auf {rechner} fehlgeschlagen: {fehler}",

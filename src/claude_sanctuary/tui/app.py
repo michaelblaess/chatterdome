@@ -1191,6 +1191,19 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
             beschriftung = f"{anzeige} ({name})" if anzeige != name else name
             self._schreibe_log(t("log.theme_aktiv", name=beschriftung))
 
+    async def action_quit(self) -> None:
+        """Beendet die Oberflaeche - im Browser nicht.
+
+        Im Browser beendete ``q`` die ganze Sitzung, und danach blieb nur
+        Neuladen (Michaels Test am 15.09.2026). Das Schliessen des Tabs raeumt
+        trotzdem ab: textual-serve schickt dann ``ExitApp``, und das laeuft an
+        dieser Aktion vorbei.
+        """
+        if self.is_web:
+            self.notify(t("notify.web_quit"))
+            return
+        await super().action_quit()
+
     def action_show_about(self) -> None:
         self.push_screen(
             AboutScreen(

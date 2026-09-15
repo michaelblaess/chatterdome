@@ -836,6 +836,34 @@ class TestDoppelterAgentReisstNichtsMit:
             assert app.is_running
 
 
+class TestQImBrowser:
+    """Im Browser beendete q die ganze Sitzung (Michaels Test am 15.09.2026)."""
+
+    async def test_q_beendet_im_browser_nicht(
+        self, quelle: FakeQuelle, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(SanctuaryApp, "is_web", property(lambda self: True))
+        meldungen: list[str] = []
+        app = SanctuaryApp(quelle=quelle)
+        app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
+        monkeypatch.setattr(app, "notify", lambda text, **_: meldungen.append(str(text)))
+        async with app.run_test(size=(160, 50)) as pilot:
+            await _gefuellt(app, pilot)
+            await pilot.press("q")
+            await pilot.pause()
+            assert app.is_running
+            assert meldungen == [t("notify.web_quit")]
+
+    async def test_gegenprobe_im_terminal_beendet_q(self, quelle: FakeQuelle) -> None:
+        app = SanctuaryApp(quelle=quelle)
+        app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
+        async with app.run_test(size=(160, 50)) as pilot:
+            await _gefuellt(app, pilot)
+            await pilot.press("q")
+            await pilot.pause()
+            assert not app.is_running
+
+
 class SitzungsQuelle(FakeQuelle):
     """Ein Agent mit Sitzung und Laufzeit, wie ihn der echte Status liefert."""
 
