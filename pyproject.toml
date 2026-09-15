@@ -29,6 +29,9 @@ dev = [
     "mypy>=1.8",
     "ruff>=0.6",
     "poethepoet>=0.29",
+    # Selbstbezug: mypy prueft web/serve.py und braucht dafuer textual-serve.
+    # Ohne das war die CI ab ed3b055 rot, weil sie nur "--extra dev" installiert.
+    "claude-sanctuary[web]",
 ]
 web = [
     "textual-serve>=1.1.3",

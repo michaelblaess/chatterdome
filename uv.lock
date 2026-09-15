@@ -211,6 +211,7 @@ dev = [
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "ruff" },
+    { name = "textual-serve" },
 ]
 web = [
     { name = "textual-serve" },
@@ -218,6 +219,7 @@ web = [
 
 [package.metadata]
 requires-dist = [
+    { name = "claude-sanctuary", extras = ["web"], marker = "extra == 'dev'" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.8" },
     { name = "poethepoet", marker = "extra == 'dev'", specifier = ">=0.29" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
