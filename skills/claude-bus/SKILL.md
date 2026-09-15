@@ -460,11 +460,11 @@ zwingen weiterzuarbeiten, und das ist nicht der Sinn einer Zustellung.
 ### Eine wartende Instanz bekommt nichts - ohne Sofortzustellung
 
 ⚠ **Seit dem 21.08.2026 gilt dieser Abschnitt nur noch für Sitzungen ohne Sofortzustellung.**
-Auf macOS und Linux gibt es sie seit dem 09.08., auf Windows seit dem 21.08. mit gesetztem
-`CLAUDE_CODE_HARBOR_KITE` - siehe [Sofortzustellung](#sofortzustellung-über-den-inbox-socket)
-weiter unten. Betroffen bleiben Sitzungen, die vor dem Setzen der Variable gestartet wurden
-(eine Umgebungsvariable wird beim Start gelesen), und der Fall, dass Anthropic den Weg wieder
-schliesst. Der folgende Abschnitt beschreibt den Zustand, der dann gilt.
+Auf macOS und Linux gibt es sie seit dem 09.08., auf Windows seit dem 21.08. - damals über den
+Schalter `CLAUDE_CODE_HARBOR_KITE`, seit Claude Code 2.1.239 offiziell. Siehe
+[Sofortzustellung](#sofortzustellung-über-den-inbox-socket) weiter unten. Betroffen bleiben
+Sitzungen ohne Kanal, etwa im Bare-Modus, und der Fall, dass Anthropic den Weg wieder schließt.
+Der folgende Abschnitt beschreibt den Zustand, der dann gilt.
 
 **`send Charlene` wirkt erst, wenn Charlene das nächste Mal eine Antwort beendet.** Sitzt
 Charlene im Leerlauf und wartet auf Eingabe, bleibt die Nachricht liegen - beliebig lange.
@@ -498,15 +498,16 @@ Nebeneffekte wie Protokollieren.
 ## Sofortzustellung über den Inbox-Socket
 
 Seit Claude Code **2.1.224** bindet jede Sitzung auf **macOS und Linux** einen Unix-Socket, in
-den von aussen geschrieben werden darf. Der Bus nutzt das: ein Auftrag landet sofort in der
-Zielsitzung, auch wenn sie nur wartet. Damit fällt die Wartezeit auf den nächsten Stop-Hook
-weg - die Bringschuld des Empfängers wird zum echten Push.
+den von außen geschrieben werden darf, auf **nativem Windows** seit 2.1.239 eine Named Pipe.
+Der Bus nutzt das: ein Auftrag landet sofort in der Zielsitzung, auch wenn sie nur wartet.
+Damit fällt die Wartezeit auf den nächsten Stop-Hook weg - die Bringschuld des Empfängers wird
+zum echten Push.
 
-**Auf nativem Windows braucht es einen Schalter.** Anthropic bietet das Feature dort
-offiziell nicht an ("Claude Code doesn't offer cross-session messaging on native Windows"),
-der Code ist aber gebaut und lässt sich einschalten - siehe "Windows: der undokumentierte
-Weg" weiter unten. Ohne den Schalter bleibt es beim Stop-Hook, und die Einstellung meldet
-das, statt es zu verschleiern.
+**Windows ist seit 2.1.239 offiziell dabei** (Changelog: "Windows: cross-session messaging is
+now available"). Die Doku nennt 2.1.234 als Mindestversion für natives Windows und beschreibt
+dort ausdrücklich die Named Pipe und den Pflicht-Auth-Frame. Der Schalter aus "Windows: vom
+Schalter zum offiziellen Weg" weiter unten ist damit nicht mehr nötig. Geprüft am 15.09.2026
+mit 2.1.272 auf RAINBOW.
 
 ### Einstellung `zustellung`
 
@@ -561,8 +562,9 @@ selbst startet. Ein selbst geöffnetes Fenster bekam den Auftrag weiterhin als R
 belegt an einer Sitzung namens Berit auf senza. Ein Wert an einer Stelle deckt beide Fälle,
 zwei Mechanismen laufen auseinander.
 
-Auf **Windows** ist die Einstellung wirkungslos und schadet nicht - dort gibt es den Socket
-nicht.
+Auf **Windows** gilt sie genauso - die Doku beschreibt die Eingangsregeln ohne
+Plattformausnahme. Hier stand bis zum 15.09.2026, sie sei dort wirkungslos. Das stimmte nur,
+solange Windows keinen Kanal band.
 
 ⚠ **Was das bedeutet:** Peer-Nachrichten von Michaels eigenen Sitzungen werden ohne Rückfrage
 zugestellt. Sie bekommen dadurch **keine** neuen Rechte: laut Anthropics Doku kann eine solche
@@ -603,19 +605,37 @@ or other Claude sessions", denn er listet auch Subagenten. Belastbar sind:
 ss -xlp | grep cc-socks
 ```
 
-### Windows: der undokumentierte Weg
+### Windows: vom Schalter zum offiziellen Weg
 
 **Am 21.08.2026 belegt, mit 2.1.238 auf RAINBOW.** Patsy stand auf `idle`, hatte kein
 Transkript, und sprang ohne einen Tastendruck an: Nachricht angekommen, Turn gestartet,
 `200 angekommen, ohne Zutun` quittiert, alles in derselben Minute.
 
-Es braucht drei Dinge, und keines davon ist offensichtlich:
+Damals brauchte es drei Dinge, und keines davon war offensichtlich:
 
 | Zutat | Warum |
 |---|---|
-| `CLAUDE_CODE_HARBOR_KITE=1` | Die Gate-Funktion gibt damit **vor** der Windows-Prüfung `true` zurück. Steht in den Benutzer-Einstellungen unter `env`, gilt also für jede neu gestartete Sitzung. |
-| Der richtige Pipe-Name | Der Kanal heisst dort `\\.\pipe\cc-msg-<32 hex>`, **nicht** `cc-socks/<pid>.sock`. |
-| Der Auth-Frame | `{"type":"auth","token":"..."}` als erste Zeile, Token aus `CLAUDE_CODE_MESSAGING_TOKEN`. Siehe unten. |
+| `CLAUDE_CODE_HARBOR_KITE=1` | Die Gate-Funktion gab damit **vor** der Windows-Prüfung `true` zurück. Steht in den Benutzer-Einstellungen unter `env`. **Seit 2.1.239 nicht mehr nötig**, siehe unten. |
+| Der richtige Pipe-Name | Der Kanal hieß `\\.\pipe\cc-msg-<32 hex>`, **nicht** `cc-socks/<pid>.sock`. In 2.1.272 heißt er `\\.\pipe\LOCAL\cc-msg-<hex>`. Sanctuary übernimmt den Pfad aus `CLAUDE_CODE_MESSAGING_SOCKET` und hängt an keinem festen Namen, `sockets.json` trägt die neue Form. |
+| Der Auth-Frame | `{"type":"auth","token":"..."}` als erste Zeile, Token aus `CLAUDE_CODE_MESSAGING_TOKEN`. Weiterhin Pflicht, siehe unten. |
+
+**Stand 15.09.2026, 2.1.272 auf RAINBOW:** 7 von 440 Pipes heißen `LOCAL\cc-msg-...`, die
+eigene Sitzung ist darunter, alle 7 Sitzungsdateien tragen `messagingSocketPath`. Die
+Gate-Funktion lautet jetzt:
+
+```js
+function is(){
+  let e = a.CLAUDE_CODE_HARBOR_KITE;
+  if (e !== void 0) return Oe(e);                                   // Variable wird ausgewertet
+  if (M()==="windows" && !P("tengu_harbor_kite_win", !0)) return !1;
+  return P("tengu_harbor_kite", !0);                                // Vorgabe jetzt true
+}
+```
+
+Zwei Unterschiede zu 2.1.233: beide Flags haben die Vorgabe `true` statt `false`, und die
+Variable wird ausgewertet statt nur auf Vorhandensein geprüft. Solange sie gesetzt ist,
+übersteuert sie auch ein serverseitiges Abschalten des Windows-Flags. Ob eine Sitzung ohne die
+Variable den Kanal bindet, ist nicht ausprobiert - das stützt sich auf Code, Changelog und Doku.
 
 Die Gate-Funktion, wörtlich aus dem Binary (2.1.233):
 
@@ -631,10 +651,9 @@ In 2.1.228 stand dort noch eine harte Zeile (`if (Kt()==="windows") return false
 Flag). Der zweite Weg wäre das serverseitige Flag `tengu_harbor_kite_win`, auf das wir keinen
 Einfluss haben.
 
-⚠ **Anthropic unterstützt das nicht.** Die Variable ist undokumentiert und kann mit jedem
-Update wirkungslos werden. Dann fällt der Bus auf den Stop-Hook zurück wie bisher - es geht
-nichts verloren, nur die Geschwindigkeit ist wieder die alte. Nichts in diesem Repo darf
-davon abhängen, dass der Weg offen ist.
+**Korrektur 15.09.2026:** Hier stand "Anthropic unterstützt das nicht". Seit 2.1.239 tut es
+das. Der Grundsatz bleibt trotzdem: nichts in diesem Repo darf davon abhängen, dass der Weg
+offen ist. Fällt er weg, holt der Stop-Hook den Auftrag wie bisher, es geht nichts verloren.
 
 ### Der Auth-Frame - ohne Ausweis wird zurückgehalten
 
