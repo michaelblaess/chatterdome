@@ -496,5 +496,21 @@
   "keymap.style_classic": "Klassisch",
   "keymap.style_function_keys": "Mit F-Tasten",
   "keymap.vim_on": "Vim-Navigation ist eingeschaltet",
-  "keymap.vim_off": "Vim-Navigation ist ausgeschaltet"
+  "keymap.vim_off": "Vim-Navigation ist ausgeschaltet",
+  "web.agents": "Agenten",
+  "web.column_context": "Kontext",
+  "web.column_host": "Rechner",
+  "web.column_name": "Name",
+  "web.column_state": "Zustand",
+  "web.column_task": "Aufgabe",
+  "web.login": "Anmelden",
+  "web.login_failed": "Passwort stimmt nicht.",
+  "web.login_title": "Anmeldung",
+  "web.logout": "Abmelden",
+  "web.no_agents": "Zurzeit läuft kein Agent.",
+  "web.no_window": "kein Fenster",
+  "web.password": "Passwort",
+  "web.readonly_hint": "Kein Passwort gesetzt - die Oberfläche zeigt nur an. Terminal und Tasten bleiben aus, bis ein Passwort hinterlegt ist.",
+  "web.terminal": "Terminal",
+  "web.updated": "Stand {zeit}"
 }

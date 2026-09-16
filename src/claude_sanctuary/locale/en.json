@@ -496,5 +496,21 @@
   "keymap.style_classic": "Classic",
   "keymap.style_function_keys": "With function keys",
   "keymap.vim_on": "Vim navigation is on",
-  "keymap.vim_off": "Vim navigation is off"
+  "keymap.vim_off": "Vim navigation is off",
+  "web.agents": "Agents",
+  "web.column_context": "Context",
+  "web.column_host": "Host",
+  "web.column_name": "Name",
+  "web.column_state": "State",
+  "web.column_task": "Task",
+  "web.login": "Sign in",
+  "web.login_failed": "Wrong password.",
+  "web.login_title": "Sign in",
+  "web.logout": "Sign out",
+  "web.no_agents": "No agent is running right now.",
+  "web.no_window": "no window",
+  "web.password": "Password",
+  "web.readonly_hint": "No password set - this page only displays. Terminal and keys stay off until a password is stored.",
+  "web.terminal": "Terminal",
+  "web.updated": "As of {zeit}"
 }

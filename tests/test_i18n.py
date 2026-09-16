@@ -79,10 +79,20 @@ def _platzhalter(vorlage: str) -> set[str]:
     return {feld for _, feld, _, _ in Formatter().parse(vorlage) if feld}
 
 
+def _quelldateien() -> list[Path]:
+    """Alle Dateien, in denen ein Sprachschluessel stehen kann.
+
+    Seit der Weboberflaeche sind das nicht mehr nur Python-Dateien: die
+    Jinja-Vorlagen rufen ``t(...)`` genauso auf. Ohne sie meldet der Test jeden
+    Web-Schluessel als tot, obwohl er im Browser angezeigt wird.
+    """
+    return [*QUELLE.rglob("*.py"), *QUELLE.rglob("*.html")]
+
+
 def _verwendete_schluessel() -> set[str]:
     muster = re.compile(r"""t\(\s*["']([a-z][a-z_0-9]*(?:\.[a-z_0-9]+)+)["']""")
     gefunden: set[str] = set()
-    for datei in QUELLE.rglob("*.py"):
+    for datei in _quelldateien():
         gefunden |= set(muster.findall(datei.read_text(encoding="utf-8")))
     return gefunden
 
@@ -124,7 +134,7 @@ class TestSprachdateien:
         """
         muster = re.compile(r"""["']([a-z][a-z_0-9]*(?:\.[a-z_0-9]+)+)["']""")
         gefunden: set[str] = set()
-        for datei in QUELLE.rglob("*.py"):
+        for datei in _quelldateien():
             gefunden |= set(muster.findall(datei.read_text(encoding="utf-8")))
 
         tot = {

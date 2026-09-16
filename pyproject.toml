@@ -29,24 +29,47 @@ dev = [
     "mypy>=1.8",
     "ruff>=0.6",
     "poethepoet>=0.29",
+    # TestClient von FastAPI setzt httpx voraus.
+    "httpx>=0.27",
     # Selbstbezug: mypy prueft web/serve.py und braucht dafuer textual-serve.
     # Ohne das war die CI ab ed3b055 rot, weil sie nur "--extra dev" installiert.
     "claude-sanctuary[web]",
 ]
 web = [
     "textual-serve>=1.1.3",
+    # Eigene Weboberflaeche: FastAPI bringt Routen und WebSocket mit, Jinja
+    # die Vorlagen, uvicorn den Server, itsdangerous signiert das
+    # Sitzungscookie der Anmeldung.
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "jinja2>=3.1",
+    "itsdangerous>=2.2",
+    # Ohne das lehnt FastAPI jede Route mit Form(...) schon beim Bau ab - das
+    # Anmeldeformular waere tot. Fiel erst im Testlauf auf, nicht beim Import.
+    "python-multipart>=0.0.9",
 ]
 
 [project.scripts]
 sanctuary-tui = "claude_sanctuary.__main__:main"
-# Browser-Zugang ueber textual-serve, braucht das Extra "web".
+# Browser-Zugang ueber textual-serve, braucht das Extra "web". Schnellschuss
+# vom 15.09.2026, faellt weg sobald sanctuary-http die Uebersicht kann.
 sanctuary-web = "claude_sanctuary.web.serve:main"
+# Eigene Weboberflaeche mit Agentenliste und Terminal, braucht dasselbe Extra.
+sanctuary-http = "claude_sanctuary.web.app:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-claude_sanctuary = ["locale/*.json", "tui/*.tcss"]
+claude_sanctuary = [
+    "locale/*.json",
+    "tui/*.tcss",
+    # Vorlagen und Bibliotheken der Weboberflaeche. xterm.js und Tabler liegen
+    # bewusst im Repo statt an einem CDN: das Werkzeug soll ohne Zugriff nach
+    # aussen laufen, und der Browser auf dem Tablet soll nichts nachladen.
+    "web/templates/*.html",
+    "web/static/*",
+]
 
 [tool.mypy]
 python_version = "3.12"
