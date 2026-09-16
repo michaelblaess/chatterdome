@@ -498,6 +498,8 @@
   "keymap.vim_on": "Vim-Navigation ist eingeschaltet",
   "keymap.vim_off": "Vim-Navigation ist ausgeschaltet",
   "web.agents": "Agenten",
+  "web.closed": "Verbindung beendet",
+  "web.unknown_session": "Zur Sitzung {sitzung} gehört kein Agent.",
   "web.column_context": "Kontext",
   "web.column_host": "Rechner",
   "web.column_name": "Name",
