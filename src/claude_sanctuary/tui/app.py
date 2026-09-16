@@ -913,7 +913,11 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
             self.notify(fehler, severity="error", markup=False)
             return
         self._schreibe_log(t("log.sent", name=name), "success")
-        self.verlauf_laden(name)
+        # Den Agenten laden, nicht seinen Namen: der Verlauf haengt an der
+        # Sitzung. Hier stand bis zum 16.09.2026 der Name, und der Worker
+        # starb mit AttributeError, sobald ein Auftrag abgelegt war.
+        if self._gewaehlt is not None:
+            self.verlauf_laden(self._gewaehlt)
         self.aktualisieren()
 
     # -- Bildschirmfoto -------------------------------------------------
@@ -1008,7 +1012,7 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
             self.notify(t("broadcast.partly", anzahl=geglueckt, gesamt=anzahl), severity="warning")
         self.aktualisieren()
         if self._gewaehlt is not None:
-            self.verlauf_laden(self._gewaehlt.name)
+            self.verlauf_laden(self._gewaehlt)
 
     # -- Neustart -------------------------------------------------------
 

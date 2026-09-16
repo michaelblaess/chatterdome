@@ -864,6 +864,47 @@ class TestQImBrowser:
             assert not app.is_running
 
 
+class TestVerlaufNachSendenUndRundruf:
+    """Nach dem Senden wurde der Verlauf mit dem NAMEN nachgeladen.
+
+    Belegt am 16.09.2026 auf senza: der Worker starb mit
+    ``AttributeError: 'str' object has no attribute 'laufzeit_ms'``, sobald ein
+    Auftrag abgelegt war. mypy sieht solche Aufrufe nicht - ``@work`` macht die
+    Methode fuer die Pruefung untypisiert.
+    """
+
+    async def test_senden_uebergibt_den_agenten(
+        self, quelle: FakeQuelle, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Geprueft wird die AUFRUFSTELLE, nicht die Wirkung: verlauf_laden ist
+        # ein Worker, und beim Fuellen der Tabelle laeuft ohnehin schon eine
+        # Verlaufsabfrage - die traegt sonst einen Eintrag nach, egal was die
+        # Aufrufstelle uebergibt. Genau daran war der erste Anlauf dieses
+        # Tests blind.
+        app = SanctuaryApp(quelle=quelle)
+        app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
+        async with app.run_test(size=(160, 50)) as pilot:
+            await _gefuellt(app, pilot)
+            gerufen: list[object] = []
+            monkeypatch.setattr(app, "verlauf_laden", gerufen.append)
+            app._senden_fertig("Klara", "")
+            assert gerufen, "nach dem Senden wurde der Verlauf nicht nachgeladen"
+            assert isinstance(gerufen[-1], Agent), f"Name statt Agent: {gerufen[-1]!r}"
+
+    async def test_rundruf_uebergibt_den_agenten(
+        self, quelle: FakeQuelle, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        app = SanctuaryApp(quelle=quelle)
+        app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
+        async with app.run_test(size=(160, 50)) as pilot:
+            await _gefuellt(app, pilot)
+            gerufen: list[object] = []
+            monkeypatch.setattr(app, "verlauf_laden", gerufen.append)
+            app._rundruf_fertig(1, [])
+            assert gerufen, "nach dem Rundruf wurde der Verlauf nicht nachgeladen"
+            assert isinstance(gerufen[-1], Agent), f"Name statt Agent: {gerufen[-1]!r}"
+
+
 class TestAuswahlBeimAbbau:
     """Eine Auswahl-Nachricht darf nach dem Abbau der Eingabe nichts umreissen.
 
