@@ -1,4 +1,0 @@
-{
-  "_hinweis": "Rechner, die 'status --mesh' abfragt. Der eigene wird uebersprungen. Namen muessen in ~/.ssh/config stehen (ssh-mesh-Kit).",
-  "hosts": ["rainbow", "senza", "dell"]
-}

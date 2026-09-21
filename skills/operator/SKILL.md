@@ -517,8 +517,11 @@ und `ssh -C` könnte komprimieren, ohne dass wir etwas bauen.
 
 ## Rechnerübergreifend: `--mesh`
 
-`mesh.json` neben dem Skript listet die Hosts (`rainbow`, `senza`, `dell`), der eigene wird
-übersprungen. Abgefragt wird über ssh **derselbe Befehl** wie lokal
+`mesh.json` neben dem Skript listet die Hosts, der eigene wird übersprungen. Die Datei ist
+**nicht versioniert**: Sie nennt die eigenen Rechner und wäre auf jedem anderen ohnehin
+falsch. Vorlage ist `mesh.example.json`, einmal kopieren und die eigenen Namen eintragen.
+Fehlt sie ganz, bleibt es bei der lokalen Sicht, und das ist kein Fehler (`operator.mjs`
+fängt das ab). Abgefragt wird über ssh **derselbe Befehl** wie lokal
 (`operator.mjs status --json`) - keine zweite Auswertungslogik, die auseinanderlaufen kann.
 Die Namen müssen in `~/.ssh/config` stehen, das erledigt das ssh-mesh-Kit.
 

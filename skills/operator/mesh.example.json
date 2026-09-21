@@ -1,0 +1,8 @@
+{
+  "_hinweis": "Vorlage. Diese Datei nach mesh.json kopieren und die eigenen Rechner eintragen - mesh.json selbst bleibt lokal und ist in .gitignore. Ohne mesh.json fragt 'status --mesh' nur den eigenen Rechner ab, das ist kein Fehler.",
+  "_format": "Rechner, die 'status --mesh' abfragt. Der eigene wird uebersprungen. Namen muessen in ~/.ssh/config stehen (ssh-mesh-Kit).",
+  "hosts": [
+    "rechner-eins",
+    "rechner-zwei"
+  ]
+}

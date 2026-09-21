@@ -24,4 +24,9 @@ dist/
 docs/plan-tui.md
 docs/roadmap.md
 PLAN*.md
+
+# Die eigene Rechnerliste fuer "status --mesh". Sie ist auf jedem anderen
+# Rechner falsch und nennt fremden Leuten die eigenen Hostnamen. Vorlage:
+# skills/operator/mesh.example.json
+skills/operator/mesh.json
 ROADMAP*.md
