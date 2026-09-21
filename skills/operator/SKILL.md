@@ -544,6 +544,37 @@ Kompaktieren zu bringen - kein CLI-Flag, kein Hook, keine API. Kompaktierung wir
 Operator kann deshalb nur **melden**, wer nah an der Grenze ist (Spalte Kontext färbt sich ab
 600k gelb, ab 800k rot, plus Hinweiszeile). Getippt werden muss `/compact` dort.
 
+## Verwaiste Shell-Prozesse einer Instanz finden (21.09.2026)
+
+Anlass war ein lauter Lüfter auf RAINBOW. Der Verdacht fiel auf Chrome, gemessen lag Chrome
+aber bei 0 % CPU über 5 s. Tatsächlich belegten zwei `powershell.exe` seit dem Vorabend je
+einen ganzen Kern, 3,6 % von 28 logischen Kernen und je rund 35.000 s CPU-Zeit. Beide waren
+Werkzeugaufrufe der Instanz Salma, im Vordergrund gestartet und ohne Kindprozesse. Auf
+Claude-Seite war der Aufruf längst vorbei, der Prozess lief weiter. Salma stand dabei im
+Operator auf `shell` und nach dem Beenden der beiden Prozesse auf `idle`.
+
+Der Weg, der funktioniert hat:
+
+1. **CPU über ein Intervall messen, nicht als Momentaufnahme.** `Get-Process` zweimal im
+   Abstand von 5 s, die Differenz von `CPU` durch Sekunden und Kernzahl teilen. Die
+   Momentaufnahme über `Win32_PerfFormattedData_PerfProc_Process` zeigt zwar dieselben
+   Prozesse, führt aber auch die eigene Abfrage (`WmiPrvSE`, die eigene PowerShell) weit oben.
+2. **Elternkette über `Win32_Process.ParentProcessId`** hochlaufen. Hier ergab das
+   `powershell.exe <- cmd.exe <- claude.exe[70168]`. Die Befehlszeile hilft nicht weiter: Sie
+   zeigt nur den Launcher (`$env:CLAUDE_CODE_SHELL_LAUNCHER_SCRIPT` plus `Invoke-Expression`),
+   das eigentliche Kommando kommt über eine Umgebungsvariable und ist von außen nicht lesbar.
+3. **Die PID der `claude.exe` gegen `operator.mjs status --json` halten**, Feld `pid`. Das
+   liefert den Namen der Instanz.
+4. **Was lief, steht im Transkript.** Die Startzeit des Prozesses ist Ortszeit, die Einträge
+   im `.jsonl` stehen in UTC. Umrechnen und nach `tool_use` mit passendem `timestamp` suchen.
+   Beide Treffer lagen innerhalb von 3 s um den Prozessstart, es waren zwei Läufe eines
+   Word-COM-Skripts (`stage2.ps1`) aus Salmas Scratchpad.
+
+Beendet wurden die beiden Prozesse erst nach Rückfrage, weil sie zu einer fremden Sitzung
+gehörten. Danach fiel die Gesamtlast sofort auf 12 %, gemessen einschließlich der eigenen Abfrage.
+Warum die Skripte einen Kern voll auslasteten, ist nicht geklärt. Dass sie in einer Schleife
+auf Word warteten, ist eine unbelegte Vermutung (siehe [[reference_word_com_bearbeiten]]).
+
 ## Fallstricke
 
 - **`stop` fragt nach - und liest die Antwort vom Terminal des Aufrufers.** Bis zum
