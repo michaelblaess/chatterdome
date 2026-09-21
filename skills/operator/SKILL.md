@@ -101,12 +101,17 @@ ist. Deshalb wird `CLAUDE_CODE_EXECPATH` bevorzugt, mit Shell-Aufruf als Rückfa
 |---|---|---|
 | `heilige` | Katholische Heilige | 26 |
 | `schauspieler` | Schauspieler | 22 |
-| `comicmotiv` | Comicmotiv | 19 |
 
 ```bash
-node $OP/operator.mjs motiv            # anzeigen, aktives ist markiert
-node $OP/operator.mjs motiv comicmotiv    # umschalten
+node $OP/operator.mjs motiv               # anzeigen, aktives ist markiert
+node $OP/operator.mjs motiv schauspieler  # umschalten
 ```
+
+**Mitgeliefert werden nur gemeinfreie Motive.** Ein Motiv aus Figuren eines geschützten
+Werks gehört nicht ins Repo, auch nicht als blosse Namensliste: Sobald `motiv` das Werk
+benennt, ist der Bezug hergestellt. Zu Comicmotiv etwa halten die Rechteinhaber EU-Marken in
+Klasse 9, also für Software, und haben 2016 zweimal GitHub-Repos vollständig abschalten
+lassen. Wer so ein Motiv möchte, legt es sich lokal an - die README nennt Anregungen.
 
 Ein weiteres Motiv ist ein zusätzlicher Eintrag unter `pools` in `namenspool.json`, mehr
 nicht. Namen dürfen nur Buchstaben, Ziffern und Bindestrich enthalten - `Piet` geht,
@@ -140,8 +145,8 @@ statt ihn wegzunehmen - sonst stünden zwei Instanzen unter einem Namen in der T
 eine beendete Sitzung, wird die Zuordnung gelöst. Der Zielname kommt aus `reserviert[0]` in
 `namenspool.json`, ist also nicht fest verdrahtet.
 
-In der Zählung von `names` werden reservierte Namen getrennt ausgewiesen - sonst hätte
-"Comicmotiv" plötzlich 20 statt 19 Namen.
+In der Zählung von `names` werden reservierte Namen getrennt ausgewiesen - sonst hätten die
+"Heiligen" plötzlich 27 statt 26 Namen.
 
 **Umschalten wirkt nur auf noch nicht vergebene Namen.** Laufende Instanzen behalten ihren -
 sonst wäre die Übersicht mitten im Betrieb wertlos. `names` kennzeichnet Einträge aus einem

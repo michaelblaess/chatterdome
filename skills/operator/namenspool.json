@@ -1,5 +1,5 @@
 {
-  "aktiv": "comicmotiv",
+  "aktiv": "heilige",
   "reserviert": [
     "Operator"
   ],
@@ -60,30 +60,6 @@
         "Claudia",
         "Romy",
         "Sophia"
-      ]
-    },
-    "comicmotiv": {
-      "motiv": "Comicmotiv",
-      "namen": [
-        "Snorre",
-        "Charlene",
-        "Lino",
-        "Luzie",
-        "Patsy",
-        "Salma",
-        "Schmid",
-        "Marga",
-        "Wolfram",
-        "Franko",
-        "Piet",
-        "Remo",
-        "Viola",
-        "Fritzi",
-        "Sherin",
-        "Spiro",
-        "Berit",
-        "Elvira",
-        "Petra"
       ]
     }
   }

@@ -55,7 +55,7 @@ sanctuary watch 2 --json      # NDJSON-Strom für Werkzeuge
 sanctuary start [Name]        # neue Instanz mit Namen im Tab-Titel
 sanctuary stop <Name>         # Instanz beenden
 
-sanctuary send Lino "Bitte Tests laufen lassen" --erwartet-quittung
+sanctuary send Klara "Bitte Tests laufen lassen" --erwartet-quittung
 sanctuary auftraege           # was liegt für mich an
 sanctuary ack <id> 200 "erledigt"
 sanctuary hilfe               # alle Befehle
@@ -63,6 +63,25 @@ sanctuary hilfe               # alle Befehle
 
 Die Skripte lassen sich weiterhin direkt aufrufen
 (`node ~/.claude/skills/operator/operator.mjs status`), das braucht man aber nur zum Debuggen.
+
+## Agentennamen
+
+Jede Sitzung bekommt einen Namen aus einem Pool, damit Du sie ansprechen kannst statt über
+eine Prozessnummer. `skills/operator/namenspool.json` hält mehrere Motive und merkt sich,
+welches aktiv ist. Mitgeliefert werden zwei gemeinfreie Motive, `heilige` (katholische
+Heilige) und `schauspieler`. Ein eigenes Motiv ist ein zusätzlicher Eintrag unter `pools`.
+
+Motive aus Figuren eines geschützten Werks werden bewusst **nicht** mitgeliefert. Eine blosse
+Namensliste sieht harmlos aus, aber sobald `motiv` das Werk benennt, ist der Bezug
+hergestellt, und die Rechteinhaber handeln durchaus: Zu Comicmotiv bestehen EU-Marken in Klasse
+9, also für Software, und 2016 wurden zwei GitHub-Repositories vollständig abgeschaltet.
+
+Der Spass an einem Motiv bleibt trotzdem, nur eben lokal. Anregungen, deren Rechtslage Du vor
+einer Veröffentlichung selbst prüfen solltest:
+
+- **Comicmotiv** - Snorre, Charlene, Lino, Luzie, Marga, Franko, Schmid, Piet
+- **Beispielteam** - Bauernfeind, Tamino, Amalia, Olsen, Kerstin, Engelhardt
+- Alles, was niemandem gehört: Sternbilder, Vögel, Bäume, Flüsse, Minerale
 
 ## Der Message-Bus-Tab
 

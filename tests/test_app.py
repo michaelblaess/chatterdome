@@ -78,7 +78,7 @@ class FakeQuelle:
         )
 
     def namen(self) -> Namenspool:
-        return Namenspool(motiv="Comicmotiv", namen=["Lino", "Luzie"], frei=["Luzie"])
+        return Namenspool(motiv="Heilige", namen=["Klara", "Agnes"], frei=["Agnes"])
 
     def verlauf(self, name: str, *, session_id: str = "", seit: str = "") -> list[Auftrag]:
         self.verlauf_abfragen.append((name, session_id, seit))
@@ -395,7 +395,7 @@ class TestBedienung:
             kopf = app.query_one("#kopf", KopfPanel)
             # _items ist ein dict key -> InfoItem (info_header.py:279).
             werte = {k: i.value for k, i in kopf._items.items()}
-            assert werte["pool"] == "Comicmotiv"
+            assert werte["pool"] == "Heilige"
             assert werte["free"] == "1"
 
 

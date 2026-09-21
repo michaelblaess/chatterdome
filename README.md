@@ -54,7 +54,7 @@ sanctuary watch 2 --json      # NDJSON stream for tooling
 sanctuary start [name]        # new session, named in the tab title
 sanctuary stop <name>         # end a session
 
-sanctuary send Lino "Please run the tests" --erwartet-quittung
+sanctuary send Klara "Please run the tests" --erwartet-quittung
 sanctuary auftraege           # what is waiting for me
 sanctuary ack <id> 200 "done"
 sanctuary hilfe               # all commands
@@ -62,6 +62,25 @@ sanctuary hilfe               # all commands
 
 The scripts can still be called directly
 (`node ~/.claude/skills/operator/operator.mjs status`), but that is only needed for debugging.
+
+## Agent names
+
+Every session gets a name from a pool, so you can address it instead of a process id.
+`skills/operator/namenspool.json` holds several themes and remembers which one is active.
+Shipped are two public-domain themes, `heilige` (catholic saints) and `schauspieler`
+(actors). Adding your own theme is one more entry under `pools`.
+
+Themes made of characters from a copyrighted work are deliberately **not** shipped. A plain
+list of names looks harmless, but naming the work in `motiv` establishes the reference, and
+rights holders do act on it: the Comicmotiv rights holders hold EU trademarks in class 9
+(software) and had two GitHub repositories taken down in full in 2016.
+
+That said, a themed pool is half the fun, so here are ideas to set up locally. Check the
+rights situation yourself before making one public:
+
+- **Comicmotiv** - Snorre, Charlene, Lino, Luzie, Marga, Franko, Schmid, Piet
+- **Beispielteam** - Bauernfeind, Tamino, Amalia, Olsen, Kerstin, Engelhardt
+- Anything that is nobody's property: constellations, birds, trees, rivers, minerals
 
 ## The message bus tab
 
