@@ -95,7 +95,9 @@ class TestFormular:
             await pilot.pause()
             assert panel.query_one("#disk-starten", Button).disabled
             assert "mindestens zwei" in _text(panel, "#disk-grund")
-            assert panel.query_one("#disk-ohne-kontext", Checkbox).disabled
+            # Bis zum 28.09.2026 war der Schalter ohne neue Agenten gesperrt, und
+            # Michael konnte CLAUDE.md nicht einschalten. Er bleibt jetzt bedienbar.
+            assert not panel.query_one("#disk-mit-kontext", Checkbox).disabled
 
     async def test_pruefen_gleich_nach_dem_einhaengen_neuer_zeilen(self) -> None:
         # Absturz vom 28.09.2026 bei Michael: NoMatches '.disk-agent-haken'. Die
@@ -353,6 +355,8 @@ class TestArchivImReiter:
                 await pilot.pause()
             panel.query_one("#disk-weiter", Input).value = "2"
             panel.query_one("#disk-weiter-modell", Select).value = "haiku"
+            panel.query_one("#disk-weiter-info", TextArea).text = "Parleyvoo ist frei."
+            panel.query_one("#disk-weiter-kontext", Checkbox).value = True
             await pilot.pause()
             await pilot.click("#disk-fortsetzen")
             await app.workers.wait_for_complete()
@@ -362,6 +366,12 @@ class TestArchivImReiter:
             weiter = aufrufe[0]
             assert weiter["diskussion"].runden == 4
             assert weiter["diskussion"].modell == "haiku"
+            letzter = weiter["diskussion"].beitraege[-1]
+            assert (letzter.art, letzter.text) == ("moderator", "Parleyvoo ist frei.")
+            assert weiter["diskussion"].ohne_kontext is False
+            # Der Hinweis steht als eigene Blase im Chat, nicht als Beitrag eines Agenten.
+            assert "Parleyvoo ist frei." in str(panel.query_one(".disk-moderator").render())
+            assert panel.query_one("#disk-weiter-info", TextArea).text == ""
             assert weiter["diskussion"].kennung == d.kennung
             assert [x.name for x in weiter["wiederbeleben"]] == ["Ghost"]
             assert str(weiter["protokoll"]).endswith("20260928-171200.md")
@@ -469,3 +479,65 @@ class TestAnimationen:
             panel.beginnen(Diskussion("y", list(d.teilnehmer)), [])
             kennzahlen = panel.kennzahlen()
             assert kennzahlen is not None and kennzahlen[1] == ""
+
+
+class TestHistorie:
+    async def test_esc_fuehrt_zur_uebersicht(self) -> None:
+        app = _app()
+        async with app.run_test(size=(160, 50)) as pilot:
+            d = _gespeichert(app, "Agatha", "Maria")
+            panel = await _reiter(app, pilot)
+            panel.zeigen(d, "")
+            panel.query_one("#disk-chat").focus()
+            await pilot.pause()
+            await pilot.press("escape")
+            await pilot.pause()
+            assert not panel.has_class("fertig")
+            assert panel.query_one("#disk-archiv").region.height > 0
+            assert str(panel.query_one("#disk-neue", Button).label) == "Zur Übersicht"
+
+    async def test_rechtsklick_oeffnet_das_kontextmenue(self) -> None:
+        from textual_widgets import ContextMenuScreen
+
+        app = _app()
+        async with app.run_test(size=(160, 50)) as pilot:
+            _gespeichert(app, "Agatha", "Maria")
+            panel = await _reiter(app, pilot)
+            # Erst wenn das Archiv neben dem Formular steht - die Klasse "breit"
+            # setzt die Groessenmeldung nach dem Reiterwechsel, und ein Klick
+            # davor trifft die alte Stelle.
+            for _ in range(40):
+                if panel.has_class("breit"):
+                    break
+                await pilot.pause()
+            await pilot.pause()
+            await pilot.click("#disk-archiv", offset=(4, 1), button=3)
+            for _ in range(5):
+                await pilot.pause()
+            assert isinstance(app.screen, ContextMenuScreen)
+
+    async def test_vorlage_fuellt_das_formular(self) -> None:
+        app = _app()
+        async with app.run_test(size=(160, 50)) as pilot:
+            d = _gespeichert(app, "Agatha", "Maria")
+            panel = await _reiter(app, pilot)
+            app._archiv_ziel = d.kennung
+            app._archiv_menue_gewaehlt("vorlage")
+            await pilot.pause()
+            assert panel.query_one("#disk-thema", TextArea).text == d.thema
+            assert panel.query_one("#disk-runden", Input).value == "2"
+
+    async def test_loeschen_nur_nach_bestaetigung(self) -> None:
+        from claude_sanctuary.tui.screens.bestaetigung_screen import BestaetigungScreen
+
+        app = _app()
+        async with app.run_test(size=(160, 50)) as pilot:
+            d = _gespeichert(app, "Agatha", "Maria")
+            await _reiter(app, pilot)
+            app._archiv_ziel = d.kennung
+            app._archiv_menue_gewaehlt("loeschen")
+            await pilot.pause()
+            assert isinstance(app.screen, BestaetigungScreen)
+            assert len(app._archiv.liste()) == 1, "noch nichts geloescht"
+            app._archiv_loeschen_bestaetigt(True)
+            assert app._archiv.liste() == []

@@ -119,3 +119,21 @@ class TestModell:
         geladen[0].modell = "opus"
         archiv.speichern(geladen[0])
         assert archiv.liste()[0].modell == "opus"
+
+
+class TestLoeschen:
+    def test_loescht_diskussion_teilnehmer_und_beitraege(self, tmp_path: Path) -> None:
+        import sqlite3
+
+        archiv = Diskussionsarchiv(tmp_path / "d.db")
+        bleibt, weg = _diskussion("bleibt"), _diskussion("weg")
+        archiv.speichern(bleibt)
+        archiv.speichern(weg)
+        assert archiv.loeschen(weg.kennung) is True
+        assert archiv.loeschen(weg.kennung) is False
+        assert [e.thema for e in archiv.liste()] == ["bleibt"]
+        with sqlite3.connect(tmp_path / "d.db") as db:
+            for tabelle in ("teilnehmer", "beitrag"):
+                rest = db.execute(f"SELECT count(*) FROM {tabelle} WHERE diskussion=?",
+                                  (weg.kennung,)).fetchone()[0]
+                assert rest == 0, tabelle

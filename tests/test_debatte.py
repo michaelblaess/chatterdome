@@ -11,6 +11,7 @@ from claude_sanctuary.kern.debatte import (
     absaetze,
     als_markdown,
     anweisung,
+    hinweis_anhaengen,
     moderieren,
     vorbereitung,
     zusammenfassen,
@@ -443,3 +444,28 @@ class TestVorbereitungsSignal:
         gemeldet: list[object] = []
         _lauf(_diskussion(runden=1), Attrappe(), beim_vorbereiten=gemeldet.append)
         assert gemeldet == []
+
+
+class TestHinweisDesModerators:
+    def test_hinweis_geht_an_die_naechsten_redner_und_zaehlt_keine_runde(self) -> None:
+        d = _lauf(_diskussion(runden=1), Attrappe())
+        hinweis_anhaengen(d, "  Parleyvoo ist in TMview frei.  ")
+        hinweis_anhaengen(d, "   ")
+        assert [b.art for b in d.beitraege].count("moderator") == 1
+        assert d.gespielte_runden == 1
+        d.runden = 2
+        weiter = Attrappe()
+        _lauf(d, weiter)
+        anweisung_text = weiter.gesendet[0][1]
+        assert "[Moderator] Parleyvoo ist in TMview frei." in anweisung_text
+        assert "neue Informationen des Moderators" in anweisung_text
+        assert "Runde 2 von 2" in anweisung_text.splitlines()[0]
+        assert "[Moderator, neue Information] Parleyvoo" in zusammenfassung_auftrag(d)
+        assert "> **Moderator**" in als_markdown(d)
+
+    def test_ohne_hinweis_keine_erklaerung(self) -> None:
+        d = _lauf(_diskussion(runden=1), Attrappe())
+        d.runden = 2
+        weiter = Attrappe()
+        _lauf(d, weiter)
+        assert "Moderator" not in weiter.gesendet[0][1].split("Bisheriger Verlauf:")[1]

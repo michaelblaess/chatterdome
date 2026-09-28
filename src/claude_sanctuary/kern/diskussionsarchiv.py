@@ -179,6 +179,16 @@ class Diskussionsarchiv:
                         int(r), str(e), int(tok), str(m))
                 for k, b, th, e, tok, m, n, r in zeilen]
 
+    def loeschen(self, kennung: int) -> bool:
+        """Entfernt eine Diskussion samt Teilnehmern und Beitraegen. False, wenn es sie nicht gab.
+
+        Das Markdown-Protokoll bleibt liegen - es ist eine Datei des Anwenders.
+        """
+        with self._verbindung() as db:
+            db.execute("DELETE FROM beitrag WHERE diskussion=?", (kennung,))
+            db.execute("DELETE FROM teilnehmer WHERE diskussion=?", (kennung,))
+            return db.execute("DELETE FROM diskussion WHERE id=?", (kennung,)).rowcount > 0
+
     def laden(self, kennung: int) -> tuple[Diskussion, str] | None:
         """Die Diskussion samt Protokollpfad, None wenn es sie nicht gibt."""
         with self._verbindung() as db:

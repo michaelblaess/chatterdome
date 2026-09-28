@@ -28,6 +28,8 @@ from typing import Protocol
 from claude_sanctuary.kern.lokale_quelle import LokaleQuelle
 
 ABSENDER = "Sanctuary"
+MODERATOR = "Moderator"
+"""So heissen Hinweise des Anwenders im Verlauf, den die Redner bekommen."""
 THEMA_TOPIC = "diskussion"
 
 WOERTER_JE_BEITRAG = 80
@@ -140,7 +142,8 @@ class Beitrag:
     text: str
     zeit: str
     art: str = "beitrag"
-    """``vorbereitung``, ``beitrag``, ``schlusswort``, ``ausgelassen`` oder ``fehler``."""
+    """``vorbereitung``, ``beitrag``, ``schlusswort``, ``moderator``, ``ausgelassen`` oder
+    ``fehler``. ``moderator`` ist ein Hinweis, den der Anwender beim Fortsetzen mitgibt."""
     hinweis: str = ""
     """Vermerk des Moderators, etwa eine deutlich ueberschrittene Laenge."""
     seite: str = ""
@@ -321,11 +324,17 @@ def anweisung(diskussion: Diskussion, redner: Teilnehmer, runde: int, schluss: b
         zeilen.append("")
         zeilen.append("Deine Notizen aus der Vorbereitung (nur Du kennst sie):")
         zeilen += eigene
-    bisher = [b for b in diskussion.beitraege if b.art in ("beitrag", "schlusswort")]
+    bisher = [b for b in diskussion.beitraege if b.art in ("beitrag", "schlusswort", "moderator")]
     if bisher:
         zeilen.append("")
         zeilen.append("Bisheriger Verlauf:")
-        zeilen += [f"[{b.name}] {b.text}" for b in bisher]
+        zeilen += [f"[{MODERATOR}] {b.text}" if b.art == "moderator" else f"[{b.name}] {b.text}"
+                   for b in bisher]
+        if any(b.art == "moderator" for b in bisher):
+            zeilen.append("")
+            zeilen.append(f"Einträge mit [{MODERATOR}] sind neue Informationen des Moderators. "
+                          "Sie stimmen, nimm sie ernst und geh darauf ein, wo sie Deine "
+                          "Position berühren.")
     zeilen.append("")
     if schluss:
         zeilen.append("Was bleibt für Dich als Ergebnis? " + umfang)
@@ -600,13 +609,24 @@ def moderieren(
     return diskussion
 
 
+def hinweis_anhaengen(diskussion: Diskussion, text: str) -> None:
+    """Haengt einen Hinweis des Anwenders an, etwa neue Fakten beim Fortsetzen.
+
+    Er steht hinter der letzten gespielten Runde und geht mit dem Verlauf an
+    jeden folgenden Redner. Leerer Text haengt nichts an.
+    """
+    if text.strip():
+        diskussion.beitraege.append(Beitrag(diskussion.gespielte_runden, MODERATOR,
+                                            text.strip(), _jetzt(), "moderator"))
+
+
 def zusammenfassung_auftrag(diskussion: Diskussion) -> str:
     """Der Auftrag an das Modell, das die Diskussion zusammenfasst. Rein und deterministisch.
 
     Bewusst ohne die Recherche-Notizen: zusammengefasst wird, was in der
     Diskussion gesagt wurde, nicht was jemand vorbereitet hat.
     """
-    gesagt = [b for b in diskussion.beitraege if b.art in ("beitrag", "schlusswort")]
+    gesagt = [b for b in diskussion.beitraege if b.art in ("beitrag", "schlusswort", "moderator")]
     zeilen = [
         "Fasse die folgende Diskussion neutral zusammen, auf Deutsch, höchstens 200 Wörter.",
         "Gliederung: je ein kurzer Absatz zu den Kernargumenten jeder Seite, dann wo die "
@@ -623,6 +643,9 @@ def zusammenfassung_auftrag(diskussion: Diskussion) -> str:
         zeilen.append(f"Teilnehmer: {t.name}{seite}")
     zeilen.append("")
     for b in gesagt:
+        if b.art == "moderator":
+            zeilen.append(f"[{MODERATOR}, neue Information] {b.text}")
+            continue
         kopf = "Schlusswort" if b.art == "schlusswort" else f"Runde {b.runde}"
         zeilen.append(f"[{b.name}, {kopf}] {b.text}")
     return "\n".join(zeilen)
@@ -666,6 +689,8 @@ def als_markdown(diskussion: Diskussion) -> str:
             zeilen.append(f"**{b.name}**, Schlusswort ({b.zeit}): {b.text}")
         elif b.art == "vorbereitung":
             zeilen.append(f"**{b.name}**, Recherche ({b.zeit}):\n\n{b.text}")
+        elif b.art == "moderator":
+            zeilen.append(f"> **{MODERATOR}** ({b.zeit}): {b.text}")
         else:
             zeilen.append(f"_{b.name}, Runde {b.runde}: {b.text}_")
         if b.hinweis:

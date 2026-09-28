@@ -33,6 +33,7 @@ from textual_widgets import (
 from claude_sanctuary import __author__, __version__, __year__
 from claude_sanctuary.i18n import current_language, t
 from claude_sanctuary.kern import absturz
+from claude_sanctuary.kern.debatte import hinweis_anhaengen
 from claude_sanctuary.kern.diskussionsarchiv import Diskussionsarchiv
 from claude_sanctuary.kern.einstellungen import ZUSTIMMUNG, Einstellungen
 from claude_sanctuary.kern.gedaechtnis import (
@@ -162,6 +163,8 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         self._diskussion_stopp: threading.Event | None = None
         """Gesetzt, solange eine Diskussion laeuft. Der Knopf haelt sie dann an."""
         self._archiv = Diskussionsarchiv()
+        self._archiv_ziel = 0
+        """Die Diskussion, deren Kontextmenue gerade offen ist."""
         """Gespeicherte Diskussionen. Der Pfad folgt dem Einstellungsordner."""
 
         self._gedaechtnis: Gedaechtnis | None = None
@@ -1073,14 +1076,77 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         diskussion, protokoll = geladen
         diskussion.runden = diskussion.gespielte_runden + ereignis.runden
         diskussion.modell = ereignis.modell
+        diskussion.ohne_kontext = not ereignis.mit_kontext
         diskussion.ende = ""
         diskussion.zusammenfassung = ""
+        hinweis_anhaengen(diskussion, ereignis.hinweis)
         laufend = {a.name.lower() for a in self._bestand.agenten if not a.selbst}
         wieder = [x for x in diskussion.teilnehmer if x.name.lower() not in laufend]
         self._diskussion_starten(DiskussionsAuftrag(
             diskussion=diskussion, ohne_kontext=diskussion.ohne_kontext,
             wiederbeleben=wieder, protokoll=protokoll or ereignis.protokoll,
         ))
+
+    def on_diskussions_panel_archiv_menue(self, ereignis: DiskussionsPanel.ArchivMenue) -> None:
+        """Kontextmenue einer gespeicherten Diskussion."""
+        from textual_widgets import ContextMenuItem, ContextMenuScreen
+
+        geladen = self._archiv.laden(ereignis.kennung)
+        if geladen is None:
+            self.notify(t("discussion.archive_missing"), severity="warning")
+            return
+        protokoll = geladen[1]
+        self._archiv_ziel = ereignis.kennung
+        laeuft = self._diskussion_stopp is not None
+        eintraege = [
+            ContextMenuItem("zeigen", t("discussion.menu_show")),
+            ContextMenuItem("fortsetzen", t("discussion.menu_continue"), enabled=not laeuft),
+            ContextMenuItem("vorlage", t("discussion.menu_template"), enabled=not laeuft),
+            ContextMenuItem.separator(),
+            ContextMenuItem("protokoll", t("discussion.menu_open_log"), enabled=bool(protokoll)),
+            ContextMenuItem("pfad", t("discussion.menu_copy_log"), enabled=bool(protokoll)),
+            ContextMenuItem.separator(),
+            ContextMenuItem("loeschen", t("discussion.menu_delete"), enabled=not laeuft),
+        ]
+        self.push_screen(ContextMenuScreen(eintraege, at=ereignis.bei),
+                         callback=self._archiv_menue_gewaehlt)
+
+    def _archiv_menue_gewaehlt(self, auswahl: str | None) -> None:
+        kennung = self._archiv_ziel
+        geladen = self._archiv.laden(kennung) if auswahl else None
+        if geladen is None:
+            return
+        diskussion, protokoll = geladen
+        panel = self.query_one("#diskussion", DiskussionsPanel)
+        if auswahl in ("zeigen", "fortsetzen"):
+            panel.zeigen(diskussion, protokoll)
+            if auswahl == "fortsetzen":
+                panel.fortsetzen_vorbereiten()
+        elif auswahl == "vorlage":
+            panel.vorlage(diskussion)
+        elif auswahl == "protokoll":
+            self._link_counter += 1
+            self._link_registry[self._link_counter] = protokoll
+            self.action_open_link(str(self._link_counter))
+        elif auswahl == "pfad":
+            self._in_zwischenablage(protokoll)
+        elif auswahl == "loeschen":
+            from claude_sanctuary.tui.screens.bestaetigung_screen import BestaetigungScreen
+
+            self.push_screen(
+                BestaetigungScreen(
+                    titel=t("discussion.delete_title"),
+                    text=t("discussion.delete_text", thema=diskussion.thema[:80]),
+                ),
+                callback=self._archiv_loeschen_bestaetigt,
+            )
+
+    def _archiv_loeschen_bestaetigt(self, ja: bool | None) -> None:
+        if not ja:
+            return
+        if self._archiv.loeschen(self._archiv_ziel):
+            self.notify(t("discussion.deleted"))
+        self._diskussionsarchiv_zeigen()
 
     def on_diskussions_panel_kennzahlen(self, _ereignis: DiskussionsPanel.Kennzahlen) -> None:
         self._statuszeile_fuer_reiter()

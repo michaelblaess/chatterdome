@@ -17,12 +17,13 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from rich.style import Style
 from rich.text import Text
 from textual import events, on
 from textual.app import ComposeResult
+from textual.binding import Binding, BindingType
 from textual.containers import Container, Horizontal, Vertical, VerticalScroll
 from textual.message import Message
 from textual.widgets import Button, Checkbox, DataTable, Input, Label, Select, Static, TextArea
@@ -126,6 +127,29 @@ class _Laeuft(Static):
             zeile.append(f"  {_balken(self._schritt)}", style=farbe)
         zeile.append(f"  {_dauer(self.sekunden)}", style="dim")
         return zeile
+
+
+class _ArchivTabelle(DataTable[Any]):
+    """Die Uebersicht, die den Rechtsklick meldet.
+
+    Abgefangen wie in ``AgentenDaten``: Textuals eigener Klick-Handler setzt nur
+    den Cursor, von der rechten Maustaste erfaehrt sonst niemand.
+    """
+
+    class Rechtsklick(Message):
+        def __init__(self, zeile: int, bei: tuple[int, int]) -> None:
+            super().__init__()
+            self.zeile = zeile
+            self.bei = bei
+
+    async def _on_click(self, event: events.Click) -> None:
+        zeile = event.style.meta.get("row", -1)
+        if event.button != 3 or not isinstance(zeile, int) or zeile < 0:
+            return
+        event.prevent_default()
+        event.stop()
+        self.move_cursor(row=zeile)
+        self.post_message(self.Rechtsklick(zeile, (event.screen_x, event.screen_y)))
 
 
 MAX_NEU = 6
@@ -356,6 +380,21 @@ class DiskussionsPanel(Vertical):
         width: 8;
         margin: 1 1 0 0;
     }
+    DiskussionsPanel #disk-weiter-raum {
+        height: auto;
+        padding: 0 2 1 2;
+    }
+    DiskussionsPanel #disk-weiter-info {
+        height: 3;
+    }
+    /* Hinweis des Moderators: mittig, nicht auf einer der beiden Seiten. */
+    DiskussionsPanel .disk-moderator {
+        height: auto;
+        padding: 0 1;
+        margin: 0 8 1 8;
+        border: round $warning;
+        background: $panel;
+    }
     DiskussionsPanel #disk-weiter-modell {
         width: 40;
         margin: 1 2 0 0;
@@ -407,6 +446,11 @@ class DiskussionsPanel(Vertical):
     }
     """
 
+    # Ohne uebersetzten Text: die Klasse entsteht, bevor die Sprache geladen ist.
+    BINDINGS: ClassVar[list[BindingType]] = [
+        Binding("escape", "zur_uebersicht", show=False),
+    ]
+
     class Starten(Message):
         """Das Formular ist vollstaendig, die App soll den Ablauf starten."""
 
@@ -428,12 +472,23 @@ class DiskussionsPanel(Vertical):
         """Die angezeigte Diskussion soll um ``runden`` Runden weitergehen."""
 
         def __init__(self, diskussion: Diskussion, runden: int, protokoll: str,
-                     modell: str) -> None:
+                     modell: str, hinweis: str = "", mit_kontext: bool = False) -> None:
             super().__init__()
             self.diskussion = diskussion
             self.runden = runden
             self.protokoll = protokoll
             self.modell = modell
+            self.hinweis = hinweis
+            """Neue Informationen fuer die Teilnehmer, leer fuer keine."""
+            self.mit_kontext = mit_kontext
+
+    class ArchivMenue(Message):
+        """Rechtsklick auf eine gespeicherte Diskussion."""
+
+        def __init__(self, kennung: int, bei: tuple[int, int]) -> None:
+            super().__init__()
+            self.kennung = kennung
+            self.bei = bei
 
     class Kennzahlen(Message):
         """Runde, Redner oder Verbrauch haben sich geaendert - fuer die Statuszeile."""
@@ -506,15 +561,15 @@ class DiskussionsPanel(Vertical):
                     yield Static(t("discussion.new_hint"), classes="disk-einheit")
                 yield Checkbox(t("discussion.research"), value=True, id="disk-recherche",
                                compact=True)
-                yield Checkbox(t("discussion.without_context"), value=True,
-                               id="disk-ohne-kontext", compact=True)
+                yield Checkbox(t("discussion.with_context"), value=False,
+                               id="disk-mit-kontext", compact=True)
                 yield Static("", id="disk-vorschau", classes="disk-leise")
                 yield Static("", id="disk-grund")
                 with Horizontal(classes="disk-knoepfe"):
                     yield Button(t("discussion.start"), variant="primary", id="disk-starten")
             with Vertical(id="disk-archiv-raum"):
                 yield Static(t("discussion.archive"), id="disk-archiv-titel")
-                yield DataTable(id="disk-archiv", cursor_type="row", zebra_stripes=True)
+                yield _ArchivTabelle(id="disk-archiv", cursor_type="row", zebra_stripes=True)
         with Vertical(id="disk-chat-raum"):
             yield Static("", id="disk-kopf")
             with Horizontal(id="disk-steuerung"):
@@ -525,6 +580,13 @@ class DiskussionsPanel(Vertical):
                 yield Select(_modell_auswahl(), value=VORGABE_MODELL, allow_blank=False,
                              id="disk-weiter-modell", compact=True)
                 yield Button(t("discussion.new"), variant="primary", id="disk-neue")
+            with Vertical(id="disk-weiter-raum"):
+                yield Static(t("discussion.more_info"), classes="disk-leise")
+                yield TextArea(id="disk-weiter-info", compact=True, soft_wrap=True,
+                               show_line_numbers=False, tab_behavior="focus",
+                               placeholder=t("discussion.more_info_placeholder"))
+                yield Checkbox(t("discussion.with_context"), value=False,
+                               id="disk-weiter-kontext", compact=True)
             yield VerticalScroll(id="disk-chat")
             with VerticalScroll(id="disk-zusammenfassung-raum"):
                 yield Static("", id="disk-zusammenfassung")
@@ -570,6 +632,11 @@ class DiskussionsPanel(Vertical):
     def _archiv_gewaehlt(self, ereignis: DataTable.RowSelected) -> None:
         if ereignis.row_key.value is not None:
             self.post_message(self.Oeffnen(int(ereignis.row_key.value)))
+
+    @on(_ArchivTabelle.Rechtsklick)
+    def _archiv_rechtsklick(self, ereignis: _ArchivTabelle.Rechtsklick) -> None:
+        if 0 <= ereignis.zeile < len(self._archiv):
+            self.post_message(self.ArchivMenue(self._archiv[ereignis.zeile].kennung, ereignis.bei))
 
     def zeigen(self, diskussion: Diskussion, protokoll: str) -> None:
         """Zeigt eine abgeschlossene Diskussion aus dem Archiv im Chat."""
@@ -667,7 +734,7 @@ class DiskussionsPanel(Vertical):
         return DiskussionsAuftrag(
             diskussion=diskussion,
             neu=neu_teilnehmer,
-            ohne_kontext=self.query_one("#disk-ohne-kontext", Checkbox).value,
+            ohne_kontext=not self.query_one("#disk-mit-kontext", Checkbox).value,
         ), ""
 
     def _seitenzeile(self, diskussion: Diskussion, teilnehmer: list[Teilnehmer]) -> str:
@@ -690,9 +757,6 @@ class DiskussionsPanel(Vertical):
         self.query_one("#disk-vorschau", Static).update(Text(vorschau))
         self.query_one("#disk-grund", Static).update(Text(grund))
         self.query_one("#disk-starten", Button).disabled = auftrag is None
-        # Ohne frische Sitzungen gibt es nichts, dem man den Kontext nehmen
-        # koennte - laufende Agenten haben ihn laengst geladen.
-        self.query_one("#disk-ohne-kontext", Checkbox).disabled = not self._zahl("disk-neu")
 
     @on(Input.Changed)
     @on(TextArea.Changed)
@@ -719,6 +783,10 @@ class DiskussionsPanel(Vertical):
         self._kopf_zeichnen()
         self.post_message(self.Anhalten())
 
+    def action_zur_uebersicht(self) -> None:
+        if self.has_class("fertig"):
+            self._knopf_neue()
+
     @on(Button.Pressed, "#disk-neue")
     def _knopf_neue(self) -> None:
         self.remove_class("fertig")
@@ -735,14 +803,38 @@ class DiskussionsPanel(Vertical):
             self.notify(t("discussion.bad_more"), severity="warning", markup=False)
             return
         modell = str(self.query_one("#disk-weiter-modell", Select).value)
-        self.post_message(self.Fortsetzen(self._diskussion, int(roh), self._protokoll, modell))
+        hinweis = self.query_one("#disk-weiter-info", TextArea).text
+        mit_kontext = self.query_one("#disk-weiter-kontext", Checkbox).value
+        self.post_message(self.Fortsetzen(self._diskussion, int(roh), self._protokoll, modell,
+                                          hinweis, mit_kontext))
+        self.query_one("#disk-weiter-info", TextArea).text = ""
+
+    def fortsetzen_vorbereiten(self) -> None:
+        """Nach "Fortsetzen" im Kontextmenue: das Hinweisfeld bekommt den Fokus."""
+        self.query_one("#disk-weiter-info", TextArea).focus()
+
+    def vorlage(self, diskussion: Diskussion) -> None:
+        """Uebernimmt Thema und Einstellungen einer alten Diskussion ins Formular."""
+        self.remove_class("fertig")
+        self._diskussion = None
+        self.query_one("#disk-thema", TextArea).text = diskussion.thema
+        self.query_one("#disk-position-pro", Input).value = diskussion.positionen[0]
+        self.query_one("#disk-position-contra", Input).value = diskussion.positionen[1]
+        self.query_one("#disk-format", Select).value = diskussion.format
+        self.query_one("#disk-runden", Input).value = str(diskussion.runden)
+        self.query_one("#disk-modell", Select).value = diskussion.modell
+        self.query_one("#disk-recherche", Checkbox).value = diskussion.recherche
+        self.query_one("#disk-mit-kontext", Checkbox).value = not diskussion.ohne_kontext
+        self._pruefen()
+        self.query_one("#disk-thema", TextArea).focus()
+        self.post_message(self.Kennzahlen())
 
     def _steuerung_zeigen(self, *, laeuft: bool) -> None:
         """Anhalten waehrend der Diskussion, danach Fortsetzen und Neue Diskussion."""
         self.query_one("#disk-anhalten", Button).display = laeuft
         fortsetzbar = not laeuft and self._diskussion is not None and self._diskussion.kennung > 0
         for widget_id in ("#disk-fortsetzen", "#disk-weiter", "#disk-weiter-einheit",
-                          "#disk-weiter-modell"):
+                          "#disk-weiter-modell", "#disk-weiter-raum"):
             self.query_one(widget_id).display = fortsetzbar
         self.query_one("#disk-neue", Button).display = not laeuft
 
@@ -926,6 +1018,12 @@ class DiskussionsPanel(Vertical):
             if dauer:
                 text = f"{text} ({dauer})"
             return Static(Text(text), classes="disk-meldung")
+        if beitrag.art == "moderator":
+            inhalt = Text()
+            inhalt.append(t("discussion.moderator_head", zeit=beitrag.zeit[:5]), style="bold")
+            inhalt.append("\n")
+            inhalt.append(beitrag.text)
+            return Static(inhalt, classes="disk-moderator")
         if beitrag.art in ("fehler", "ausgelassen"):
             return Static(Text(f"{beitrag.name}: {beitrag.text}"), classes="disk-meldung")
         mit_seiten = d is not None and d.format == "diskussion" and beitrag.seite
@@ -977,6 +1075,7 @@ class DiskussionsPanel(Vertical):
         for schluessel in list(self._laeufer):
             self._laeufer_weg(schluessel)
         self.query_one("#disk-weiter-modell", Select).value = diskussion.modell
+        self.query_one("#disk-weiter-kontext", Checkbox).value = not diskussion.ohne_kontext
         if diskussion.zusammenfassung:
             inhalt = Text()
             inhalt.append(t("discussion.summary_title"), style="bold")
