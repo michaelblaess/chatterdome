@@ -18,7 +18,7 @@ import { join } from 'node:path';
 import { createServer } from 'node:net';
 
 import {
-  sockelFaehig, ladeSockets, merkeSocket, raeumeSockets, eintrag,
+  sockelFaehig, ladeSockets, merkeSocket, raeumeSockets, eintrag, SCHONFRIST_MS,
   nutzlast, schreibeInSocket, sofortZustellen,
 } from './socket.mjs';
 
@@ -26,6 +26,11 @@ const WINDOWS = process.platform === 'win32';
 
 function tempDir() {
   return mkdtempSync(join(tmpdir(), 'bus-socket-'));
+}
+
+/** Die Tabelle ohne den Zeitstempel "seit", der sich je Lauf aendert. */
+function ohneZeit(tabelle) {
+  return Object.fromEntries(Object.entries(tabelle).map(([sid, { seit: _seit, ...rest }]) => [sid, rest]));
 }
 
 describe('Nutzlast', () => {
@@ -53,7 +58,7 @@ describe('Socket-Tabelle', () => {
     try {
       assert.deepEqual(ladeSockets(dir), {}, 'ohne Datei ist die Tabelle leer');
       assert.equal(merkeSocket(dir, 'sid-1', '/tmp/a.sock'), true);
-      assert.deepEqual(ladeSockets(dir), { 'sid-1': { pfad: '/tmp/a.sock' } });
+      assert.deepEqual(ohneZeit(ladeSockets(dir)), { 'sid-1': { pfad: '/tmp/a.sock' } });
     } finally { rmSync(dir, { recursive: true, force: true }); }
   });
 
@@ -79,8 +84,9 @@ describe('Socket-Tabelle', () => {
     try {
       merkeSocket(dir, 'lebt', '/tmp/a.sock');
       merkeSocket(dir, 'weg', '/tmp/b.sock');
-      assert.equal(raeumeSockets(dir, ['lebt']), 1);
-      assert.deepEqual(ladeSockets(dir), { lebt: { pfad: '/tmp/a.sock' } });
+      // Nach Ablauf der Schonfrist, sonst ist auch "weg" noch geschuetzt.
+      assert.equal(raeumeSockets(dir, ['lebt'], { jetzt: Date.now() + SCHONFRIST_MS + 1 }), 1);
+      assert.deepEqual(Object.keys(ladeSockets(dir)), ['lebt']);
     } finally { rmSync(dir, { recursive: true, force: true }); }
   });
 
@@ -91,8 +97,28 @@ describe('Socket-Tabelle', () => {
     const dir = tempDir();
     try {
       merkeSocket(dir, 'lebt', '/tmp/a.sock');
-      assert.equal(raeumeSockets(dir, []), 0);
-      assert.deepEqual(ladeSockets(dir), { lebt: { pfad: '/tmp/a.sock' } });
+      assert.equal(raeumeSockets(dir, [], { jetzt: Date.now() + SCHONFRIST_MS + 1 }), 0);
+      assert.deepEqual(Object.keys(ladeSockets(dir)), ['lebt']);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  test('ein frischer Eintrag uebersteht das Aufraeumen einer anderen Sitzung', () => {
+    // Der Fall vom 28.09.2026: "neu" ist gerade gestartet und steht noch nicht
+    // in der Instanzliste, der Hook von "alt" raeumt in genau diesem Moment auf.
+    const dir = tempDir();
+    try {
+      merkeSocket(dir, 'alt', '/tmp/a.sock');
+      merkeSocket(dir, 'neu', '/tmp/b.sock');
+      assert.equal(raeumeSockets(dir, ['alt']), 0);
+      assert.deepEqual(Object.keys(ladeSockets(dir)).sort(), ['alt', 'neu']);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  test('ein Eintrag im alten Format ohne Zeitstempel wird weiter aufgeraeumt', () => {
+    const dir = tempDir();
+    try {
+      writeFileSync(join(dir, 'sockets.json'), JSON.stringify({ lebt: '/tmp/a', weg: '/tmp/b' }), 'utf8');
+      assert.equal(raeumeSockets(dir, ['lebt']), 1);
     } finally { rmSync(dir, { recursive: true, force: true }); }
   });
 });
@@ -197,7 +223,7 @@ describe('Beglaubigung', () => {
     const dir = tempDir();
     try {
       merkeSocket(dir, 'sid-1', '/tmp/a.sock', 'geheim');
-      assert.deepEqual(ladeSockets(dir), { 'sid-1': { pfad: '/tmp/a.sock', token: 'geheim' } });
+      assert.deepEqual(ohneZeit(ladeSockets(dir)), { 'sid-1': { pfad: '/tmp/a.sock', token: 'geheim' } });
     } finally { rmSync(dir, { recursive: true, force: true }); }
   });
 
@@ -206,7 +232,7 @@ describe('Beglaubigung', () => {
     const dir = tempDir();
     try {
       merkeSocket(dir, 'sid-1', '/tmp/a.sock');
-      assert.deepEqual(ladeSockets(dir), { 'sid-1': { pfad: '/tmp/a.sock' } });
+      assert.deepEqual(ohneZeit(ladeSockets(dir)), { 'sid-1': { pfad: '/tmp/a.sock' } });
     } finally { rmSync(dir, { recursive: true, force: true }); }
   });
 

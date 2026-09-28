@@ -77,6 +77,9 @@ export function ladeSockets(datenDir) {
   }
 }
 
+/** So lange bleibt ein neuer Eintrag vom Aufraeumen verschont. */
+export const SCHONFRIST_MS = 10 * 60 * 1000;
+
 /**
  * Haelt den Socket einer Sitzung fest.
  *
@@ -99,13 +102,24 @@ export function merkeSocket(datenDir, sessionId, pfad, token = '') {
   if (vorher.pfad === pfad && vorher.token === token) return true;
   // Seit dem 21.08.2026 ein Objekt statt eines blossen Pfades: der Token
   // gehoert dazu, siehe eintrag(). Gelesen werden weiterhin beide Formen.
-  tabelle[sessionId] = token ? { pfad, token } : { pfad };
-  try {
-    writeFileSync(pfadTabelle(datenDir), JSON.stringify(tabelle, null, 1) + '\n', 'utf8');
-    return true;
-  } catch {
-    return false;
+  // "seit" schuetzt den frischen Eintrag vor dem Aufraeumen anderer Sitzungen,
+  // siehe raeumeSockets.
+  const neu = token ? { pfad, token, seit: Date.now() } : { pfad, seit: Date.now() };
+  // Lesen, Ergaenzen, Schreiben ist nicht atomar. Starten mehrere Sitzungen
+  // gleichzeitig, kann ein zweiter Hook den eigenen Eintrag ueberschreiben.
+  // Deshalb nach dem Schreiben nachsehen und notfalls auf dem neuen Stand
+  // wiederholen - eine Sperrdatei waere fuer drei Zeilen JSON zu viel.
+  for (let versuch = 0; versuch < 3; versuch++) {
+    const aktuell = versuch === 0 ? tabelle : ladeSockets(datenDir);
+    aktuell[sessionId] = neu;
+    try {
+      writeFileSync(pfadTabelle(datenDir), JSON.stringify(aktuell, null, 1) + '\n', 'utf8');
+    } catch {
+      return false;
+    }
+    if (eintrag(ladeSockets(datenDir)[sessionId]).pfad === pfad) return true;
   }
+  return false;
 }
 
 /**
@@ -145,7 +159,7 @@ export function eintrag(wert) {
  * @returns {number}
  * Anzahl der entfernten Eintraege.
  */
-export function raeumeSockets(datenDir, lebende) {
+export function raeumeSockets(datenDir, lebende, { jetzt = Date.now(), schonfrist = SCHONFRIST_MS } = {}) {
   const aktiv = lebende instanceof Set ? lebende : new Set(lebende);
   // Eine leere Liste bedeutet NICHT "nichts laeuft" - sie kann auch aus einem
   // Fehler stammen. Wer daraus loescht, nimmt allen Sitzungen ihren Socket.
@@ -154,8 +168,17 @@ export function raeumeSockets(datenDir, lebende) {
 
   const tabelle = ladeSockets(datenDir);
   const vorher = Object.keys(tabelle).length;
-  for (const sid of Object.keys(tabelle)) {
-    if (!aktiv.has(sid)) delete tabelle[sid];
+  for (const [sid, wert] of Object.entries(tabelle)) {
+    if (aktiv.has(sid)) continue;
+    // Eine frisch gestartete Sitzung steht noch nicht in der Instanzliste -
+    // Claude Code legt sessions/<pid>.json erst einige Sekunden nach dem
+    // SessionStart-Hook an. Ohne die Schonfrist kann der Hook einer
+    // gleichzeitig gestarteten Sitzung genau diesen Eintrag loeschen. Am
+    // 28.09.2026 blieb so einer von drei Diskussions-Agenten ohne Socket und
+    // bekam keinen Auftrag zugestellt (Ursache wahrscheinlich, nicht belegt).
+    const seit = wert && typeof wert === 'object' ? Number(wert.seit) || 0 : 0;
+    if (seit && jetzt - seit < schonfrist) continue;
+    delete tabelle[sid];
   }
   const entfernt = vorher - Object.keys(tabelle).length;
   if (entfernt > 0) {
