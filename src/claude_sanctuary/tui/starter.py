@@ -34,18 +34,25 @@ def starte_lokal(
     name: str = "",
     verzeichnis: str = "",
     einstellungen: dict[str, Any] | None = None,
+    *,
+    claude_argumente: list[str] | None = None,
+    umgebung: dict[str, str] | None = None,
 ) -> str:
     """Oeffnet ein Terminalfenster und startet dort eine neue Sitzung.
 
     :param name: gewuenschter Agentenname, leer fuer den naechsten freien.
     :param verzeichnis: Arbeitsverzeichnis, leer fuer das aktuelle.
     :param einstellungen: geladene Einstellungen, sonst werden sie geholt.
+    :param claude_argumente: gehen hinter ``--`` unveraendert an claude, siehe starte.mjs.
+    :param umgebung: zusaetzliche Umgebungsvariablen fuer die neue Sitzung.
     :returns: leere Zeichenkette bei Erfolg, sonst die Fehlermeldung.
     """
     befehl = [*finde_befehl(), "start"]
     if name:
         befehl.append(name)
-    return _oeffne(befehl, verzeichnis, einstellungen)
+    if claude_argumente:
+        befehl += ["--", *claude_argumente]
+    return _oeffne(befehl, verzeichnis, einstellungen, umgebung)
 
 
 def starte_resume(session_id: str, verzeichnis: str = "",
@@ -67,7 +74,12 @@ def starte_resume(session_id: str, verzeichnis: str = "",
     return _oeffne([claude, "--resume", session_id], verzeichnis, einstellungen)
 
 
-def _oeffne(befehl: list[str], verzeichnis: str, einstellungen: dict[str, Any] | None) -> str:
+def _oeffne(
+    befehl: list[str],
+    verzeichnis: str,
+    einstellungen: dict[str, Any] | None,
+    umgebung: dict[str, str] | None = None,
+) -> str:
     """Gemeinsamer Weg: Startdatei schreiben, Terminal damit oeffnen."""
     werte = einstellungen if einstellungen is not None else Einstellungen().laden()
     ordner = verzeichnis or str(Path.cwd())
@@ -84,12 +96,50 @@ def _oeffne(befehl: list[str], verzeichnis: str, einstellungen: dict[str, Any] |
         # die Nutzereingaben stehen in der Startdatei - nicht in der Zeile.
         subprocess.Popen(
             _zeile(terminal, datei, ordner),
+            env={**saubere_umgebung(), **(umgebung or {})},
             close_fds=True,
             start_new_session=sys.platform != "win32",
         )
     except OSError as fehler:
         return str(fehler)
     return ""
+
+
+SITZUNGSMARKER = ("CLAUDECODE", "CLAUDE_PID", "CLAUDE_EFFORT")
+"""Variablen, die eine laufende Claude-Sitzung an ihre Kindprozesse vererbt.
+
+Dazu alles mit ``CLAUDE_CODE_``, siehe ``saubere_umgebung``.
+"""
+
+BEHALTEN = ("CLAUDE_CODE_EXECPATH",)
+"""Ausnahme: der Pfad zur Claude-Binaerdatei ist kein Sitzungsmarker.
+
+``starte.mjs`` startet damit ohne Shell. Fehlt er, geht der Start ueber den
+Wrapper im PATH - am 28.09.2026 kam auf diesem Weg die Namensvorgabe nicht beim
+SessionStart-Hook an. Ob das die Ursache war, ist nicht belegt.
+"""
+
+
+def saubere_umgebung() -> dict[str, str]:
+    """Die eigene Umgebung ohne die Marker einer laufenden Claude-Sitzung.
+
+    Belegt am 28.09.2026: Aus einer Claude-Sitzung heraus gestartet, erbten
+    die neuen Agenten ``CLAUDE_CODE_CHILD_SESSION`` und hielten sich fuer
+    Kind-Sitzungen - kein Transkript, keine ``sessions/<pid>.json``, also
+    unsichtbar fuer den Operator. Schlimmer noch ``CLAUDE_CODE_MESSAGING_SOCKET``
+    und ``_TOKEN``: der neue Agent haette den Inbox-Socket der startenden
+    Sitzung fuer seinen eigenen gehalten. Aus der TUI heraus fiel das nie auf,
+    weil die ueblicherweise nicht in einer Claude-Sitzung laeuft.
+    """
+    return {
+        schluessel: wert
+        for schluessel, wert in os.environ.items()
+        if schluessel.upper() in BEHALTEN
+        or (
+            not schluessel.upper().startswith("CLAUDE_CODE_")
+            and schluessel.upper() not in SITZUNGSMARKER
+        )
+    }
 
 
 def _zeile(terminal: Terminal, datei: Path, ordner: str) -> list[str]:
