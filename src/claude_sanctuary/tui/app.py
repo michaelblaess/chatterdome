@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import dataclasses
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -150,6 +151,8 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         self._bild_pfad = ""
 
         self._reserviert: list[str] = []
+        self._diskussion_stopp: threading.Event | None = None
+        """Gesetzt, solange eine Diskussion laeuft. Die Taste haelt sie dann an."""
         """Namen aus dem Pool, die vorab vergeben sind - fuer den Rundruf."""
 
         self._gedaechtnis: Gedaechtnis | None = None
@@ -1013,6 +1016,91 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         self.aktualisieren()
         if self._gewaehlt is not None:
             self.verlauf_laden(self._gewaehlt)
+
+    # -- Diskussion -----------------------------------------------------
+
+    def action_discussion(self) -> None:
+        """Oeffnet den Dialog - oder haelt eine laufende Diskussion an."""
+        from claude_sanctuary.tui.screens.bestaetigung_screen import BestaetigungScreen
+        from claude_sanctuary.tui.screens.diskussion_screen import DiskussionScreen
+
+        if self._diskussion_stopp is not None:
+            self.push_screen(
+                BestaetigungScreen(titel=t("discussion.stop_title"),
+                                   text=t("discussion.stop_text")),
+                callback=self._diskussion_anhalten,
+            )
+            return
+        self.push_screen(DiskussionScreen(self._bestand.agenten),
+                         callback=self._diskussion_bestaetigt)
+
+    def _diskussion_anhalten(self, ja: bool | None) -> None:
+        if ja and self._diskussion_stopp is not None:
+            self._diskussion_stopp.set()
+
+    def _diskussion_bestaetigt(self, auftrag: Any | None) -> None:
+        if auftrag is None:
+            return
+        self._diskussion_stopp = threading.Event()
+        self.notify(t("discussion.running"))
+        self._diskussion_ausfuehren(auftrag, self._diskussion_stopp)
+
+    @work(thread=True, group="diskussion")
+    def _diskussion_ausfuehren(self, auftrag: Any, stopp: threading.Event) -> None:
+        """Der ganze Ablauf in einem Thread - er blockiert Minuten.
+
+        Ueber das Modul und nicht per Namensimport, damit ein Test den Ablauf
+        ersetzen kann, ohne echte Fenster zu oeffnen.
+        """
+        from claude_sanctuary import debatte_ablauf
+
+        def melden(text: str) -> None:
+            self.call_from_thread(self._schreibe_log, t("log.discussion_note", text=text))
+
+        def beitrag(eintrag: Any) -> None:
+            self.call_from_thread(self._diskussion_beitrag, eintrag)
+
+        try:
+            ergebnis = debatte_ablauf.ausfuehren(
+                auftrag.diskussion, auftrag.neu,
+                ohne_eigenen_kontext=auftrag.ohne_kontext,
+                melden=melden, beim_beitrag=beitrag, stopp=stopp,
+                quelle=self._quelle if isinstance(self._quelle, LokaleQuelle) else None,
+            )
+        finally:
+            self.call_from_thread(self._diskussion_vorbei)
+        self.call_from_thread(self._diskussion_fertig, ergebnis)
+
+    def _diskussion_beitrag(self, beitrag: Any) -> None:
+        koepfe = {
+            "beitrag": t("discussion.head_round", runde=beitrag.runde),
+            "schlusswort": t("discussion.head_closing"),
+            "vorbereitung": t("discussion.head_research"),
+        }
+        kopf = koepfe.get(beitrag.art)
+        if kopf is None:
+            # Ausgelassen oder Fehler: der Text ist schon der Grund.
+            self._schreibe_log(t("log.discussion_note", text=f"{beitrag.name}: {beitrag.text}"),
+                               "warning")
+            return
+        self._schreibe_log(t("log.discussion_contribution", name=beitrag.name, kopf=kopf,
+                             text=beitrag.text))
+
+    def _diskussion_vorbei(self) -> None:
+        self._diskussion_stopp = None
+
+    def _diskussion_fertig(self, ergebnis: Any) -> None:
+        if ergebnis.fehler:
+            self._schreibe_log(t("log.discussion_failed", grund=ergebnis.fehler), "error")
+            self.notify(ergebnis.fehler, severity="error", markup=False)
+            return
+        diskussion = ergebnis.diskussion
+        if diskussion.zusammenfassung:
+            self._schreibe_log(t("log.discussion_summary", text=diskussion.zusammenfassung))
+        meldung = t("log.discussion_done", ende=diskussion.ende, pfad=str(ergebnis.protokoll))
+        self._schreibe_log(meldung, "success")
+        self.notify(meldung, markup=False)
+        self.aktualisieren()
 
     # -- Neustart -------------------------------------------------------
 
