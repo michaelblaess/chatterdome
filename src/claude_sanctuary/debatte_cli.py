@@ -9,6 +9,9 @@
 Sitzung, deren Namen der SessionStart-Hook wie ueblich aus dem Pool vergibt,
 und beendet sie am Ende wieder. Beides laesst sich kombinieren.
 
+Gespeichert wird jede Diskussion im Archiv (``--liste``), und mit
+``--fortsetzen NR --runden N`` geht eine davon um N Runden weiter.
+
 Eine Angabe ist ``pro``, ``contra``, eine davon mit Rolle (``pro:Rolle``),
 nur eine Rolle oder "-" fuer nichts. Ohne Seite verteilt der Moderator PRO
 und CONTRA abwechselnd.
@@ -21,9 +24,11 @@ from __future__ import annotations
 import argparse
 import sys
 import threading
+from pathlib import Path
 
 from claude_sanctuary.debatte_ablauf import ausfuehren, laufende
 from claude_sanctuary.kern.debatte import FORMATE, SEITEN, Beitrag, Diskussion, Teilnehmer
+from claude_sanctuary.kern.diskussionsarchiv import Diskussionsarchiv
 from claude_sanctuary.kern.lokale_quelle import LokaleQuelle
 
 
@@ -60,7 +65,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Diskussion zwischen Agenten, moderiert von Sanctuary."
     )
-    parser.add_argument("thema")
+    parser.add_argument("thema", nargs="?", default="")
     parser.add_argument("--mit", nargs="+", default=[], metavar="NAME[=ROLLE]",
                         help="laufende Agenten")
     parser.add_argument("--neu", nargs="+", default=[], metavar="SEITE[:ROLLE]",
@@ -73,10 +78,26 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--schlussworte", action="store_true",
                         help="eine Schlussrunde (Vorgabe aus)")
     parser.add_argument("--recherche", action="store_true",
-                        help="vor Runde 1 eine Vorbereitung mit Websuche")
+                        help="vor Runde 1 eine Vorbereitung mit Websuche (Vorgabe)")
+    parser.add_argument("--ohne-recherche", action="store_true",
+                        help="keine Vorbereitung, keine Websuche")
+    parser.add_argument("--liste", action="store_true",
+                        help="die gespeicherten Diskussionen zeigen")
+    parser.add_argument("--fortsetzen", type=int, default=0, metavar="NR",
+                        help="eine gespeicherte Diskussion um --runden Runden fortsetzen")
     parser.add_argument("--ohne-kontext", action="store_true",
                         help="frische Sitzungen ohne eigene CLAUDE.md und ohne Memory")
     args = parser.parse_args(argv)
+    archiv = Diskussionsarchiv()
+    if args.liste:
+        for e in archiv.liste():
+            print(f"{e.kennung:>4}  {e.beginn}  {e.runden:>2} Runden  "
+                  f"{', '.join(e.teilnehmer)}  {e.thema}")
+        return 0
+    if args.fortsetzen:
+        return _fortsetzen(archiv, args.fortsetzen, args.runden)
+    if not args.thema:
+        parser.error("Es fehlt ein Thema.")
 
     neu = [Teilnehmer(f"neu-{i}", r, s)
            for i, (s, r) in enumerate(_haltung(h) for h in args.neu)]
@@ -87,7 +108,7 @@ def main(argv: list[str] | None = None) -> int:
         format=args.format,
         runden=args.runden,
         dauer_minuten=args.dauer,
-        recherche=args.recherche,
+        recherche=not args.ohne_recherche,
         positionen=(args.positionen[0], args.positionen[1]),
         schlussworte=args.schlussworte,
     )
@@ -107,12 +128,36 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Laeuft nicht: {', '.join(fehlen)}. Laufende Agenten: {frei}", file=sys.stderr)
         return 2
 
+    return _laufen(diskussion, neu, [], args.ohne_kontext, quelle, archiv, None)
+
+
+def _fortsetzen(archiv: Diskussionsarchiv, kennung: int, runden: int) -> int:
+    """Setzt eine gespeicherte Diskussion fort. Beendete Teilnehmer starten unter ihrem Namen."""
+    geladen = archiv.laden(kennung)
+    if geladen is None:
+        print(f"Keine Diskussion Nummer {kennung} im Archiv.", file=sys.stderr)
+        return 2
+    diskussion, protokoll = geladen
+    diskussion.runden = diskussion.gespielte_runden + runden
+    diskussion.ende = ""
+    diskussion.zusammenfassung = ""
+    quelle = LokaleQuelle()
+    laufend = {n.lower() for n in laufende(quelle).values()}
+    wieder = [t for t in diskussion.teilnehmer if t.name.lower() not in laufend]
+    return _laufen(diskussion, [], wieder, diskussion.ohne_kontext, quelle, archiv,
+                   Path(protokoll) if protokoll else None)
+
+
+def _laufen(diskussion: Diskussion, neu: list[Teilnehmer], wieder: list[Teilnehmer],
+            ohne_kontext: bool, quelle: LokaleQuelle, archiv: Diskussionsarchiv,
+            protokoll: Path | None) -> int:
     stopp = threading.Event()
     try:
         ergebnis = ausfuehren(
-            diskussion, neu, ohne_eigenen_kontext=args.ohne_kontext,
+            diskussion, neu, ohne_eigenen_kontext=ohne_kontext, wiederbeleben=wieder,
             melden=lambda text: print(f"\n{text}", flush=True),
-            beim_beitrag=_ausgeben, stopp=stopp, quelle=quelle,
+            beim_beitrag=_ausgeben, stopp=stopp, quelle=quelle, archiv=archiv,
+            protokoll=protokoll,
         )
     except KeyboardInterrupt:
         stopp.set()
@@ -123,7 +168,10 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     if diskussion.zusammenfassung:
         print(f"\n{diskussion.zusammenfassung}", flush=True)
-    print(f"\nEnde: {diskussion.ende}\nProtokoll: {ergebnis.protokoll}")
+    v = diskussion.verbrauch
+    print(f"\nEnde: {diskussion.ende}\nProtokoll: {ergebnis.protokoll}"
+          f"\nArchiv: Nummer {diskussion.kennung}"
+          f"\nTokens: {v.echt} neu und Ausgabe, {v.cache} aus dem Cache")
     return 0
 
 

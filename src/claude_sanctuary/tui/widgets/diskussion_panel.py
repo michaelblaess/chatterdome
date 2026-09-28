@@ -12,19 +12,34 @@ Vorher stand das Formular in einem modalen Dialog hinter der Taste a.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
+from datetime import datetime
+from pathlib import Path
 from typing import Any
 
+from rich.style import Style
 from rich.text import Text
-from textual import on
+from textual import events, on
 from textual.app import ComposeResult
-from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.containers import Container, Horizontal, Vertical, VerticalScroll
 from textual.message import Message
-from textual.widgets import Button, Checkbox, Input, Label, Select, Static, TextArea
+from textual.widgets import Button, Checkbox, DataTable, Input, Label, Select, Static, TextArea
+from textual_widgets import StatusItem
 
 from claude_sanctuary.i18n import t
-from claude_sanctuary.kern.debatte import CONTRA, PRO, Beitrag, Diskussion, Teilnehmer
+from claude_sanctuary.kern.debatte import (
+    CONTRA,
+    PRO,
+    Beitrag,
+    Diskussion,
+    Teilnehmer,
+    Verbrauch,
+    absaetze,
+)
+from claude_sanctuary.kern.diskussionsarchiv import Eintrag
 from claude_sanctuary.kern.modelle import Agent
+from claude_sanctuary.tui.widgets.status_zeile import _tokens
 
 MAX_NEU = 6
 """Mehr frische Fenster auf einmal braucht keine Diskussion, und jedes kostet."""
@@ -42,6 +57,10 @@ class DiskussionsAuftrag:
     neu: list[Teilnehmer] = field(default_factory=list)
     """Je frische Sitzung ein Platzhalter mit Seite, siehe ``debatte_ablauf.ausfuehren``."""
     ohne_kontext: bool = False
+    wiederbeleben: list[Teilnehmer] = field(default_factory=list)
+    """Beim Fortsetzen: Teilnehmer, deren Sitzung nicht mehr laeuft."""
+    protokoll: str = ""
+    """Beim Fortsetzen: die Markdown-Datei, die weitergeschrieben wird."""
 
 
 class _AgentZeile(Horizontal):
@@ -224,6 +243,55 @@ class DiskussionsPanel(Vertical):
     DiskussionsPanel #disk-zusammenfassung-raum.da {
         display: block;
     }
+    DiskussionsPanel #disk-weiter {
+        width: 8;
+        margin: 1 1 0 0;
+    }
+    DiskussionsPanel #disk-weiter-einheit {
+        width: auto;
+        margin: 1 2 0 0;
+        color: $text-muted;
+    }
+
+    /* -- Archiv: immer sichtbar, unter dem Formular oder bei breitem
+       Fenster daneben (Klasse "breit", gesetzt in on_resize) -- */
+    DiskussionsPanel #disk-start {
+        height: 1fr;
+        layout: vertical;
+    }
+    DiskussionsPanel.breit #disk-start {
+        layout: horizontal;
+    }
+    DiskussionsPanel #disk-archiv-raum {
+        height: auto;
+        max-height: 10;
+        padding: 0 2;
+        border-top: solid $surface-lighten-2;
+    }
+    DiskussionsPanel.breit #disk-archiv-raum {
+        width: 2fr;
+        height: 1fr;
+        max-height: 100%;
+        padding: 1 2;
+        border-top: none;
+        border-left: solid $surface-lighten-2;
+    }
+    DiskussionsPanel.niedrig #disk-archiv-raum {
+        display: none;
+    }
+    DiskussionsPanel.breit #disk-formular {
+        width: 3fr;
+    }
+    DiskussionsPanel.laeuft #disk-start,
+    DiskussionsPanel.fertig #disk-start {
+        display: none;
+    }
+    DiskussionsPanel #disk-archiv {
+        height: auto;
+    }
+    DiskussionsPanel.breit #disk-archiv {
+        height: 1fr;
+    }
     """
 
     class Starten(Message):
@@ -235,6 +303,25 @@ class DiskussionsPanel(Vertical):
 
     class Anhalten(Message):
         """Der Knopf "Anhalten" wurde gedrueckt."""
+
+    class Oeffnen(Message):
+        """Eine Diskussion aus dem Archiv soll angezeigt werden."""
+
+        def __init__(self, kennung: int) -> None:
+            super().__init__()
+            self.kennung = kennung
+
+    class Fortsetzen(Message):
+        """Die angezeigte Diskussion soll um ``runden`` Runden weitergehen."""
+
+        def __init__(self, diskussion: Diskussion, runden: int, protokoll: str) -> None:
+            super().__init__()
+            self.diskussion = diskussion
+            self.runden = runden
+            self.protokoll = protokoll
+
+    class Kennzahlen(Message):
+        """Runde, Redner oder Verbrauch haben sich geaendert - fuer die Statuszeile."""
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
@@ -251,64 +338,117 @@ class DiskussionsPanel(Vertical):
         self._runde = 0
         self._redner = ""
         self._zustand = ""
+        self._protokoll = ""
+        self._verbrauch = Verbrauch()
+        self._archiv: list[Eintrag] = []
 
     # -- Aufbau ---------------------------------------------------------
 
     def compose(self) -> ComposeResult:
-        with VerticalScroll(id="disk-formular"):
-            with Horizontal(classes="disk-zeile disk-thema-zeile"):
-                yield Label(t("discussion.topic"))
-                yield TextArea(placeholder=t("discussion.topic_placeholder"), id="disk-thema",
-                               compact=True, soft_wrap=True, show_line_numbers=False,
-                               tab_behavior="focus")
-            with Horizontal(classes="disk-zeile"):
-                yield Label(t("discussion.positions"))
-                yield Input(placeholder=t("discussion.position_pro_placeholder"),
-                            id="disk-position-pro", classes="disk-position", compact=True)
-                yield Input(placeholder=t("discussion.position_contra_placeholder"),
-                            id="disk-position-contra", classes="disk-position", compact=True)
-            with Horizontal(classes="disk-zeile"):
-                yield Label(t("discussion.format"))
-                yield Select(
-                    [(t("discussion.format_debate"), "diskussion"),
-                     (t("discussion.format_team"), "team")],
-                    value="diskussion", allow_blank=False, id="disk-format", compact=True,
-                )
-            with Horizontal(classes="disk-zeile"):
-                yield Label(t("discussion.limit"))
-                yield Input("3", type="integer", id="disk-runden", classes="disk-zahl",
-                            compact=True)
-                yield Static(t("discussion.rounds"), classes="disk-einheit")
-                yield Input("0", type="number", id="disk-dauer", classes="disk-zahl",
-                            compact=True)
-                yield Static(t("discussion.minutes"), classes="disk-einheit")
-            yield Static(t("discussion.running_agents"))
-            with VerticalScroll(id="disk-agenten"):
-                yield Static(t("discussion.no_agents"), id="disk-keine", classes="disk-leise")
-            with Horizontal(classes="disk-zeile"):
-                yield Label(t("discussion.new_agents"))
-                yield Input("0", type="integer", id="disk-neu", classes="disk-zahl",
-                            compact=True)
-                yield Static(t("discussion.new_hint"), classes="disk-einheit")
-            yield Checkbox(t("discussion.research"), value=False, id="disk-recherche",
-                           compact=True)
-            yield Checkbox(t("discussion.without_context"), value=True,
-                           id="disk-ohne-kontext", compact=True)
-            yield Static("", id="disk-vorschau", classes="disk-leise")
-            yield Static("", id="disk-grund")
-            with Horizontal(classes="disk-knoepfe"):
-                yield Button(t("discussion.start"), variant="primary", id="disk-starten")
+        with Container(id="disk-start"):
+            with VerticalScroll(id="disk-formular"):
+                with Horizontal(classes="disk-zeile disk-thema-zeile"):
+                    yield Label(t("discussion.topic"))
+                    yield TextArea(placeholder=t("discussion.topic_placeholder"), id="disk-thema",
+                                   compact=True, soft_wrap=True, show_line_numbers=False,
+                                   tab_behavior="focus")
+                with Horizontal(classes="disk-zeile"):
+                    yield Label(t("discussion.positions"))
+                    yield Input(placeholder=t("discussion.position_pro_placeholder"),
+                                id="disk-position-pro", classes="disk-position", compact=True)
+                    yield Input(placeholder=t("discussion.position_contra_placeholder"),
+                                id="disk-position-contra", classes="disk-position", compact=True)
+                with Horizontal(classes="disk-zeile"):
+                    yield Label(t("discussion.format"))
+                    yield Select(
+                        [(t("discussion.format_debate"), "diskussion"),
+                         (t("discussion.format_team"), "team")],
+                        value="diskussion", allow_blank=False, id="disk-format", compact=True,
+                    )
+                with Horizontal(classes="disk-zeile"):
+                    yield Label(t("discussion.limit"))
+                    yield Input("3", type="integer", id="disk-runden", classes="disk-zahl",
+                                compact=True)
+                    yield Static(t("discussion.rounds"), classes="disk-einheit")
+                    yield Input("0", type="number", id="disk-dauer", classes="disk-zahl",
+                                compact=True)
+                    yield Static(t("discussion.minutes"), classes="disk-einheit")
+                yield Static(t("discussion.running_agents"))
+                with VerticalScroll(id="disk-agenten"):
+                    yield Static(t("discussion.no_agents"), id="disk-keine", classes="disk-leise")
+                with Horizontal(classes="disk-zeile"):
+                    yield Label(t("discussion.new_agents"))
+                    yield Input("0", type="integer", id="disk-neu", classes="disk-zahl",
+                                compact=True)
+                    yield Static(t("discussion.new_hint"), classes="disk-einheit")
+                yield Checkbox(t("discussion.research"), value=True, id="disk-recherche",
+                               compact=True)
+                yield Checkbox(t("discussion.without_context"), value=True,
+                               id="disk-ohne-kontext", compact=True)
+                yield Static("", id="disk-vorschau", classes="disk-leise")
+                yield Static("", id="disk-grund")
+                with Horizontal(classes="disk-knoepfe"):
+                    yield Button(t("discussion.start"), variant="primary", id="disk-starten")
+            with Vertical(id="disk-archiv-raum"):
+                yield Static(t("discussion.archive"), id="disk-archiv-titel")
+                yield DataTable(id="disk-archiv", cursor_type="row", zebra_stripes=True)
         with Vertical(id="disk-chat-raum"):
             yield Static("", id="disk-kopf")
             with Horizontal(id="disk-steuerung"):
                 yield Button(t("discussion.stop"), variant="error", id="disk-anhalten")
+                yield Button(t("discussion.continue"), variant="success", id="disk-fortsetzen")
+                yield Input("3", type="integer", id="disk-weiter", compact=True)
+                yield Static(t("discussion.more_rounds"), id="disk-weiter-einheit")
                 yield Button(t("discussion.new"), variant="primary", id="disk-neue")
             yield VerticalScroll(id="disk-chat")
             with VerticalScroll(id="disk-zusammenfassung-raum"):
                 yield Static("", id="disk-zusammenfassung")
 
     def on_mount(self) -> None:
+        tabelle = self.query_one("#disk-archiv", DataTable)
+        # Das Thema zuletzt: es ist das laengste Feld und schoebe sonst
+        # die kurzen Spalten aus dem Bild.
+        tabelle.add_columns(t("discussion.col_date"), t("discussion.col_agents"),
+                            t("discussion.col_rounds"), t("discussion.col_tokens"),
+                            t("discussion.col_topic"))
+        self._steuerung_zeigen(laeuft=True)
         self._pruefen()
+
+    BREIT_AB = 140
+    """Ab dieser Breite steht das Archiv neben dem Formular statt darunter."""
+
+    NIEDRIG_UNTER = 20
+    """Darunter hat das Archiv unter dem Formular keinen Platz - es entfaellt dann,
+    das Formular geht vor (Test ``test_formular_passt_auf_100_mal_30``)."""
+
+    def on_resize(self, ereignis: events.Resize) -> None:
+        breit = ereignis.size.width >= self.BREIT_AB
+        self.set_class(breit, "breit")
+        self.set_class(not breit and ereignis.size.height < self.NIEDRIG_UNTER, "niedrig")
+
+    # -- Archiv ---------------------------------------------------------
+
+    def archiv_setzen(self, eintraege: list[Eintrag]) -> None:
+        """Fuellt die Uebersicht der gespeicherten Diskussionen, neueste zuerst."""
+        self._archiv = list(eintraege)
+        tabelle = self.query_one("#disk-archiv", DataTable)
+        tabelle.clear()
+        for e in eintraege:
+            thema = e.thema if len(e.thema) <= 50 else f"{e.thema[:47]}..."
+            tabelle.add_row(_datum(e.beginn), ", ".join(e.teilnehmer), str(e.runden),
+                            _tokens(e.tokens), thema, key=str(e.kennung))
+        self.query_one("#disk-archiv-titel", Static).update(
+            t("discussion.archive") if eintraege else t("discussion.archive_empty"))
+
+    @on(DataTable.RowSelected, "#disk-archiv")
+    def _archiv_gewaehlt(self, ereignis: DataTable.RowSelected) -> None:
+        if ereignis.row_key.value is not None:
+            self.post_message(self.Oeffnen(int(ereignis.row_key.value)))
+
+    def zeigen(self, diskussion: Diskussion, protokoll: str) -> None:
+        """Zeigt eine abgeschlossene Diskussion aus dem Archiv im Chat."""
+        self.beginnen(diskussion, [])
+        self.fertig(diskussion, diskussion.ende, protokoll)
 
     # -- Agentenliste ---------------------------------------------------
 
@@ -455,26 +595,89 @@ class DiskussionsPanel(Vertical):
     @on(Button.Pressed, "#disk-neue")
     def _knopf_neue(self) -> None:
         self.remove_class("fertig")
+        self._diskussion = None
         self._pruefen()
+        self.post_message(self.Kennzahlen())
+
+    @on(Button.Pressed, "#disk-fortsetzen")
+    def _knopf_fortsetzen(self) -> None:
+        roh = self.query_one("#disk-weiter", Input).value.strip()
+        if self._diskussion is None:
+            return
+        if not roh.isdigit() or not 1 <= int(roh) <= 50:
+            self.notify(t("discussion.bad_more"), severity="warning", markup=False)
+            return
+        self.post_message(self.Fortsetzen(self._diskussion, int(roh), self._protokoll))
+
+    def _steuerung_zeigen(self, *, laeuft: bool) -> None:
+        """Anhalten waehrend der Diskussion, danach Fortsetzen und Neue Diskussion."""
+        self.query_one("#disk-anhalten", Button).display = laeuft
+        fortsetzbar = not laeuft and self._diskussion is not None and self._diskussion.kennung > 0
+        for widget_id in ("#disk-fortsetzen", "#disk-weiter", "#disk-weiter-einheit"):
+            self.query_one(widget_id).display = fortsetzbar
+        self.query_one("#disk-neue", Button).display = not laeuft
+
+    # -- Statuszeile ----------------------------------------------------
+
+    def kennzahlen(self) -> tuple[list[StatusItem], str] | None:
+        """Was die Statuszeile im Reiter zeigt, dazu der Pfad des Protokolls.
+
+        None, solange das Formular steht - dann bleiben die Bus-Kennzahlen.
+        """
+        d = self._diskussion
+        if d is None or not (self.has_class("laeuft") or self.has_class("fertig")):
+            return None
+        laeuft = self.has_class("laeuft")
+        runde = self._runde if laeuft else d.gespielte_runden
+        posten = [StatusItem(t("discussion.stat_round"), f"{runde} / {d.runden}")]
+        if laeuft and self._redner:
+            posten.append(StatusItem(t("discussion.stat_speaker"), self._redner,
+                                     value_style="bold yellow"))
+        elif not laeuft:
+            posten.append(StatusItem(t("discussion.stat_state"), t("discussion.stat_done")))
+        namen = [x.name for x in d.teilnehmer] + [x.name for x in self._neu]
+        posten.append(StatusItem(t("discussion.stat_agents"), ", ".join(namen)))
+        beitraege = sum(1 for b in d.beitraege if b.art in ("beitrag", "schlusswort"))
+        posten.append(StatusItem(t("discussion.stat_posts"), str(beitraege)))
+        if d.beginn:
+            posten.append(StatusItem(t("discussion.stat_since"), _datum(d.beginn)))
+        v = self._verbrauch if self._verbrauch.gesamt else d.verbrauch
+        posten.append(StatusItem(t("discussion.stat_tokens"), _tokens(v.echt)))
+        posten.append(StatusItem(t("discussion.stat_cache"), _tokens(v.cache),
+                                 value_style="dim"))
+        return posten, self._protokoll
+
+    def verbrauch(self, verbrauch: Verbrauch) -> None:
+        """Neuer Stand des Verbrauchs, vom Ablauf nach jedem Beitrag."""
+        self._verbrauch = verbrauch
+        self.post_message(self.Kennzahlen())
 
     # -- Chat -----------------------------------------------------------
 
     def beginnen(self, diskussion: Diskussion, neu: list[Teilnehmer]) -> None:
-        """Schaltet auf den Chat um. Die frischen Teilnehmer tragen noch Platzhalter."""
+        """Schaltet auf den Chat um. Die frischen Teilnehmer tragen noch Platzhalter.
+
+        Steht schon etwas im Protokoll (Fortsetzen, Archiv), erscheint es sofort.
+        """
         self._diskussion = diskussion
         self._neu = neu
-        self._runde = 0
+        self._runde = diskussion.gespielte_runden
         self._redner = ""
+        self._verbrauch = Verbrauch()
         self._zustand = t("discussion.state_starting") if neu else ""
-        self.query_one("#disk-chat", VerticalScroll).remove_children()
+        chat = self.query_one("#disk-chat", VerticalScroll)
+        chat.remove_children()
+        if diskussion.beitraege:
+            chat.mount_all([self._blase(b) for b in diskussion.beitraege])
+            chat.call_after_refresh(chat.scroll_end, animate=False)
         self.query_one("#disk-zusammenfassung", Static).update("")
         self.query_one("#disk-zusammenfassung-raum").remove_class("da")
         self.query_one("#disk-anhalten", Button).disabled = False
-        self.query_one("#disk-anhalten", Button).display = True
-        self.query_one("#disk-neue", Button).display = False
         self.remove_class("fertig")
         self.add_class("laeuft")
+        self._steuerung_zeigen(laeuft=True)
         self._kopf_zeichnen()
+        self.post_message(self.Kennzahlen())
 
     def _kopf_zeichnen(self) -> None:
         d = self._diskussion
@@ -501,6 +704,7 @@ class DiskussionsPanel(Vertical):
             self._zustand = t("discussion.state_turn", runde=runde,
                               runden=self._diskussion.runden, name=name)
         self._kopf_zeichnen()
+        self.post_message(self.Kennzahlen())
 
     def beitrag(self, beitrag: Beitrag) -> None:
         """Haengt einen Eintrag an den Chat."""
@@ -508,6 +712,26 @@ class DiskussionsPanel(Vertical):
         widget = self._blase(beitrag)
         chat.mount(widget)
         chat.scroll_end(animate=False)
+        self.post_message(self.Kennzahlen())
+
+    def _farben(self) -> dict[str, str]:
+        """Die Farben der Seiten, wie die Raender der Blasen."""
+        variablen = self.app.theme_variables
+        return {PRO: variablen.get("primary", "blue"), CONTRA: variablen.get("accent", "magenta"),
+                "": variablen.get("secondary", "cyan")}
+
+    def _erwaehnungen(self, text: Text, sprecher: str) -> None:
+        """Faerbt die Namen der ANDEREN Teilnehmer in der Farbe ihrer Seite."""
+        d = self._diskussion
+        if d is None:
+            return
+        farben = self._farben()
+        for teilnehmer in d.teilnehmer:
+            if teilnehmer.name.lower() == sprecher.lower() or not teilnehmer.name:
+                continue
+            seite = teilnehmer.seite if d.format == "diskussion" else ""
+            stil = Style(bold=True, color=farben.get(seite, farben[""]))
+            text.highlight_regex(rf"\b{re.escape(teilnehmer.name)}\b", stil)
 
     def _blase(self, beitrag: Beitrag) -> Static:
         d = self._diskussion
@@ -530,7 +754,11 @@ class DiskussionsPanel(Vertical):
         if beitrag.ungeprueft:
             inhalt.append(f"  {t('discussion.unverified')}", style="italic dim")
         inhalt.append("\n")
-        inhalt.append(beitrag.text)
+        # Leerzeile zwischen den Absaetzen: ein einfacher Umbruch ginge im
+        # Zeilenumbruch einer breiten Blase unter.
+        rumpf = Text("\n\n".join(absaetze(beitrag.text)))
+        self._erwaehnungen(rumpf, beitrag.name)
+        inhalt.append_text(rumpf)
         if beitrag.hinweis:
             inhalt.append(f"\n{beitrag.hinweis}", style="dim italic")
         seite = beitrag.seite if mit_seiten else "team"
@@ -547,11 +775,14 @@ class DiskussionsPanel(Vertical):
         self._diskussion = diskussion
         self._neu = []
         self._kopf_zeichnen()
+        self.post_message(self.Kennzahlen())
 
     def fertig(self, diskussion: Diskussion, ende: str, protokoll: str) -> None:
-        """Beendet: Zusammenfassung unter den Chat, Knopf fuer eine neue Diskussion."""
+        """Beendet: Zusammenfassung unter den Chat, Knoepfe zum Fortsetzen und fuer Neues."""
         self._diskussion = diskussion
-        self._zustand = t("discussion.state_done", ende=ende, pfad=protokoll)
+        self._protokoll = protokoll
+        self._redner = ""
+        self._zustand = t("discussion.state_done_short", ende=ende) if ende else ""
         self._kopf_zeichnen()
         if diskussion.zusammenfassung:
             inhalt = Text()
@@ -560,7 +791,20 @@ class DiskussionsPanel(Vertical):
             inhalt.append(diskussion.zusammenfassung)
             self.query_one("#disk-zusammenfassung", Static).update(inhalt)
             self.query_one("#disk-zusammenfassung-raum").add_class("da")
-        self.query_one("#disk-anhalten", Button).display = False
-        self.query_one("#disk-neue", Button).display = True
         self.remove_class("laeuft")
         self.add_class("fertig")
+        self._steuerung_zeigen(laeuft=False)
+        self.post_message(self.Kennzahlen())
+
+
+def _datum(iso: str) -> str:
+    """ISO-Zeitpunkt als ``28.09.2026 17:12``, Unlesbares unveraendert."""
+    try:
+        return datetime.fromisoformat(iso).strftime("%d.%m.%Y %H:%M")
+    except ValueError:
+        return iso
+
+
+def protokoll_name(pfad: str) -> str:
+    """Der Dateiname eines Protokolls fuer die Anzeige."""
+    return Path(pfad).name if pfad else ""

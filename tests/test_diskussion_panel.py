@@ -254,3 +254,124 @@ class TestThemaMehrzeilig:
             assert auftrag is not None
             assert auftrag.diskussion.thema == (
                 "Mad Max - Fury Road. Alte Fans mögen ihn nicht, die jungen schon.")
+
+
+class TestVorgaben:
+    async def test_research_ist_an(self) -> None:
+        app = _app()
+        async with app.run_test(size=(160, 50)) as pilot:
+            panel = await _reiter(app, pilot)
+            assert panel.query_one("#disk-recherche", Checkbox).value is True
+
+
+class TestLesbarkeit:
+    async def test_langer_beitrag_bekommt_einen_absatz(self) -> None:
+        app = _app()
+        async with app.run_test(size=(160, 50)) as pilot:
+            panel = await _reiter(app, pilot)
+            d = Diskussion("x", [Teilnehmer("A", seite="pro"), Teilnehmer("B", seite="contra")])
+            panel.beginnen(d, [])
+            satz = "Das ist ein Satz mit genau zehn Woertern darin, wirklich wahr."
+            panel.beitrag(_beitrag("A", "pro", " ".join([satz] * 6)))
+            await pilot.pause()
+            assert f"{satz}\n\n{satz}" in str(panel.query_one(".disk-blase").render())
+
+    async def test_erwaehnte_agenten_in_der_farbe_ihrer_seite(self) -> None:
+        from rich.text import Text
+
+        app = _app()
+        async with app.run_test(size=(160, 50)) as pilot:
+            panel = await _reiter(app, pilot)
+            d = Diskussion("x", [Teilnehmer("Agatha", seite="pro"),
+                                 Teilnehmer("Maria", seite="contra")])
+            panel.beginnen(d, [])
+            text = Text("Maria, da irrst Du. Agatha bleibt dabei, Mariachi nicht.")
+            panel._erwaehnungen(text, "Agatha")
+            markiert = [(s.start, text.plain[s.start:s.end]) for s in text.spans]
+            assert markiert == [(0, "Maria")], "nur andere, nur ganze Woerter"
+            farbe = text.spans[0].style.color  # type: ignore[union-attr]
+            assert farbe is not None
+            assert farbe.name.lower() == app.theme_variables["accent"].lower()
+
+
+def _gespeichert(app: SanctuaryApp, *namen: str) -> Diskussion:
+    d = Diskussion("Roundhouse oder Chinwag?",
+                   [Teilnehmer(namen[0], seite="pro"), Teilnehmer(namen[1], seite="contra")],
+                   runden=2, beginn="2026-09-28T17:12:00", ende="2 Runden gespielt")
+    d.beitraege = [_beitrag(namen[0], "pro", "Erster."),
+                   Beitrag(2, namen[1], "Zweiter.", "13:01:00", seite="contra")]
+    app._archiv.speichern(d, "C:/ablage/20260928-171200.md")
+    return d
+
+
+class TestArchivImReiter:
+    async def test_liste_zeigt_gespeicherte_und_oeffnet_den_chat(self) -> None:
+        from textual.widgets import DataTable
+
+        from claude_sanctuary.tui.widgets.status_zeile import StatusZeile
+
+        app = _app()
+        async with app.run_test(size=(160, 50)) as pilot:
+            _gespeichert(app, "Agatha", "Maria")
+            panel = await _reiter(app, pilot)
+            tabelle = panel.query_one("#disk-archiv", DataTable)
+            assert tabelle.row_count == 1
+            zeile = [str(z) for z in tabelle.get_row_at(0)]
+            assert zeile[:3] == ["28.09.2026 17:12", "Agatha, Maria", "2"]
+            tabelle.focus()
+            await pilot.press("enter")
+            for _ in range(10):
+                await pilot.pause()
+            assert panel.has_class("fertig")
+            assert len(list(panel.query(".disk-blase"))) == 2
+            assert panel.query_one("#disk-fortsetzen", Button).display
+            status = str(app.query_one("#status", StatusZeile).render())
+            assert "Runde: 2 / 2" in status and "20260928-171200.md" in status
+            assert "C:/ablage/20260928-171200.md" in app._link_registry.values()
+            # Zurueck zum Formular: die Bus-Kennzahlen kommen wieder.
+            await pilot.click("#disk-neue")
+            await pilot.pause()
+            assert "Agenten:" in str(app.query_one("#status", StatusZeile).render())
+
+    async def test_fortsetzen_startet_beendete_unter_ihrem_namen(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        aufrufe: list[dict[str, Any]] = []
+
+        def ablauf(diskussion: Diskussion, neu: list[Teilnehmer], **werte: Any) -> Ergebnis:
+            aufrufe.append({"diskussion": diskussion, **werte})
+            diskussion.ende = "4 Runden gespielt"
+            return Ergebnis(diskussion)
+
+        monkeypatch.setattr(debatte_ablauf, "ausfuehren", ablauf)
+        app = _app()
+        async with app.run_test(size=(160, 50)) as pilot:
+            d = _gespeichert(app, "Klara", "Ghost")      # Klara laeuft, Ghost nicht
+            panel = await _reiter(app, pilot)
+            app.post_message(DiskussionsPanel.Oeffnen(d.kennung))
+            for _ in range(10):
+                await pilot.pause()
+            panel.query_one("#disk-weiter", Input).value = "2"
+            await pilot.click("#disk-fortsetzen")
+            await app.workers.wait_for_complete()
+            for _ in range(10):
+                await pilot.pause()
+            assert len(aufrufe) == 1
+            weiter = aufrufe[0]
+            assert weiter["diskussion"].runden == 4
+            assert weiter["diskussion"].kennung == d.kennung
+            assert [x.name for x in weiter["wiederbeleben"]] == ["Ghost"]
+            assert str(weiter["protokoll"]).endswith("20260928-171200.md")
+
+    async def test_archiv_neben_dem_formular_oder_darunter(self) -> None:
+        for groesse, daneben in (((160, 50), True), ((120, 60), False)):
+            app = _app()
+            async with app.run_test(size=groesse) as pilot:
+                panel = await _reiter(app, pilot)
+                formular = panel.query_one("#disk-formular").region
+                archiv = panel.query_one("#disk-archiv-raum").region
+                assert archiv.height > 0, groesse
+                if daneben:
+                    assert archiv.x >= formular.right, groesse
+                else:
+                    assert archiv.y >= formular.bottom, groesse

@@ -7,6 +7,8 @@ import threading
 from claude_sanctuary.kern.debatte import (
     Diskussion,
     Teilnehmer,
+    Verbrauch,
+    absaetze,
     als_markdown,
     anweisung,
     moderieren,
@@ -365,3 +367,58 @@ class TestAusgabe:
         assert text.startswith("# Ist Angular tot?")
         assert "**Amalia** (Runde 1" in text
         assert "_Ende: 1 Runde gespielt_" in text
+
+
+class TestFortsetzen:
+    def test_geht_nach_der_letzten_runde_weiter_ohne_neue_vorbereitung(self) -> None:
+        kanal = Attrappe()
+        d = _lauf(_diskussion(runden=2, recherche=True), kanal)
+        assert d.gespielte_runden == 2
+        vorbereitungen = sum(1 for b in d.beitraege if b.art == "vorbereitung")
+        d.runden = d.gespielte_runden + 1
+        weiter = Attrappe()
+        _lauf(d, weiter)
+        assert [an for an, _ in weiter.gesendet] == ["Amalia", "Tamino", "Kerstin"]
+        assert all("Runde 3 von 3" in text.splitlines()[0] for _, text in weiter.gesendet)
+        assert sum(1 for b in d.beitraege if b.art == "vorbereitung") == vorbereitungen
+        assert d.gespielte_runden == 3
+        # Der alte Verlauf steht in der neuen Anweisung.
+        assert "Amalia sagt etwas" in weiter.gesendet[0][1]
+
+    def test_gespielte_runden_zaehlt_auch_ausgelassene(self) -> None:
+        d = _lauf(_diskussion(runden=2), Attrappe({"Kerstin": "schweigt"}),
+                  frist=10.0)
+        assert d.gespielte_runden == 2
+
+
+class TestAbsaetze:
+    MARIA = ("Roundhouse und Signalbox vertragen sich gut, Agatha. Bei Chinwag widerspreche "
+             "ich aber: Das Werkzeug plaudert doch nicht nur. Es verteilt Aufträge, verlangt "
+             "Quittungen mit Statuscodes und kann eine Instanz sogar beenden. Ein Schwätzchen "
+             "verniedlicht genau den Teil, auf den man sich verlassen muss. Wenn nachts ein "
+             "Auftrag hängen bleibt, suchst Du den Fehler dann gern in einem Programm namens "
+             "Schwätzchen? Catherder sagt wenigstens ehrlich, dass Koordination Arbeit ist.")
+
+    def test_langer_beitrag_bricht_an_der_satzgrenze_nahe_der_mitte(self) -> None:
+        # Genau dort hat Michael am 28.09.2026 den Umbruch markiert.
+        erster, zweiter = absaetze(self.MARIA)
+        assert erster.endswith("sogar beenden.")
+        assert zweiter.startswith("Ein Schwätzchen")
+        assert f"{erster} {zweiter}" == self.MARIA
+
+    def test_kurzer_beitrag_bleibt_ein_absatz(self) -> None:
+        assert absaetze("Kurz. Und knapp.") == ["Kurz. Und knapp."]
+
+    def test_eigene_umbrueche_bleiben(self) -> None:
+        assert absaetze("Erstens.\n\nZweitens.") == ["Erstens.", "Zweitens."]
+
+    def test_abkuerzungen_teilen_nicht(self) -> None:
+        text = " ".join(["Das gilt z. B. auch hier, wort"] * 10)
+        assert absaetze(text) == [text]
+
+
+class TestVerbrauch:
+    def test_summe_und_anteile(self) -> None:
+        v = Verbrauch(10, 100, 5) + Verbrauch(1, 2, 3)
+        assert (v.neu, v.cache, v.aus) == (11, 102, 8)
+        assert v.echt == 19 and v.gesamt == 121

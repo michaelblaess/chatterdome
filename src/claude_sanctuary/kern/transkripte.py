@@ -215,37 +215,7 @@ class ClaudeQuelle:
         try:
             with t.pfad.open(encoding="utf-8", errors="replace") as strom:
                 for zeile in strom:
-                    if '"assistant"' not in zeile:
-                        continue
-                    try:
-                        satz = json.loads(zeile)
-                    except (ValueError, TypeError):
-                        continue
-                    if not isinstance(satz, dict) or satz.get("type") != "assistant":
-                        continue
-                    wann = _zeitpunkt(satz.get("timestamp"))
-                    nachricht = satz.get("message")
-                    verbrauch = nachricht.get("usage") if isinstance(nachricht, dict) else None
-                    if wann is None or not isinstance(verbrauch, dict):
-                        continue
-                    anfrage = Anfrage(
-                        ts=wann,
-                        sitzung=str(satz.get("sessionId") or t.sitzung),
-                        ordner=_ordnername(satz.get("cwd"), merker),
-                        frisch=_zahl(verbrauch.get("input_tokens")),
-                        cache_neu=_zahl(verbrauch.get("cache_creation_input_tokens")),
-                        cache_gelesen=_zahl(verbrauch.get("cache_read_input_tokens")),
-                        aus=_zahl(verbrauch.get("output_tokens")),
-                        agent=CLAUDE,
-                        subagent=t.subagent,
-                        art=t.art,
-                    )
-                    # Ohne Kennung bleibt nur die Zeile selbst - eine eigene,
-                    # nie kollidierende Schluesselung.
-                    kennung = satz.get("requestId") or (
-                        nachricht.get("id") if isinstance(nachricht, dict) else None
-                    )
-                    letzte[str(kennung) if kennung else f"zeile-{len(letzte)}"] = anfrage
+                    _claude_zeile(zeile, t, merker, letzte)
         except OSError:
             # Eine Datei, die gerade ersetzt wird, darf den Durchgang nicht
             # abbrechen - die bereits gelesenen Zuege sind trotzdem auswertbar.
@@ -477,6 +447,71 @@ class CodexQuelle:
 
 
 Transkriptquelle = ClaudeQuelle | CodexQuelle
+
+
+def _claude_zeile(
+    zeile: str, t: Transkript, merker: dict[str, str], letzte: dict[str, Anfrage]
+) -> None:
+    """Traegt eine Transkriptzeile in ``letzte`` ein, wenn sie eine Modellanfrage ist."""
+    if '"assistant"' not in zeile:
+        return
+    try:
+        satz = json.loads(zeile)
+    except (ValueError, TypeError):
+        return
+    if not isinstance(satz, dict) or satz.get("type") != "assistant":
+        return
+    wann = _zeitpunkt(satz.get("timestamp"))
+    nachricht = satz.get("message")
+    verbrauch = nachricht.get("usage") if isinstance(nachricht, dict) else None
+    if wann is None or not isinstance(verbrauch, dict):
+        return
+    anfrage = Anfrage(
+        ts=wann,
+        sitzung=str(satz.get("sessionId") or t.sitzung),
+        ordner=_ordnername(satz.get("cwd"), merker),
+        frisch=_zahl(verbrauch.get("input_tokens")),
+        cache_neu=_zahl(verbrauch.get("cache_creation_input_tokens")),
+        cache_gelesen=_zahl(verbrauch.get("cache_read_input_tokens")),
+        aus=_zahl(verbrauch.get("output_tokens")),
+        agent=CLAUDE,
+        subagent=t.subagent,
+        art=t.art,
+    )
+    # Ohne Kennung bleibt nur die Zeile selbst - eine eigene,
+    # nie kollidierende Schluesselung.
+    kennung = satz.get("requestId") or (
+        nachricht.get("id") if isinstance(nachricht, dict) else None
+    )
+    letzte[str(kennung) if kennung else f"zeile-{len(letzte)}"] = anfrage
+
+
+def claude_anfragen_ab(pfad: Path, versatz: int) -> list[Anfrage]:
+    """Die Modellanfragen einer Claude-Transkriptdatei ab einem Byte-Versatz.
+
+    Fuer den Verbrauch einer Diskussion: der Versatz ist die Dateigroesse beim
+    Start, gezaehlt wird also nur, was danach geschah. Binaer gelesen, weil ein
+    Versatz in Bytes im Textmodus nicht verlaesslich anzuspringen ist. Eine
+    halbe erste oder letzte Zeile scheitert am JSON und faellt heraus.
+    """
+    letzte: dict[str, Anfrage] = {}
+    t = Transkript(CLAUDE, pfad, pfad.stem)
+    try:
+        with pfad.open("rb") as strom:
+            strom.seek(versatz)
+            for roh in strom:
+                _claude_zeile(roh.decode("utf-8", errors="replace"), t, {}, letzte)
+    except OSError:
+        return []
+    return list(letzte.values())
+
+
+def claude_transkript(sitzung: str, wurzel: Path | None = None) -> Path | None:
+    """Die Transkriptdatei einer Claude-Sitzung, None wenn (noch) keine da ist."""
+    basis = wurzel if wurzel is not None else claude_wurzel()
+    if not sitzung or not basis.is_dir():
+        return None
+    return next(iter(sorted(basis.glob(f"*/{sitzung}.jsonl"))), None)
 
 
 def claude_wurzel() -> Path:

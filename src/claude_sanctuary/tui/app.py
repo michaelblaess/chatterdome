@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import dataclasses
+import sqlite3
 import threading
 import time
 from pathlib import Path
@@ -32,6 +33,7 @@ from textual_widgets import (
 from claude_sanctuary import __author__, __version__, __year__
 from claude_sanctuary.i18n import current_language, t
 from claude_sanctuary.kern import absturz
+from claude_sanctuary.kern.diskussionsarchiv import Diskussionsarchiv
 from claude_sanctuary.kern.einstellungen import ZUSTIMMUNG, Einstellungen
 from claude_sanctuary.kern.gedaechtnis import (
     Gedaechtnis,
@@ -60,7 +62,11 @@ from claude_sanctuary.tui.starter import oeffne_ordner
 from claude_sanctuary.tui.widgets.agenten_tabelle import AgentenTabelle
 from claude_sanctuary.tui.widgets.bus_detail import BusDetail
 from claude_sanctuary.tui.widgets.bus_tabelle import BusTabelle
-from claude_sanctuary.tui.widgets.diskussion_panel import DiskussionsPanel
+from claude_sanctuary.tui.widgets.diskussion_panel import (
+    DiskussionsAuftrag,
+    DiskussionsPanel,
+    protokoll_name,
+)
 from claude_sanctuary.tui.widgets.gedaechtnis_detail import GedaechtnisDetail
 from claude_sanctuary.tui.widgets.kopf_panel import KopfPanel
 from claude_sanctuary.tui.widgets.notizen_tabelle import NotizenTabelle
@@ -152,9 +158,11 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         self._bild_pfad = ""
 
         self._reserviert: list[str] = []
-        self._diskussion_stopp: threading.Event | None = None
-        """Gesetzt, solange eine Diskussion laeuft. Die Taste haelt sie dann an."""
         """Namen aus dem Pool, die vorab vergeben sind - fuer den Rundruf."""
+        self._diskussion_stopp: threading.Event | None = None
+        """Gesetzt, solange eine Diskussion laeuft. Der Knopf haelt sie dann an."""
+        self._archiv = Diskussionsarchiv()
+        """Gespeicherte Diskussionen. Der Pfad folgt dem Einstellungsordner."""
 
         self._gedaechtnis: Gedaechtnis | None = None
         """Der Notizbestand. None, solange der Tab nie geoeffnet wurde."""
@@ -426,6 +434,9 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         elif ereignis.pane.id == "tab-statistik" and self._statistik is None:
             self.query_one("#statistik", StatistikDashboard).setze_laeuft(True)
             self.statistik_laden()
+        if ereignis.pane.id == "tab-diskussion":
+            self._diskussionsarchiv_zeigen()
+        self._statuszeile_fuer_reiter()
 
     def action_show_memory(self) -> None:
         """Zeigt den Gedaechtnis-Tab und liest den Bestand neu ein."""
@@ -1026,9 +1037,11 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
 
     def on_diskussions_panel_starten(self, ereignis: DiskussionsPanel.Starten) -> None:
         """Das Formular im Reiter ist vollstaendig - Ablauf im Hintergrund starten."""
+        self._diskussion_starten(ereignis.auftrag)
+
+    def _diskussion_starten(self, auftrag: DiskussionsAuftrag) -> None:
         if self._diskussion_stopp is not None:
             return  # laeuft schon, der Knopf ist dann ohnehin verdeckt
-        auftrag = ereignis.auftrag
         self._diskussion_stopp = threading.Event()
         self.query_one("#diskussion", DiskussionsPanel).beginnen(auftrag.diskussion, auftrag.neu)
         self._schreibe_log(t("log.discussion_note", text=auftrag.diskussion.thema))
@@ -1038,8 +1051,67 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         if self._diskussion_stopp is not None:
             self._diskussion_stopp.set()
 
+    def on_diskussions_panel_oeffnen(self, ereignis: DiskussionsPanel.Oeffnen) -> None:
+        """Eine gespeicherte Diskussion im Chat zeigen."""
+        geladen = self._archiv.laden(ereignis.kennung)
+        if geladen is None:
+            self.notify(t("discussion.archive_missing"), severity="warning")
+            return
+        diskussion, protokoll = geladen
+        self.query_one("#diskussion", DiskussionsPanel).zeigen(diskussion, protokoll)
+
+    def on_diskussions_panel_fortsetzen(self, ereignis: DiskussionsPanel.Fortsetzen) -> None:
+        """Weitere Runden. Die Diskussion kommt frisch aus dem Archiv, nicht aus der Anzeige.
+
+        Wer nicht mehr laeuft, wird unter seinem Namen neu gestartet - frische
+        Agenten schliesst der Ablauf am Ende ja wieder.
+        """
+        geladen = self._archiv.laden(ereignis.diskussion.kennung)
+        if geladen is None:
+            self.notify(t("discussion.archive_missing"), severity="warning")
+            return
+        diskussion, protokoll = geladen
+        diskussion.runden = diskussion.gespielte_runden + ereignis.runden
+        diskussion.ende = ""
+        diskussion.zusammenfassung = ""
+        laufend = {a.name.lower() for a in self._bestand.agenten if not a.selbst}
+        wieder = [x for x in diskussion.teilnehmer if x.name.lower() not in laufend]
+        self._diskussion_starten(DiskussionsAuftrag(
+            diskussion=diskussion, ohne_kontext=diskussion.ohne_kontext,
+            wiederbeleben=wieder, protokoll=protokoll or ereignis.protokoll,
+        ))
+
+    def on_diskussions_panel_kennzahlen(self, _ereignis: DiskussionsPanel.Kennzahlen) -> None:
+        self._statuszeile_fuer_reiter()
+
+    def _statuszeile_fuer_reiter(self) -> None:
+        """Im Reiter Diskussion zeigt die Statuszeile deren Stand, sonst den des Bus."""
+        status = self.query_one("#status", StatusZeile)
+        aktiv = self.query_one("#bereiche", TabbedContent).active
+        kennzahlen = None
+        if aktiv == "tab-diskussion":
+            kennzahlen = self.query_one("#diskussion", DiskussionsPanel).kennzahlen()
+        if kennzahlen is None:
+            status.diskussion_aus()
+            return
+        posten, protokoll = kennzahlen
+        link = None
+        if protokoll:
+            self._link_counter += 1
+            self._link_registry[self._link_counter] = protokoll
+            link = (protokoll_name(protokoll), f"app.open_link({self._link_counter})")
+        status.diskussion_zeigen(posten, link)
+
+    def _diskussionsarchiv_zeigen(self) -> None:
+        try:
+            eintraege = self._archiv.liste()
+        except sqlite3.Error as fehler:
+            self._schreibe_log(t("log.discussion_archive_failed", grund=str(fehler)), "error")
+            return
+        self.query_one("#diskussion", DiskussionsPanel).archiv_setzen(eintraege)
+
     @work(thread=True, group="diskussion")
-    def _diskussion_ausfuehren(self, auftrag: Any, stopp: threading.Event) -> None:
+    def _diskussion_ausfuehren(self, auftrag: DiskussionsAuftrag, stopp: threading.Event) -> None:
         """Der ganze Ablauf in einem Thread - er blockiert Minuten.
 
         Ueber das Modul und nicht per Namensimport, damit ein Test den Ablauf
@@ -1058,12 +1130,16 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
             ergebnis = debatte_ablauf.ausfuehren(
                 auftrag.diskussion, auftrag.neu,
                 ohne_eigenen_kontext=auftrag.ohne_kontext,
+                wiederbeleben=auftrag.wiederbeleben,
                 melden=melden,
                 beim_beitrag=lambda b: self.call_from_thread(panel.beitrag, b),
                 beim_wort=lambda r, runde: self.call_from_thread(panel.redner, r.name, runde),
                 beim_start=lambda d: self.call_from_thread(panel.teilnehmer_bekannt, d),
+                beim_verbrauch=lambda v: self.call_from_thread(panel.verbrauch, v),
                 stopp=stopp,
                 quelle=self._quelle if isinstance(self._quelle, LokaleQuelle) else None,
+                archiv=self._archiv,
+                protokoll=Path(auftrag.protokoll) if auftrag.protokoll else None,
             )
         finally:
             self.call_from_thread(self._diskussion_vorbei)
@@ -1075,6 +1151,7 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
     def _diskussion_fertig(self, ergebnis: Any) -> None:
         panel = self.query_one("#diskussion", DiskussionsPanel)
         diskussion = ergebnis.diskussion
+        self._diskussionsarchiv_zeigen()
         if ergebnis.fehler:
             self._schreibe_log(t("log.discussion_failed", grund=ergebnis.fehler), "error")
             self.notify(ergebnis.fehler, severity="error", markup=False)

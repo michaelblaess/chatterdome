@@ -17,6 +17,7 @@ damit die Tests ohne echte Sitzungen auskommen.
 
 from __future__ import annotations
 
+import re
 import threading
 import time
 from collections.abc import Callable
@@ -80,6 +81,32 @@ SEITEN = {
 
 
 @dataclass
+class Verbrauch:
+    """Tokens einer Diskussion, getrennt nach dem, was sie kosten.
+
+    ``neu`` ist frische Eingabe plus Cache-Erzeugung, ``cache`` die billige
+    Cache-Lesung, ``aus`` die Ausgabe - dieselbe Trennung wie in der Statistik.
+    """
+
+    neu: int = 0
+    cache: int = 0
+    aus: int = 0
+
+    def __add__(self, anderer: Verbrauch) -> Verbrauch:
+        return Verbrauch(self.neu + anderer.neu, self.cache + anderer.cache,
+                         self.aus + anderer.aus)
+
+    @property
+    def echt(self) -> int:
+        """Alles ausser der Cache-Lesung."""
+        return self.neu + self.aus
+
+    @property
+    def gesamt(self) -> int:
+        return self.neu + self.cache + self.aus
+
+
+@dataclass
 class Teilnehmer:
     """Ein Agent in der Diskussion."""
 
@@ -90,6 +117,8 @@ class Teilnehmer:
     """``pro`` oder ``contra``. Nur im Format ``diskussion``, leer heisst: wird verteilt."""
     ohne_recherche: str = ""
     """Grund, wenn die Recherche in der Vorbereitung gescheitert ist."""
+    sitzung: str = ""
+    """Sitzungskennung, sobald bekannt - fuer den Verbrauch aus dem Transkript."""
 
 
 @dataclass
@@ -135,6 +164,20 @@ class Diskussion:
     """Warum die Diskussion endete, leer solange sie laeuft."""
     zusammenfassung: str = ""
     """Neutrale Zusammenfassung nach dem Ende, siehe ``zusammenfassen``."""
+    beginn: str = ""
+    """Zeitpunkt des ersten Starts als ISO-Text, gesetzt vom Ablauf."""
+    verbrauch: Verbrauch = field(default_factory=Verbrauch)
+    kennung: int = 0
+    """Nummer im Archiv, 0 solange nicht gespeichert."""
+    ohne_kontext: bool = False
+    """Frische Sitzungen ohne eigene CLAUDE.md - gilt auch beim Fortsetzen."""
+
+    @property
+    def gespielte_runden(self) -> int:
+        """Hoechste Runde mit einem Eintrag, 0 vor dem ersten Beitrag."""
+        return max((b.runde for b in self.beitraege
+                    if b.art in ("beitrag", "ausgelassen", "fehler") and b.runde > 0),
+                   default=0)
 
     def pruefen(self) -> str:
         """Liefert den ersten Grund, warum die Diskussion nicht starten kann."""
@@ -323,6 +366,66 @@ def vorbereitung(diskussion: Diskussion, redner: Teilnehmer) -> str:
     return "\n".join(zeilen)
 
 
+_SATZENDE = re.compile(r'(?<=[.!?])\s+(?=["„»A-ZÄÖÜ])')
+
+_KEIN_SATZENDE = {"bzw.", "ca.", "vgl.", "nr.", "dr.", "prof.", "ggf.", "evtl.", "inkl.",
+                  "sog.", "bspw.", "etc.", "usw.", "st.", "mio.", "mrd."}
+"""Abkuerzungen, nach denen oft ein Grossbuchstabe folgt, ohne dass ein Satz endet."""
+
+
+def _saetze(text: str) -> list[str]:
+    """Zerlegt einen Absatz in Saetze.
+
+    Kein Satzende sind ein einzelner Buchstabe ("z. B."), eine Ordnungszahl
+    ("am 3. Oktober") und die Abkuerzungen aus ``_KEIN_SATZENDE``.
+    """
+    saetze: list[str] = []
+    anfang = 0
+    for treffer in _SATZENDE.finditer(text):
+        davor = text[anfang:treffer.start()].split()
+        wort = davor[-1] if davor else ""
+        kern = wort.rstrip(".!?")
+        if (wort.endswith(".") and (len(kern) <= 1 or kern.isdigit()
+                                    or wort.lower() in _KEIN_SATZENDE)):
+            continue
+        saetze.append(text[anfang:treffer.start()])
+        anfang = treffer.end()
+    saetze.append(text[anfang:])
+    return saetze
+
+
+ABSATZ_AB_WOERTERN = 40
+"""Kuerzere Beitraege bleiben ein Absatz."""
+
+
+def absaetze(text: str) -> list[str]:
+    """Teilt einen Beitrag fuer die Anzeige in Absaetze.
+
+    Eigene Zeilenumbrueche des Redners bleiben. Ein langer Block ohne Umbruch
+    wird an der Satzgrenze geteilt, die der Mitte am naechsten liegt - so hat
+    Michael es am 28.09.2026 in einem Bildschirmfoto markiert. Den Agenten
+    wird das bewusst nicht aufgetragen: eine mehrzeilige Quittung koennte
+    ueber einen .cmd-Wrapper am ersten Umbruch abgeschnitten werden.
+    """
+    bloecke = [b.strip() for b in text.splitlines() if b.strip()]
+    ergebnis: list[str] = []
+    for block in bloecke:
+        saetze = _saetze(block)
+        woerter = len(block.split())
+        if woerter < ABSATZ_AB_WOERTERN or len(saetze) < 2:
+            ergebnis.append(block)
+            continue
+        bisher = 0
+        beste, abstand = 1, float(woerter)
+        for i, satz in enumerate(saetze[:-1], start=1):
+            bisher += len(satz.split())
+            if abs(bisher - woerter / 2) < abstand:
+                beste, abstand = i, abs(bisher - woerter / 2)
+        ergebnis.append(" ".join(saetze[:beste]))
+        ergebnis.append(" ".join(saetze[beste:]))
+    return ergebnis
+
+
 def _jetzt() -> str:
     return datetime.now().strftime("%H:%M:%S")
 
@@ -443,11 +546,14 @@ def moderieren(
             eintragen(Beitrag(0, name, grund, _jetzt(), "ausgelassen",
                               seite=nach_name[name].seite))
 
-    if diskussion.recherche:
+    # Beim Fortsetzen steht die Vorbereitung schon im Protokoll, die Notizen
+    # gehen weiter in jede Anweisung. Und es geht nach der letzten Runde weiter.
+    erste_runde = diskussion.gespielte_runden + 1
+    if diskussion.recherche and erste_runde == 1:
         vorbereiten()
 
     ende = "1 Runde gespielt" if diskussion.runden == 1 else f"{diskussion.runden} Runden gespielt"
-    for runde in range(1, diskussion.runden + 1):
+    for runde in range(erste_runde, diskussion.runden + 1):
         for redner in list(aktiv):
             if stopp.is_set():
                 ende = "von Hand gestoppt"

@@ -8,7 +8,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from rich.style import Style
+from rich.text import Text
 from textual_widgets import StatusBar, StatusItem
+from textual_widgets.status_bar import TRENNER
 
 from claude_sanctuary.i18n import current_language, t
 from claude_sanctuary.kern.modelle import Bestand
@@ -36,6 +39,38 @@ class StatusZeile(StatusBar):  # type: ignore[misc]
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(hint=t("status.empty"), **kwargs)
+        self._bus_posten: list[StatusItem] = []
+        self._diskussion = False
+        self._link: tuple[str, str] | None = None
+        """Beschriftung und Klick-Aktion eines Links am Ende, nur im Diskussionsmodus."""
+
+    def diskussion_zeigen(self, posten: list[StatusItem],
+                          link: tuple[str, str] | None = None) -> None:
+        """Zeigt die Kennzahlen einer Diskussion statt der des Bus.
+
+        :param link: (Beschriftung, Aktion) - etwa das Protokoll, das per Klick aufgeht.
+        """
+        self._diskussion = True
+        self._link = link
+        self.set_items(posten)
+
+    def diskussion_aus(self) -> None:
+        """Zurueck zu den Bus-Kennzahlen."""
+        if not self._diskussion:
+            return
+        self._diskussion = False
+        self._link = None
+        self.set_items(self._bus_posten)
+
+    def _build(self) -> Text:
+        text: Text = super()._build()
+        if self._diskussion and self._link is not None:
+            beschriftung, aktion = self._link
+            text.append(TRENNER, style="dim")
+            text.append(f"{t('discussion.stat_log')}: ", style="dim")
+            text.append(beschriftung, style=Style(underline=True, bold=True)
+                        + Style.from_meta({"@click": aktion}))
+        return text
 
     def uebernehmen(self, bestand: Bestand, *, verbrauch: int | None = None) -> None:
         """Traegt die Kennzahlen einer Abfrage ein.
@@ -68,4 +103,8 @@ class StatusZeile(StatusBar):  # type: ignore[misc]
         # gar keine Spalte.
         if verbrauch is not None:
             posten.append(StatusItem(t("status.tokens"), _tokens(verbrauch)))
-        self.set_items(posten)
+        self._bus_posten = posten
+        # Im Reiter Diskussion steht deren Zeile - der Bus-Takt darf sie nicht
+        # alle paar Sekunden ueberschreiben.
+        if not self._diskussion:
+            self.set_items(posten)
