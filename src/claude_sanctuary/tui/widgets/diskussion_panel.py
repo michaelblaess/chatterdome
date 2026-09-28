@@ -63,13 +63,26 @@ class _AgentZeile(Horizontal):
                      value=self._seite, allow_blank=False, compact=True,
                      classes="disk-agent-seite")
 
+    # Der Zustand steht in der Zeile selbst und wird ueber die Aenderungen
+    # nachgefuehrt, NICHT aus den Feldern gelesen. Frisch eingehaengt hat die
+    # Zeile ihre Kinder noch nicht, und eine Pruefung genau dazwischen warf
+    # NoMatches - am 28.09.2026 bei Michael, zweimal, einmal als Absturz.
+
+    @on(Checkbox.Changed, ".disk-agent-haken")
+    def _haken_geaendert(self, ereignis: Checkbox.Changed) -> None:
+        self._angekreuzt = bool(ereignis.value)
+
+    @on(Select.Changed, ".disk-agent-seite")
+    def _seite_geaendert(self, ereignis: Select.Changed) -> None:
+        self._seite = str(ereignis.value)
+
     @property
     def angekreuzt(self) -> bool:
-        return self.query_one(".disk-agent-haken", Checkbox).value
+        return self._angekreuzt
 
     @property
     def seite(self) -> str:
-        return str(self.query_one(".disk-agent-seite", Select).value)
+        return self._seite
 
 
 class DiskussionsPanel(Vertical):
@@ -221,6 +234,10 @@ class DiskussionsPanel(Vertical):
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self._agenten: list[Agent] = []
+        self._zeilen: list[_AgentZeile] = []
+        """Die aktuellen Zeilen. NICHT per query ermitteln: remove_children wirkt
+        verzoegert, und eine Abfrage direkt nach dem Neuaufbau fand jeden Agenten
+        doppelt ("Ein Teilnehmer steht doppelt in der Liste")."""
         self._generation = 0
         """Zaehlt die Neuaufbauten der Agentenliste - IDs muessen eindeutig bleiben."""
         self._diskussion: Diskussion | None = None
@@ -299,18 +316,24 @@ class DiskussionsPanel(Vertical):
         if [(a.name, a.rechner) for a in neu] == [(a.name, a.rechner) for a in self._agenten]:
             return
         vorher = {(z.agent.name, z.agent.rechner): (z.angekreuzt, z.seite)
-                  for z in self.query(_AgentZeile)}
+                  for z in self._zeilen}
         self._agenten = neu
         self._generation += 1
         liste = self.query_one("#disk-agenten", VerticalScroll)
         liste.remove_children()
         if not neu:
             liste.mount(Static(t("discussion.no_agents"), classes="disk-leise"))
+        self._zeilen = []
         for i, agent in enumerate(neu):
             angekreuzt, seite = vorher.get((agent.name, agent.rechner), (False, AUTO))
-            liste.mount(_AgentZeile(agent, angekreuzt, seite,
-                                    id=f"disk-agent-{self._generation}-{i}"))
-        self.call_after_refresh(self._pruefen)
+            zeile = _AgentZeile(agent, angekreuzt, seite,
+                                id=f"disk-agent-{self._generation}-{i}")
+            self._zeilen.append(zeile)
+            liste.mount(zeile)
+        # Waehrend einer Diskussion ist das Formular verdeckt und wird nicht
+        # geprueft - der Bestand aktualisiert sich aber weiter im Takt.
+        if not self.has_class("laeuft"):
+            self.call_after_refresh(self._pruefen)
 
     # -- Formular auswerten ---------------------------------------------
 
@@ -335,7 +358,7 @@ class DiskussionsPanel(Vertical):
             return None, t("discussion.bad_minutes")
         if neu is None or neu < 0 or neu != int(neu) or neu > MAX_NEU:
             return None, t("discussion.bad_new", maximum=MAX_NEU)
-        zeilen = [z for z in self.query(_AgentZeile) if z.angekreuzt]
+        zeilen = [z for z in self._zeilen if z.angekreuzt]
         if len(zeilen) + int(neu) < 2:
             return None, t("discussion.too_few")
 

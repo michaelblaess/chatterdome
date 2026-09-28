@@ -97,6 +97,27 @@ class TestFormular:
             assert "mindestens zwei" in _text(panel, "#disk-grund")
             assert panel.query_one("#disk-ohne-kontext", Checkbox).disabled
 
+    async def test_pruefen_gleich_nach_dem_einhaengen_neuer_zeilen(self) -> None:
+        # Absturz vom 28.09.2026 bei Michael: NoMatches '.disk-agent-haken'. Die
+        # Zeilen waren eingehaengt, ihre Kinder noch nicht aufgebaut, und die
+        # Pruefung lief genau dazwischen.
+        from claude_sanctuary.kern.modelle import Agent
+
+        app = _app()
+        async with app.run_test(size=(160, 50)) as pilot:
+            panel = await _reiter(app, pilot)
+            panel.query_one("#disk-thema", Input).value = "Thema"
+            _zeile(panel, "Klara").query_one(Checkbox).value = True
+            await pilot.pause()
+            panel.agenten_setzen([Agent(name="Klara", status="idle", rechner="TESTHOST"),
+                                  Agent(name="Neu", status="idle", rechner="TESTHOST")])
+            auftrag, grund = panel.auftrag()          # darf nicht werfen
+            assert auftrag is None and "mindestens zwei" in grund
+            for _ in range(20):
+                await pilot.pause()
+            # Und der Haken hat den Neuaufbau ueberlebt.
+            assert _zeile(panel, "Klara").angekreuzt
+
     async def test_haken_ueberleben_eine_aktualisierung(self) -> None:
         app = _app()
         async with app.run_test(size=(160, 50)) as pilot:
