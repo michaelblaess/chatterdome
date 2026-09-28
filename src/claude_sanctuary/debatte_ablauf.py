@@ -82,6 +82,11 @@ def ablage() -> Path:
     return ordner
 
 
+def modelle(quelle: LokaleQuelle) -> dict[str, str]:
+    """Kleingeschriebener Agentenname auf das Modell, mit dem er laeuft, soweit bekannt."""
+    return {a.name.lower(): a.modell for a in quelle.bestand().agenten if a.modell}
+
+
 def laufende(quelle: LokaleQuelle) -> dict[str, str]:
     """Laufende Agenten als Sitzungskennung auf Namen."""
     return {a.session_id: a.name for a in quelle.bestand().agenten if a.session_id}
@@ -155,7 +160,7 @@ def _json_antwort(ausgabe: str) -> tuple[str, Verbrauch]:
     return str(daten.get("result") or "").strip(), verbrauch
 
 
-def claude_einmal(auftrag: str, ordner: Path) -> tuple[str, str, Verbrauch]:
+def claude_einmal(auftrag: str, ordner: Path, modell: str = "") -> tuple[str, str, Verbrauch]:
     """Ein einmaliger ``claude -p``-Aufruf ohne Fenster, ohne Bus und ohne eigenen Kontext.
 
     Der Auftrag geht ueber stdin, nicht als Argument: der Wrapper claude.cmd
@@ -169,6 +174,8 @@ def claude_einmal(auftrag: str, ordner: Path) -> tuple[str, str, Verbrauch]:
     argumente, umgebung = ohne_kontext(ordner, hooks=False)
     befehl = [claude, "-p", *argumente, "--output-format", "json",
               "--disallowedTools", "WebSearch", "WebFetch", "Bash", "Read", "Write", "Edit"]
+    if modell:
+        befehl += ["--model", modell]
     try:
         lauf = subprocess.run(  # fester Befehl, keine Shell
             befehl,
@@ -287,6 +294,7 @@ def ausfuehren(
     beim_wort: Callable[[Teilnehmer, int], None] | None = None,
     beim_start: Callable[[Diskussion], None] | None = None,
     beim_verbrauch: Callable[[Verbrauch], None] | None = None,
+    beim_vorbereiten: Callable[[list[Teilnehmer]], None] | None = None,
     stopp: threading.Event | None = None,
     quelle: LokaleQuelle | None = None,
     archiv: Diskussionsarchiv | None = None,
@@ -337,6 +345,11 @@ def ausfuehren(
         if beim_verbrauch is not None:
             beim_verbrauch(diskussion.verbrauch)
 
+    def modelle_merken() -> None:
+        bekannt = modelle(quelle)
+        for teilnehmer in diskussion.teilnehmer:
+            teilnehmer.modell = bekannt.get(teilnehmer.name.lower(), teilnehmer.modell)
+
     try:
         wunsch = [t.name for t in wiederbeleben] + [""] * len(neu)
         if wunsch:
@@ -346,6 +359,8 @@ def ausfuehren(
             ohne_web = not diskussion.recherche or diskussion.gespielte_runden > 0
             for name in wunsch:
                 argumente, umgebung = ohne_kontext(ordner) if ohne_eigenen_kontext else ([], {})
+                if diskussion.modell:
+                    argumente = [*argumente, "--model", diskussion.modell]
                 if ohne_web:
                     # Bei frischen Sitzungen hart gesperrt, bei laufenden Agenten
                     # bleibt es bei der Bitte in der Anweisung.
@@ -376,6 +391,7 @@ def ausfuehren(
                 for name, t in zip(zugeordnet[len(wiederbeleben):], neu, strict=True)
             ]
 
+        modelle_merken()
         sitzungen = {n.lower(): s for s, n in laufende(quelle).items()}
         frisch = {n.lower() for n in gestartet}
         for teilnehmer in diskussion.teilnehmer:
@@ -388,8 +404,11 @@ def ausfuehren(
         if beim_start is not None:
             beim_start(diskussion)
         moderieren(diskussion, BusKanal(quelle, rechner()), beim_beitrag=nach_beitrag,
-                   beim_wort=beim_wort, stopp=stopp)
+                   beim_wort=beim_wort, beim_vorbereiten=beim_vorbereiten, stopp=stopp)
     finally:
+        # Vor dem Aufraeumen: eine frische Sitzung nennt ihr Modell erst nach
+        # der ersten Antwort, und danach ist sie weg.
+        modelle_merken()
         for meldung in aufraeumen(quelle, gestartet):
             melden(f"Nicht beendet: {meldung}")
 
@@ -400,7 +419,7 @@ def ausfuehren(
 
         def modell(auftrag: str) -> tuple[str, str]:
             nonlocal extra
-            text, fehler, extra = claude_einmal(auftrag, ordner)
+            text, fehler, extra = claude_einmal(auftrag, ordner, diskussion.modell)
             return text, fehler
 
         grund = zusammenfassen(diskussion, modell)

@@ -70,3 +70,52 @@ class TestArchiv:
 
     def test_unbekannte_nummer(self, tmp_path: Path) -> None:
         assert Diskussionsarchiv(tmp_path / "d.db").laden(42) is None
+
+
+class TestModell:
+    def test_modell_der_diskussion_und_der_teilnehmer(self, tmp_path: Path) -> None:
+        archiv = Diskussionsarchiv(tmp_path / "d.db")
+        d = _diskussion()
+        d.modell = "haiku"
+        d.teilnehmer[0].modell = "claude-haiku-4-5-20251001"
+        archiv.speichern(d)
+        geladen = archiv.laden(d.kennung)
+        assert geladen is not None
+        assert geladen[0].modell == "haiku"
+        assert geladen[0].teilnehmer[0].modell == "claude-haiku-4-5-20251001"
+        assert archiv.liste()[0].modell == "haiku"
+
+    def test_datei_vom_ersten_stand_bekommt_die_spalten_nachgetragen(
+        self, tmp_path: Path
+    ) -> None:
+        import sqlite3
+
+        datei = tmp_path / "alt.db"
+        # Das Schema vom 28.09.2026, Commit 2572784 - noch ohne Modell.
+        alt = sqlite3.connect(datei)
+        alt.executescript(
+            "CREATE TABLE diskussion (id INTEGER PRIMARY KEY AUTOINCREMENT, beginn TEXT NOT NULL,"
+            " thema TEXT NOT NULL, format TEXT NOT NULL, runden INTEGER NOT NULL,"
+            " recherche INTEGER NOT NULL, dauer_minuten REAL NOT NULL,"
+            " position_pro TEXT NOT NULL, position_contra TEXT NOT NULL,"
+            " schlussworte INTEGER NOT NULL, ohne_kontext INTEGER NOT NULL, ende TEXT NOT NULL,"
+            " zusammenfassung TEXT NOT NULL, protokoll TEXT NOT NULL,"
+            " tokens_neu INTEGER NOT NULL, tokens_cache INTEGER NOT NULL,"
+            " tokens_aus INTEGER NOT NULL);"
+            "CREATE TABLE teilnehmer (diskussion INTEGER NOT NULL, nr INTEGER NOT NULL,"
+            " name TEXT NOT NULL, rolle TEXT NOT NULL, seite TEXT NOT NULL,"
+            " ohne_recherche TEXT NOT NULL, sitzung TEXT NOT NULL, PRIMARY KEY (diskussion, nr));"
+            "INSERT INTO diskussion VALUES (1, '2026-09-28T18:02:25', 'Alt', 'diskussion', 20,"
+            " 1, 0, '', '', 0, 1, '', '', '', 1, 2, 3);"
+            "INSERT INTO teilnehmer VALUES (1, 0, 'Agatha', '', 'pro', '', 's-1');"
+        )
+        alt.commit()
+        alt.close()
+        archiv = Diskussionsarchiv(datei)
+        eintrag = archiv.liste()[0]
+        assert (eintrag.thema, eintrag.modell) == ("Alt", "")
+        geladen = archiv.laden(1)
+        assert geladen is not None and geladen[0].teilnehmer[0].name == "Agatha"
+        geladen[0].modell = "opus"
+        archiv.speichern(geladen[0])
+        assert archiv.liste()[0].modell == "opus"

@@ -71,6 +71,14 @@ FORMATE = {
 }
 
 
+MODELLE = ("", "haiku", "sonnet", "opus")
+"""Kurznamen, die ``claude --model`` annimmt (am 28.09.2026 mit haiku und sonnet
+geprueft). Leer heisst: die Voreinstellung von Claude Code."""
+
+VORGABE_MODELL = "sonnet"
+"""Fuer eine Unterhaltungsdiskussion reicht Sonnet, und Opus frisst Tokens."""
+
+
 PRO = "pro"
 CONTRA = "contra"
 
@@ -119,6 +127,8 @@ class Teilnehmer:
     """Grund, wenn die Recherche in der Vorbereitung gescheitert ist."""
     sitzung: str = ""
     """Sitzungskennung, sobald bekannt - fuer den Verbrauch aus dem Transkript."""
+    modell: str = ""
+    """Das Modell, mit dem die Sitzung tatsaechlich lief, laut Bestand. Leer wenn unbekannt."""
 
 
 @dataclass
@@ -171,6 +181,12 @@ class Diskussion:
     """Nummer im Archiv, 0 solange nicht gespeichert."""
     ohne_kontext: bool = False
     """Frische Sitzungen ohne eigene CLAUDE.md - gilt auch beim Fortsetzen."""
+    modell: str = ""
+    """Gewaehltes Modell (``haiku``, ``sonnet``, ``opus``), leer fuer die Voreinstellung.
+
+    Gilt fuer frisch gestartete Sitzungen und die Zusammenfassung. Laufende
+    Agenten behalten ihr Modell - welches sie hatten, steht je ``Teilnehmer``.
+    """
 
     @property
     def gespielte_runden(self) -> int:
@@ -436,6 +452,7 @@ def moderieren(
     *,
     beim_beitrag: Callable[[Beitrag], None] | None = None,
     beim_wort: Callable[[Teilnehmer, int], None] | None = None,
+    beim_vorbereiten: Callable[[list[Teilnehmer]], None] | None = None,
     stopp: threading.Event | None = None,
     uhr: Callable[[], float] = time.monotonic,
     schlafen: Callable[[float], None] = time.sleep,
@@ -447,6 +464,7 @@ def moderieren(
 
     :param beim_beitrag: wird nach jedem Eintrag im Protokoll aufgerufen, fuer die Live-Ansicht.
     :param beim_wort: wird gerufen, bevor ein Redner das Wort bekommt (Runde 0 = Schlusswort).
+    :param beim_vorbereiten: bekommt die Teilnehmer, deren Recherche gerade beginnt.
     :param stopp: von aussen gesetzt, beendet die Diskussion nach dem laufenden Beitrag.
     :returns: dieselbe Diskussion mit gefuelltem Protokoll und ``ende``.
     """
@@ -513,6 +531,8 @@ def moderieren(
                 aktiv.remove(redner)
             else:
                 offen[redner.name] = kennung
+        if beim_vorbereiten is not None and offen:
+            beim_vorbereiten([t for t in aktiv if t.name in offen])
         nach_name = {t.name: t for t in aktiv}
         abgabe = uhr() + frist_recherche
         while offen and uhr() < abgabe and not stopp.is_set():
@@ -637,6 +657,7 @@ def als_markdown(diskussion: Diskussion) -> str:
         return f"{t.name} ({zusatz})" if zusatz else t.name
 
     zeilen.append("Teilnehmer: " + ", ".join(beschreibung(t) for t in diskussion.teilnehmer))
+    zeilen.append(f"Modell: {diskussion.modell or 'Voreinstellung'}")
     zeilen.append("")
     for b in diskussion.beitraege:
         if b.art == "beitrag":

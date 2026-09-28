@@ -352,6 +352,8 @@ class TestArchivImReiter:
             for _ in range(10):
                 await pilot.pause()
             panel.query_one("#disk-weiter", Input).value = "2"
+            panel.query_one("#disk-weiter-modell", Select).value = "haiku"
+            await pilot.pause()
             await pilot.click("#disk-fortsetzen")
             await app.workers.wait_for_complete()
             for _ in range(10):
@@ -359,6 +361,7 @@ class TestArchivImReiter:
             assert len(aufrufe) == 1
             weiter = aufrufe[0]
             assert weiter["diskussion"].runden == 4
+            assert weiter["diskussion"].modell == "haiku"
             assert weiter["diskussion"].kennung == d.kennung
             assert [x.name for x in weiter["wiederbeleben"]] == ["Ghost"]
             assert str(weiter["protokoll"]).endswith("20260928-171200.md")
@@ -375,3 +378,94 @@ class TestArchivImReiter:
                     assert archiv.x >= formular.right, groesse
                 else:
                     assert archiv.y >= formular.bottom, groesse
+
+
+class TestModellwahl:
+    async def test_vorgabe_sonnet_und_im_auftrag(self) -> None:
+        app = _app()
+        async with app.run_test(size=(160, 50)) as pilot:
+            panel = await _reiter(app, pilot)
+            assert panel.query_one("#disk-modell", Select).value == "sonnet"
+            panel.query_one("#disk-thema", TextArea).text = "Thema"
+            panel.query_one("#disk-modell", Select).value = "opus"
+            _zeile(panel, "Klara").query_one(Checkbox).value = True
+            panel.query_one("#disk-neu", Input).value = "1"
+            await pilot.pause()
+            auftrag, _grund = panel.auftrag()
+            assert auftrag is not None and auftrag.diskussion.modell == "opus"
+
+    async def test_fortsetzen_bietet_das_bisherige_modell_an(self) -> None:
+        app = _app()
+        async with app.run_test(size=(160, 50)) as pilot:
+            panel = await _reiter(app, pilot)
+            d = Diskussion("x", [Teilnehmer("A", seite="pro", modell="claude-haiku-4-5"),
+                                 Teilnehmer("B", seite="contra")], modell="haiku", kennung=7)
+            panel.zeigen(d, "")
+            await pilot.pause()
+            assert panel.query_one("#disk-weiter-modell", Select).value == "haiku"
+            kopf = str(panel.query_one("#disk-kopf", Static).render())
+            assert "Modell: Haiku (A: claude-haiku-4-5)" in kopf
+
+
+class TestAnimationen:
+    async def test_tipp_anzeige_auf_der_seite_des_redners_bis_zum_beitrag(self) -> None:
+        from claude_sanctuary.tui.widgets.diskussion_panel import _Laeuft
+
+        app = _app()
+        async with app.run_test(size=(160, 50)) as pilot:
+            panel = await _reiter(app, pilot)
+            d = Diskussion("x", [Teilnehmer("A", seite="pro"), Teilnehmer("B", seite="contra")])
+            panel.beginnen(d, [])
+            panel.redner("B", 1)
+            await pilot.pause(0.3)
+            tippt = panel.query_one(".disk-tippt", _Laeuft)
+            assert tippt.has_class("disk-contra")
+            erstes = tippt.zeile()
+            assert "B schreibt" in erstes.plain
+            await pilot.pause(0.5)
+            assert tippt.zeile().spans != erstes.spans, "die Punkte laufen"
+            panel.beitrag(_beitrag("B", "contra", "Nein."))
+            await pilot.pause()
+            assert not list(panel.query(_Laeuft))
+            assert len(list(panel.query(".disk-blase"))) == 1
+
+    async def test_recherche_je_teilnehmer_mit_fortschritt_im_kopf(self) -> None:
+        from claude_sanctuary.tui.widgets.diskussion_panel import _Laeuft
+
+        app = _app()
+        async with app.run_test(size=(160, 50)) as pilot:
+            panel = await _reiter(app, pilot)
+            a, b = Teilnehmer("A", seite="pro"), Teilnehmer("B", seite="contra")
+            panel.beginnen(Diskussion("x", [a, b], recherche=True), [])
+            panel.vorbereitung_beginnt([a, b])
+            await pilot.pause()
+            assert [w.text for w in panel.query(_Laeuft)] == [
+                "A recherchiert im Netz", "B recherchiert im Netz"]
+            assert "0 von 2 fertig" in str(panel.query_one("#disk-kopf", Static).render())
+            panel.beitrag(Beitrag(0, "A", "- Notiz", "13:00:00", "vorbereitung", seite="pro"))
+            await pilot.pause()
+            assert [w.text for w in panel.query(_Laeuft)] == ["B recherchiert im Netz"]
+            meldung = str(panel.query(".disk-meldung").first().render())
+            assert meldung.startswith("A hat recherchiert. (0:0")
+            assert "1 von 2 fertig" in str(panel.query_one("#disk-kopf", Static).render())
+            panel.fertig(panel._diskussion, "abgebrochen", "")  # type: ignore[arg-type]
+            await pilot.pause()
+            assert not list(panel.query(_Laeuft))
+
+    def test_laufbalken_bleibt_im_rahmen(self) -> None:
+        from claude_sanctuary.tui.widgets.diskussion_panel import BALKEN_BREITE, _balken
+
+        balken = [_balken(i) for i in range(60)]
+        assert all(len(x) == BALKEN_BREITE and x.count("▰") == 5 for x in balken)
+        assert len(set(balken)) > 10, "der Block bewegt sich"
+
+    async def test_neue_diskussion_zeigt_nicht_das_alte_protokoll(self) -> None:
+        app = _app()
+        async with app.run_test(size=(160, 50)) as pilot:
+            panel = await _reiter(app, pilot)
+            d = Diskussion("x", [Teilnehmer("A", seite="pro"), Teilnehmer("B", seite="contra")],
+                           kennung=3)
+            panel.zeigen(d, "C:/alt.md")
+            panel.beginnen(Diskussion("y", list(d.teilnehmer)), [])
+            kennzahlen = panel.kennzahlen()
+            assert kennzahlen is not None and kennzahlen[1] == ""

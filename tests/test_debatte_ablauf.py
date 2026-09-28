@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from claude_sanctuary.debatte_ablauf import Verbrauchszaehler, _json_antwort, namen_zuordnen
 from claude_sanctuary.kern.debatte import Verbrauch
 
@@ -72,3 +74,25 @@ class TestVerbrauchszaehler:
         datei.parent.mkdir()
         datei.write_text(_zeile("r-1", 10, 100, 1), encoding="utf-8")
         assert zaehler.stand() == Verbrauch(10, 100, 1)
+
+
+class TestModellImAufruf:
+    def test_zusammenfassung_mit_gewaehltem_modell(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import subprocess
+
+        from claude_sanctuary import debatte_ablauf
+
+        befehle: list[list[str]] = []
+
+        def lauf(befehl: list[str], **_werte: object) -> subprocess.CompletedProcess[str]:
+            befehle.append(befehl)
+            return subprocess.CompletedProcess(befehl, 0, '{"result": "Kurz."}', "")
+
+        monkeypatch.setattr(subprocess, "run", lauf)
+        assert debatte_ablauf.claude_einmal("x", tmp_path, "haiku")[0] == "Kurz."
+        assert debatte_ablauf.claude_einmal("x", tmp_path)[0] == "Kurz."
+        mit, ohne = befehle
+        assert mit[mit.index("--model") + 1] == "haiku"
+        assert "--model" not in ohne

@@ -1072,6 +1072,7 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
             return
         diskussion, protokoll = geladen
         diskussion.runden = diskussion.gespielte_runden + ereignis.runden
+        diskussion.modell = ereignis.modell
         diskussion.ende = ""
         diskussion.zusammenfassung = ""
         laufend = {a.name.lower() for a in self._bestand.agenten if not a.selbst}
@@ -1136,6 +1137,7 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
                 beim_wort=lambda r, runde: self.call_from_thread(panel.redner, r.name, runde),
                 beim_start=lambda d: self.call_from_thread(panel.teilnehmer_bekannt, d),
                 beim_verbrauch=lambda v: self.call_from_thread(panel.verbrauch, v),
+                beim_vorbereiten=lambda ts: self.call_from_thread(panel.vorbereitung_beginnt, ts),
                 stopp=stopp,
                 quelle=self._quelle if isinstance(self._quelle, LokaleQuelle) else None,
                 archiv=self._archiv,

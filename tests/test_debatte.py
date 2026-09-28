@@ -422,3 +422,24 @@ class TestVerbrauch:
         v = Verbrauch(10, 100, 5) + Verbrauch(1, 2, 3)
         assert (v.neu, v.cache, v.aus) == (11, 102, 8)
         assert v.echt == 19 and v.gesamt == 121
+
+
+class TestVorbereitungsSignal:
+    def test_meldet_die_rechercheure_bevor_die_erste_notiz_kommt(self) -> None:
+        gemeldet: list[list[str]] = []
+        stand_beim_melden: list[int] = []
+        d = _diskussion(runden=1, recherche=True)
+
+        def melden(teilnehmer: list[Teilnehmer]) -> None:
+            gemeldet.append([t.name for t in teilnehmer])
+            stand_beim_melden.append(len(d.beitraege))
+
+        _lauf(d, Attrappe({"Kerstin": "unerreichbar"}), beim_vorbereiten=melden)
+        assert gemeldet == [["Amalia", "Tamino"]], "wer unerreichbar ist, recherchiert nicht"
+        # Nur der Sendefehler von Kerstin steht vorher im Protokoll.
+        assert stand_beim_melden == [1]
+
+    def test_ohne_recherche_kein_signal(self) -> None:
+        gemeldet: list[object] = []
+        _lauf(_diskussion(runden=1), Attrappe(), beim_vorbereiten=gemeldet.append)
+        assert gemeldet == []

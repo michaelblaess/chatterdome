@@ -27,7 +27,15 @@ import threading
 from pathlib import Path
 
 from claude_sanctuary.debatte_ablauf import ausfuehren, laufende
-from claude_sanctuary.kern.debatte import FORMATE, SEITEN, Beitrag, Diskussion, Teilnehmer
+from claude_sanctuary.kern.debatte import (
+    FORMATE,
+    MODELLE,
+    SEITEN,
+    VORGABE_MODELL,
+    Beitrag,
+    Diskussion,
+    Teilnehmer,
+)
 from claude_sanctuary.kern.diskussionsarchiv import Diskussionsarchiv
 from claude_sanctuary.kern.lokale_quelle import LokaleQuelle
 
@@ -81,6 +89,9 @@ def main(argv: list[str] | None = None) -> int:
                         help="vor Runde 1 eine Vorbereitung mit Websuche (Vorgabe)")
     parser.add_argument("--ohne-recherche", action="store_true",
                         help="keine Vorbereitung, keine Websuche")
+    parser.add_argument("--modell", choices=[m for m in MODELLE if m], default=None,
+                        help=f"Modell für neue Agenten und die Zusammenfassung "
+                             f"(Vorgabe {VORGABE_MODELL}, beim Fortsetzen das bisherige)")
     parser.add_argument("--liste", action="store_true",
                         help="die gespeicherten Diskussionen zeigen")
     parser.add_argument("--fortsetzen", type=int, default=0, metavar="NR",
@@ -91,11 +102,11 @@ def main(argv: list[str] | None = None) -> int:
     archiv = Diskussionsarchiv()
     if args.liste:
         for e in archiv.liste():
-            print(f"{e.kennung:>4}  {e.beginn}  {e.runden:>2} Runden  "
+            print(f"{e.kennung:>4}  {e.beginn}  {e.runden:>2} Runden  {e.modell or "-":<7}  "
                   f"{', '.join(e.teilnehmer)}  {e.thema}")
         return 0
     if args.fortsetzen:
-        return _fortsetzen(archiv, args.fortsetzen, args.runden)
+        return _fortsetzen(archiv, args.fortsetzen, args.runden, args.modell)
     if not args.thema:
         parser.error("Es fehlt ein Thema.")
 
@@ -109,6 +120,7 @@ def main(argv: list[str] | None = None) -> int:
         runden=args.runden,
         dauer_minuten=args.dauer,
         recherche=not args.ohne_recherche,
+        modell=args.modell or VORGABE_MODELL,
         positionen=(args.positionen[0], args.positionen[1]),
         schlussworte=args.schlussworte,
     )
@@ -131,7 +143,8 @@ def main(argv: list[str] | None = None) -> int:
     return _laufen(diskussion, neu, [], args.ohne_kontext, quelle, archiv, None)
 
 
-def _fortsetzen(archiv: Diskussionsarchiv, kennung: int, runden: int) -> int:
+def _fortsetzen(archiv: Diskussionsarchiv, kennung: int, runden: int,
+                modell: str | None) -> int:
     """Setzt eine gespeicherte Diskussion fort. Beendete Teilnehmer starten unter ihrem Namen."""
     geladen = archiv.laden(kennung)
     if geladen is None:
@@ -139,6 +152,8 @@ def _fortsetzen(archiv: Diskussionsarchiv, kennung: int, runden: int) -> int:
         return 2
     diskussion, protokoll = geladen
     diskussion.runden = diskussion.gespielte_runden + runden
+    if modell is not None:
+        diskussion.modell = modell
     diskussion.ende = ""
     diskussion.zusammenfassung = ""
     quelle = LokaleQuelle()

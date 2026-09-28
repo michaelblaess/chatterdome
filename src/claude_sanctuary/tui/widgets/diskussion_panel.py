@@ -13,6 +13,7 @@ Vorher stand das Formular in einem modalen Dialog hinter der Taste a.
 from __future__ import annotations
 
 import re
+import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -30,7 +31,9 @@ from textual_widgets import StatusItem
 from claude_sanctuary.i18n import t
 from claude_sanctuary.kern.debatte import (
     CONTRA,
+    MODELLE,
     PRO,
+    VORGABE_MODELL,
     Beitrag,
     Diskussion,
     Teilnehmer,
@@ -40,6 +43,90 @@ from claude_sanctuary.kern.debatte import (
 from claude_sanctuary.kern.diskussionsarchiv import Eintrag
 from claude_sanctuary.kern.modelle import Agent
 from claude_sanctuary.tui.widgets.status_zeile import _tokens
+
+
+def modell_name(modell: str) -> str:
+    """Kurzer Anzeigename eines Modell-Kurznamens, leer ist die Voreinstellung."""
+    return modell.capitalize() if modell else t("discussion.model_default_short")
+
+
+def _modell_auswahl() -> list[tuple[str, str]]:
+    # Die Schluessel stehen ausgeschrieben da, damit die Pruefung auf unbenutzte
+    # Uebersetzungen sie findet.
+    texte = {"": t("discussion.model_default"), "haiku": t("discussion.model_haiku"),
+             "sonnet": t("discussion.model_sonnet"), "opus": t("discussion.model_opus")}
+    return [(texte[m], m) for m in MODELLE]
+
+
+SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+BALKEN_BREITE = 18
+BALKEN_BLOCK = 5
+
+
+def _balken(schritt: int) -> str:
+    """Ein Block, der im Balken hin und her laeuft - fuer Arbeit ohne bekannte Dauer."""
+    weg = BALKEN_BREITE - BALKEN_BLOCK
+    stelle = schritt % (2 * weg)
+    stelle = stelle if stelle <= weg else 2 * weg - stelle
+    return "▱" * stelle + "▰" * BALKEN_BLOCK + "▱" * (weg - stelle)
+
+
+def _dauer(sekunden: float) -> str:
+    ganz = int(sekunden)
+    return f"{ganz // 60}:{ganz % 60:02d}"
+
+
+class _Laeuft(Static):
+    """Eine Zeile, die zeigt, dass gerade gearbeitet wird - mit Animation und Uhr.
+
+    Zwei Arten: ``schreibt`` ist die Tipp-Anzeige in der Blase des Redners
+    (laufende Punkte), sonst Spinner, Laufbalken und Text. Einen echten
+    Fortschritt gibt es nicht: wie lange eine Recherche dauert, weiss niemand
+    vorher, und ein Balken, der bei 90 % haengt, luegt.
+    """
+
+    TAKT = 0.12
+
+    def __init__(self, text: str, *, schreibt: bool = False, classes: str = "") -> None:
+        super().__init__("", classes=f"disk-laeuft {classes}".strip())
+        self.text = text
+        self._schreibt = schreibt
+        self._schritt = 0
+        self._beginn = time.monotonic()
+
+    def on_mount(self) -> None:
+        self._zeichnen()
+        self.set_interval(self.TAKT, self._weiter)
+
+    @property
+    def sekunden(self) -> float:
+        return time.monotonic() - self._beginn
+
+    def _weiter(self) -> None:
+        self._schritt += 1
+        self._zeichnen()
+
+    def _zeichnen(self) -> None:
+        self.update(self.zeile())
+
+    def zeile(self) -> Text:
+        """Der aktuelle Stand der Anzeige."""
+        farbe = self.app.theme_variables.get("accent", "magenta")
+        zeile = Text()
+        if self._schreibt:
+            zeile.append(self.text, style="italic")
+            zeile.append("  ")
+            # Drei Punkte, die nacheinander aufleuchten - wie im Messenger.
+            hell = (self._schritt // 3) % 3
+            for i in range(3):
+                zeile.append("● ", style=f"bold {farbe}" if i == hell else "dim")
+        else:
+            zeile.append(f"{SPINNER[self._schritt % len(SPINNER)]} ", style=f"bold {farbe}")
+            zeile.append(self.text)
+            zeile.append(f"  {_balken(self._schritt)}", style=farbe)
+        zeile.append(f"  {_dauer(self.sekunden)}", style="dim")
+        return zeile
+
 
 MAX_NEU = 6
 """Mehr frische Fenster auf einmal braucht keine Diskussion, und jedes kostet."""
@@ -134,7 +221,7 @@ class DiskussionsPanel(Vertical):
         width: 1fr;
         margin-right: 2;
     }
-    DiskussionsPanel #disk-format {
+    DiskussionsPanel #disk-format, DiskussionsPanel #disk-modell {
         width: 32;
     }
     DiskussionsPanel .disk-zahl {
@@ -225,6 +312,28 @@ class DiskussionsPanel(Vertical):
         border-left: thick $secondary;
         margin: 0 8 1 0;
     }
+    /* Laufende Anzeigen: Spinner, Laufbalken, Tipp-Punkte (siehe _Laeuft). */
+    DiskussionsPanel .disk-laeuft {
+        height: auto;
+        padding: 0 1;
+        margin: 0 0 1 0;
+    }
+    DiskussionsPanel .disk-tippt {
+        background: $panel;
+    }
+    DiskussionsPanel .disk-tippt.disk-pro {
+        border-left: thick $primary;
+        margin: 0 16 1 0;
+    }
+    DiskussionsPanel .disk-tippt.disk-contra {
+        border-right: thick $accent;
+        margin: 0 0 1 16;
+        text-align: right;
+    }
+    DiskussionsPanel .disk-tippt.disk-team {
+        border-left: thick $secondary;
+        margin: 0 8 1 0;
+    }
     DiskussionsPanel .disk-meldung {
         height: auto;
         color: $text-muted;
@@ -246,6 +355,10 @@ class DiskussionsPanel(Vertical):
     DiskussionsPanel #disk-weiter {
         width: 8;
         margin: 1 1 0 0;
+    }
+    DiskussionsPanel #disk-weiter-modell {
+        width: 40;
+        margin: 1 2 0 0;
     }
     DiskussionsPanel #disk-weiter-einheit {
         width: auto;
@@ -314,11 +427,13 @@ class DiskussionsPanel(Vertical):
     class Fortsetzen(Message):
         """Die angezeigte Diskussion soll um ``runden`` Runden weitergehen."""
 
-        def __init__(self, diskussion: Diskussion, runden: int, protokoll: str) -> None:
+        def __init__(self, diskussion: Diskussion, runden: int, protokoll: str,
+                     modell: str) -> None:
             super().__init__()
             self.diskussion = diskussion
             self.runden = runden
             self.protokoll = protokoll
+            self.modell = modell
 
     class Kennzahlen(Message):
         """Runde, Redner oder Verbrauch haben sich geaendert - fuer die Statuszeile."""
@@ -341,6 +456,9 @@ class DiskussionsPanel(Vertical):
         self._protokoll = ""
         self._verbrauch = Verbrauch()
         self._archiv: list[Eintrag] = []
+        self._laeufer: dict[str, _Laeuft] = {}
+        """Die laufenden Anzeigen im Chat: Start, Recherche je Name, Tippen, Zusammenfassung."""
+        self._recherche_gesamt = 0
 
     # -- Aufbau ---------------------------------------------------------
 
@@ -373,6 +491,11 @@ class DiskussionsPanel(Vertical):
                     yield Input("0", type="number", id="disk-dauer", classes="disk-zahl",
                                 compact=True)
                     yield Static(t("discussion.minutes"), classes="disk-einheit")
+                with Horizontal(classes="disk-zeile"):
+                    yield Label(t("discussion.model"))
+                    yield Select(_modell_auswahl(), value=VORGABE_MODELL, allow_blank=False,
+                                 id="disk-modell", compact=True)
+                    yield Static(t("discussion.model_hint"), classes="disk-einheit")
                 yield Static(t("discussion.running_agents"))
                 with VerticalScroll(id="disk-agenten"):
                     yield Static(t("discussion.no_agents"), id="disk-keine", classes="disk-leise")
@@ -399,6 +522,8 @@ class DiskussionsPanel(Vertical):
                 yield Button(t("discussion.continue"), variant="success", id="disk-fortsetzen")
                 yield Input("3", type="integer", id="disk-weiter", compact=True)
                 yield Static(t("discussion.more_rounds"), id="disk-weiter-einheit")
+                yield Select(_modell_auswahl(), value=VORGABE_MODELL, allow_blank=False,
+                             id="disk-weiter-modell", compact=True)
                 yield Button(t("discussion.new"), variant="primary", id="disk-neue")
             yield VerticalScroll(id="disk-chat")
             with VerticalScroll(id="disk-zusammenfassung-raum"):
@@ -410,7 +535,7 @@ class DiskussionsPanel(Vertical):
         # die kurzen Spalten aus dem Bild.
         tabelle.add_columns(t("discussion.col_date"), t("discussion.col_agents"),
                             t("discussion.col_rounds"), t("discussion.col_tokens"),
-                            t("discussion.col_topic"))
+                            t("discussion.col_model"), t("discussion.col_topic"))
         self._steuerung_zeigen(laeuft=True)
         self._pruefen()
 
@@ -436,7 +561,8 @@ class DiskussionsPanel(Vertical):
         for e in eintraege:
             thema = e.thema if len(e.thema) <= 50 else f"{e.thema[:47]}..."
             tabelle.add_row(_datum(e.beginn), ", ".join(e.teilnehmer), str(e.runden),
-                            _tokens(e.tokens), thema, key=str(e.kennung))
+                            _tokens(e.tokens), modell_name(e.modell), thema,
+                            key=str(e.kennung))
         self.query_one("#disk-archiv-titel", Static).update(
             t("discussion.archive") if eintraege else t("discussion.archive_empty"))
 
@@ -519,6 +645,7 @@ class DiskussionsPanel(Vertical):
                         for z in zeilen],
             format=format_wert,
             runden=int(runden),
+            modell=str(self.query_one("#disk-modell", Select).value),
             dauer_minuten=float(dauer),
             recherche=self.query_one("#disk-recherche", Checkbox).value,
             positionen=(self.query_one("#disk-position-pro", Input).value.strip(),
@@ -607,13 +734,15 @@ class DiskussionsPanel(Vertical):
         if not roh.isdigit() or not 1 <= int(roh) <= 50:
             self.notify(t("discussion.bad_more"), severity="warning", markup=False)
             return
-        self.post_message(self.Fortsetzen(self._diskussion, int(roh), self._protokoll))
+        modell = str(self.query_one("#disk-weiter-modell", Select).value)
+        self.post_message(self.Fortsetzen(self._diskussion, int(roh), self._protokoll, modell))
 
     def _steuerung_zeigen(self, *, laeuft: bool) -> None:
         """Anhalten waehrend der Diskussion, danach Fortsetzen und Neue Diskussion."""
         self.query_one("#disk-anhalten", Button).display = laeuft
         fortsetzbar = not laeuft and self._diskussion is not None and self._diskussion.kennung > 0
-        for widget_id in ("#disk-fortsetzen", "#disk-weiter", "#disk-weiter-einheit"):
+        for widget_id in ("#disk-fortsetzen", "#disk-weiter", "#disk-weiter-einheit",
+                          "#disk-weiter-modell"):
             self.query_one(widget_id).display = fortsetzbar
         self.query_one("#disk-neue", Button).display = not laeuft
 
@@ -637,6 +766,7 @@ class DiskussionsPanel(Vertical):
             posten.append(StatusItem(t("discussion.stat_state"), t("discussion.stat_done")))
         namen = [x.name for x in d.teilnehmer] + [x.name for x in self._neu]
         posten.append(StatusItem(t("discussion.stat_agents"), ", ".join(namen)))
+        posten.append(StatusItem(t("discussion.stat_model"), modell_name(d.modell)))
         beitraege = sum(1 for b in d.beitraege if b.art in ("beitrag", "schlusswort"))
         posten.append(StatusItem(t("discussion.stat_posts"), str(beitraege)))
         if d.beginn:
@@ -664,12 +794,18 @@ class DiskussionsPanel(Vertical):
         self._runde = diskussion.gespielte_runden
         self._redner = ""
         self._verbrauch = Verbrauch()
+        # Das Protokoll kommt erst mit dem Ende - bis dahin kein Link, sonst
+        # stuende hier der einer zuvor angesehenen Diskussion.
+        self._protokoll = ""
         self._zustand = t("discussion.state_starting") if neu else ""
+        self._laeufer = {}
         chat = self.query_one("#disk-chat", VerticalScroll)
         chat.remove_children()
         if diskussion.beitraege:
             chat.mount_all([self._blase(b) for b in diskussion.beitraege])
             chat.call_after_refresh(chat.scroll_end, animate=False)
+        if neu:
+            self._laeufer_an("start", _Laeuft(t("discussion.anim_starting")))
         self.query_one("#disk-zusammenfassung", Static).update("")
         self.query_one("#disk-zusammenfassung-raum").remove_class("da")
         self.query_one("#disk-anhalten", Button).disabled = False
@@ -691,9 +827,40 @@ class DiskussionsPanel(Vertical):
         regeln = t("discussion.rules_research_on") if d.recherche else t(
             "discussion.rules_research_off")
         kopf.append(f"\n{regeln}", style="dim")
+        modell = t("discussion.head_model", modell=modell_name(d.modell))
+        echt = [f"{x.name}: {x.modell}" for x in d.teilnehmer if x.modell]
+        if echt:
+            modell = f"{modell} ({', '.join(echt)})"
+        kopf.append(f"  ·  {modell}", style="dim")
         if self._zustand:
             kopf.append(f"\n{self._zustand}", style="italic")
         self.query_one("#disk-kopf", Static).update(kopf)
+
+    # -- Animationen ----------------------------------------------------
+
+    def _laeufer_an(self, schluessel: str, widget: _Laeuft) -> None:
+        """Haengt eine laufende Anzeige an den Chat, eine je Schluessel."""
+        self._laeufer_weg(schluessel)
+        self._laeufer[schluessel] = widget
+        chat = self.query_one("#disk-chat", VerticalScroll)
+        chat.mount(widget)
+        chat.scroll_end(animate=False)
+
+    def _laeufer_weg(self, schluessel: str) -> _Laeuft | None:
+        widget = self._laeufer.pop(schluessel, None)
+        if widget is not None:
+            widget.remove()
+        return widget
+
+    def vorbereitung_beginnt(self, teilnehmer: list[Teilnehmer]) -> None:
+        """Die Recherche laeuft - je Teilnehmer eine Zeile mit Spinner und Uhr."""
+        self._laeufer_weg("start")
+        self._recherche_gesamt = len(teilnehmer)
+        for x in teilnehmer:
+            self._laeufer_an(f"recherche:{x.name}",
+                             _Laeuft(t("discussion.anim_research", name=x.name)))
+        self._zustand = t("discussion.state_research", fertig=0, gesamt=len(teilnehmer))
+        self._kopf_zeichnen()
 
     def redner(self, name: str, runde: int) -> None:
         """Der Moderator gibt gerade jemandem das Wort."""
@@ -704,14 +871,31 @@ class DiskussionsPanel(Vertical):
             self._zustand = t("discussion.state_turn", runde=runde,
                               runden=self._diskussion.runden, name=name)
         self._kopf_zeichnen()
+        seite = next((x.seite for x in self._diskussion.teilnehmer if x.name == name), "")
+        if self._diskussion.format != "diskussion":
+            seite = ""
+        klasse = {PRO: "disk-pro", CONTRA: "disk-contra"}.get(seite, "disk-team")
+        self._laeufer_an("tippt", _Laeuft(t("discussion.anim_typing", name=name), schreibt=True,
+                                          classes=f"disk-tippt {klasse}"))
         self.post_message(self.Kennzahlen())
 
     def beitrag(self, beitrag: Beitrag) -> None:
-        """Haengt einen Eintrag an den Chat."""
+        """Haengt einen Eintrag an den Chat. Er ersetzt die passende laufende Anzeige."""
         chat = self.query_one("#disk-chat", VerticalScroll)
-        widget = self._blase(beitrag)
-        chat.mount(widget)
-        chat.scroll_end(animate=False)
+        recherche = (self._laeufer.pop(f"recherche:{beitrag.name}", None)
+                     if beitrag.runde == 0 else None)
+        if recherche is not None:
+            # An die Stelle der Recherchezeile, damit die Reihenfolge bleibt.
+            chat.mount(self._blase(beitrag, _dauer(recherche.sekunden)), before=recherche)
+            recherche.remove()
+            offen = sum(1 for k in self._laeufer if k.startswith("recherche:"))
+            self._zustand = t("discussion.state_research",
+                              fertig=self._recherche_gesamt - offen, gesamt=self._recherche_gesamt)
+            self._kopf_zeichnen()
+        else:
+            self._laeufer_weg("tippt")
+            chat.mount(self._blase(beitrag))
+            chat.scroll_end(animate=False)
         self.post_message(self.Kennzahlen())
 
     def _farben(self) -> dict[str, str]:
@@ -733,12 +917,14 @@ class DiskussionsPanel(Vertical):
             stil = Style(bold=True, color=farben.get(seite, farben[""]))
             text.highlight_regex(rf"\b{re.escape(teilnehmer.name)}\b", stil)
 
-    def _blase(self, beitrag: Beitrag) -> Static:
+    def _blase(self, beitrag: Beitrag, dauer: str = "") -> Static:
         d = self._diskussion
         if beitrag.art == "vorbereitung":
             # Die Notizen sind privat - im Chat steht nur, dass recherchiert wurde.
             text = (t("discussion.research_failed", name=beitrag.name)
                     if beitrag.ungeprueft else t("discussion.researched", name=beitrag.name))
+            if dauer:
+                text = f"{text} ({dauer})"
             return Static(Text(text), classes="disk-meldung")
         if beitrag.art in ("fehler", "ausgelassen"):
             return Static(Text(f"{beitrag.name}: {beitrag.text}"), classes="disk-meldung")
@@ -769,11 +955,15 @@ class DiskussionsPanel(Vertical):
         """Eine Zeile des Ablaufs (Start, Namen, Zusammenfassung wird erstellt)."""
         self._zustand = text
         self._kopf_zeichnen()
+        if text == t("discussion.summary_pending"):
+            self._laeufer_weg("tippt")
+            self._laeufer_an("zusammenfassung", _Laeuft(text))
 
     def teilnehmer_bekannt(self, diskussion: Diskussion) -> None:
         """Die frischen Agenten haben ihre Namen - Kopf neu zeichnen."""
         self._diskussion = diskussion
         self._neu = []
+        self._laeufer_weg("start")
         self._kopf_zeichnen()
         self.post_message(self.Kennzahlen())
 
@@ -784,6 +974,9 @@ class DiskussionsPanel(Vertical):
         self._redner = ""
         self._zustand = t("discussion.state_done_short", ende=ende) if ende else ""
         self._kopf_zeichnen()
+        for schluessel in list(self._laeufer):
+            self._laeufer_weg(schluessel)
+        self.query_one("#disk-weiter-modell", Select).value = diskussion.modell
         if diskussion.zusammenfassung:
             inhalt = Text()
             inhalt.append(t("discussion.summary_title"), style="bold")

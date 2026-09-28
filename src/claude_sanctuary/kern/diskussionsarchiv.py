@@ -39,7 +39,8 @@ CREATE TABLE IF NOT EXISTS diskussion (
     protokoll TEXT NOT NULL,
     tokens_neu INTEGER NOT NULL,
     tokens_cache INTEGER NOT NULL,
-    tokens_aus INTEGER NOT NULL
+    tokens_aus INTEGER NOT NULL,
+    modell TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS teilnehmer (
     diskussion INTEGER NOT NULL REFERENCES diskussion(id) ON DELETE CASCADE,
@@ -49,6 +50,7 @@ CREATE TABLE IF NOT EXISTS teilnehmer (
     seite TEXT NOT NULL,
     ohne_recherche TEXT NOT NULL,
     sitzung TEXT NOT NULL,
+    modell TEXT NOT NULL DEFAULT '',
     PRIMARY KEY (diskussion, nr)
 );
 CREATE TABLE IF NOT EXISTS beitrag (
@@ -66,6 +68,10 @@ CREATE TABLE IF NOT EXISTS beitrag (
 );
 """
 
+_NACHTRAEGE = (("diskussion", "modell"), ("teilnehmer", "modell"))
+"""Spalten, die nach dem ersten Stand dazukamen. Eine Datei vom 28.09.2026 kennt
+sie noch nicht - sie werden beim Oeffnen nachgetragen."""
+
 
 @dataclass(frozen=True)
 class Eintrag:
@@ -80,6 +86,7 @@ class Eintrag:
     ende: str
     tokens: int
     """Alles ausser der Cache-Lesung, wie ``Verbrauch.echt``."""
+    modell: str = ""
 
 
 def archiv_datei() -> Path:
@@ -101,6 +108,11 @@ class Diskussionsarchiv:
             verbindung.execute("PRAGMA journal_mode=WAL")
             verbindung.execute("PRAGMA foreign_keys=ON")
             verbindung.executescript(_SCHEMA)
+            for tabelle, spalte in _NACHTRAEGE:
+                vorhanden = {z[1] for z in verbindung.execute(f"PRAGMA table_info({tabelle})")}
+                if spalte not in vorhanden:
+                    verbindung.execute(
+                        f"ALTER TABLE {tabelle} ADD COLUMN {spalte} TEXT NOT NULL DEFAULT ''")
             with verbindung:
                 yield verbindung
         finally:
@@ -114,14 +126,14 @@ class Diskussionsarchiv:
         werte = (d.beginn, d.thema, d.format, d.runden, int(d.recherche), d.dauer_minuten,
                  d.positionen[0], d.positionen[1], int(d.schlussworte), int(d.ohne_kontext),
                  d.ende, d.zusammenfassung, d.verbrauch.neu, d.verbrauch.cache,
-                 d.verbrauch.aus)
+                 d.verbrauch.aus, d.modell)
         with self._verbindung() as db:
             if d.kennung:
                 db.execute(
                     "UPDATE diskussion SET beginn=?, thema=?, format=?, runden=?, recherche=?,"
                     " dauer_minuten=?, position_pro=?, position_contra=?, schlussworte=?,"
                     " ohne_kontext=?, ende=?, zusammenfassung=?, tokens_neu=?,"
-                    " tokens_cache=?, tokens_aus=? WHERE id=?",
+                    " tokens_cache=?, tokens_aus=?, modell=? WHERE id=?",
                     (*werte, d.kennung),
                 )
             else:
@@ -129,7 +141,8 @@ class Diskussionsarchiv:
                     "INSERT INTO diskussion (beginn, thema, format, runden, recherche,"
                     " dauer_minuten, position_pro, position_contra, schlussworte,"
                     " ohne_kontext, ende, zusammenfassung, tokens_neu, tokens_cache,"
-                    " tokens_aus, protokoll) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'')",
+                    " tokens_aus, modell, protokoll)"
+                    " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'')",
                     werte,
                 )
                 d.kennung = int(zeiger.lastrowid or 0)
@@ -137,8 +150,9 @@ class Diskussionsarchiv:
                 db.execute("UPDATE diskussion SET protokoll=? WHERE id=?", (protokoll, d.kennung))
             db.execute("DELETE FROM teilnehmer WHERE diskussion=?", (d.kennung,))
             db.executemany(
-                "INSERT INTO teilnehmer VALUES (?,?,?,?,?,?,?)",
-                [(d.kennung, i, t.name, t.rolle, t.seite, t.ohne_recherche, t.sitzung)
+                "INSERT INTO teilnehmer (diskussion, nr, name, rolle, seite, ohne_recherche,"
+                " sitzung, modell) VALUES (?,?,?,?,?,?,?,?)",
+                [(d.kennung, i, t.name, t.rolle, t.seite, t.ohne_recherche, t.sitzung, t.modell)
                  for i, t in enumerate(d.teilnehmer)],
             )
             db.execute("DELETE FROM beitrag WHERE diskussion=?", (d.kennung,))
@@ -153,7 +167,7 @@ class Diskussionsarchiv:
         """Die letzten Diskussionen, neueste zuerst."""
         with self._verbindung() as db:
             zeilen = db.execute(
-                "SELECT d.id, d.beginn, d.thema, d.ende, d.tokens_neu + d.tokens_aus,"
+                "SELECT d.id, d.beginn, d.thema, d.ende, d.tokens_neu + d.tokens_aus, d.modell,"
                 " (SELECT group_concat(name, '|') FROM"
                 "   (SELECT name FROM teilnehmer WHERE diskussion=d.id ORDER BY nr)),"
                 " (SELECT coalesce(max(runde), 0) FROM beitrag"
@@ -162,8 +176,8 @@ class Diskussionsarchiv:
                 (anzahl,),
             ).fetchall()
         return [Eintrag(int(k), str(b), str(th), tuple(str(n or "").split("|")) if n else (),
-                        int(r), str(e), int(tok))
-                for k, b, th, e, tok, n, r in zeilen]
+                        int(r), str(e), int(tok), str(m))
+                for k, b, th, e, tok, m, n, r in zeilen]
 
     def laden(self, kennung: int) -> tuple[Diskussion, str] | None:
         """Die Diskussion samt Protokollpfad, None wenn es sie nicht gibt."""
@@ -171,14 +185,15 @@ class Diskussionsarchiv:
             kopf = db.execute(
                 "SELECT beginn, thema, format, runden, recherche, dauer_minuten, position_pro,"
                 " position_contra, schlussworte, ohne_kontext, ende, zusammenfassung,"
-                " protokoll, tokens_neu, tokens_cache, tokens_aus FROM diskussion WHERE id=?",
+                " protokoll, tokens_neu, tokens_cache, tokens_aus, modell"
+                " FROM diskussion WHERE id=?",
                 (kennung,),
             ).fetchone()
             if kopf is None:
                 return None
             teilnehmer = [
-                Teilnehmer(n, r, s, o, z) for n, r, s, o, z in db.execute(
-                    "SELECT name, rolle, seite, ohne_recherche, sitzung FROM teilnehmer"
+                Teilnehmer(n, r, s, o, z, m) for n, r, s, o, z, m in db.execute(
+                    "SELECT name, rolle, seite, ohne_recherche, sitzung, modell FROM teilnehmer"
                     " WHERE diskussion=? ORDER BY nr", (kennung,))
             ]
             beitraege = [
@@ -187,13 +202,13 @@ class Diskussionsarchiv:
                     " FROM beitrag WHERE diskussion=? ORDER BY nr", (kennung,))
             ]
         (beginn, thema, fmt, runden, recherche, dauer, pro, contra, schluss, ohne,
-         ende, zusammenfassung, protokoll, neu, cache, aus) = kopf
+         ende, zusammenfassung, protokoll, neu, cache, aus, modell) = kopf
         d = Diskussion(
             thema=thema, teilnehmer=teilnehmer, format=fmt, runden=int(runden),
             recherche=bool(recherche), dauer_minuten=float(dauer), positionen=(pro, contra),
             schlussworte=bool(schluss), beitraege=beitraege, ende=ende,
             zusammenfassung=zusammenfassung, beginn=beginn,
             verbrauch=Verbrauch(int(neu), int(cache), int(aus)), kennung=kennung,
-            ohne_kontext=bool(ohne),
+            ohne_kontext=bool(ohne), modell=modell,
         )
         return d, str(protokoll)
