@@ -49,9 +49,15 @@ def finde_befehl() -> list[str]:
     Erst der Kurzbefehl aus dem PATH, sonst der Direktaufruf ueber node. Der
     Rueckfall ist noetig, weil ``~/.local/bin`` in einer nicht-interaktiven
     Shell fehlen kann - genau die Falle, die auch beim Mesh-Aufruf zuschlaegt.
+
+    Unter Windows ist der Kurzbefehl ``sanctuary.CMD``, und den nimmt diese
+    Funktion NICHT: eine Batch-Datei laeuft ueber cmd.exe, und cmd schneidet
+    ein Argument am ersten Zeilenumbruch ab. Belegt am 28.09.2026 - von jedem
+    mehrzeiligen Auftrag stand im Bus nur die erste Zeile, bei der Diskussion
+    ebenso wie beim Rundruf der Oberflaeche.
     """
     kurz = shutil.which("sanctuary")
-    if kurz:
+    if kurz and not kurz.lower().endswith((".cmd", ".bat")):
         return [kurz]
     skript = _repo_wurzel() / "bin" / "sanctuary.mjs"
     node = shutil.which("node") or "node"
@@ -222,6 +228,33 @@ class LokaleQuelle:
         if quittung:
             args.append("--expect-receipt")
         return self._still(args)
+
+    def senden_mit_kennung(
+        self, an: str, text: str, *, topic: str = "", host: str = "", von: str = ""
+    ) -> tuple[str, str]:
+        """Legt einen Auftrag mit Quittungswunsch ab und liefert dessen Kennung.
+
+        Wer auf die Antwort warten will, braucht die Kennung - ``senden``
+        verwirft die Ausgabe. Der Bus nennt sie in der Erfolgszeile als
+        ``(id <kennung>)``, eine JSON-Ausgabe hat ``send`` nicht.
+
+        :returns: ``(kennung, "")`` bei Erfolg, sonst ``("", grund)``.
+        """
+        args = ["send", an, text, "--expect-receipt"]
+        if topic:
+            args += ["--topic", topic]
+        if host:
+            args += ["--host", host]
+        if von:
+            args += ["--from", von]
+        lauf, fehler = self._lauf(args)
+        if lauf is None:
+            return "", fehler
+        ausgabe = _ohne_farbe(lauf.stdout)
+        treffer = re.search(r"\(id ([0-9a-zA-Z_-]+)\)", ausgabe)
+        if treffer is None:
+            return "", f"Keine Auftragskennung in der Antwort: {ausgabe.strip()[:200]}"
+        return treffer.group(1), ""
 
     def stoppen(self, name: str) -> str:
         # --force unterdrueckt die Rueckfrage; die Oberflaeche hat vorher
