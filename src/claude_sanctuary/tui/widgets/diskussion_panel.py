@@ -20,7 +20,7 @@ from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.message import Message
-from textual.widgets import Button, Checkbox, Input, Label, Select, Static
+from textual.widgets import Button, Checkbox, Input, Label, Select, Static, TextArea
 
 from claude_sanctuary.i18n import t
 from claude_sanctuary.kern.debatte import CONTRA, PRO, Beitrag, Diskussion, Teilnehmer
@@ -103,8 +103,13 @@ class DiskussionsPanel(Vertical):
     DiskussionsPanel .disk-zeile Label {
         width: 18;
     }
+    /* Das Thema ist oft ein ganzer Satz mit Kontext - drei Zeilen, umbrechend. */
+    DiskussionsPanel .disk-zeile.disk-thema-zeile {
+        height: 3;
+    }
     DiskussionsPanel #disk-thema {
         width: 1fr;
+        height: 3;
     }
     DiskussionsPanel .disk-position {
         width: 1fr;
@@ -251,10 +256,11 @@ class DiskussionsPanel(Vertical):
 
     def compose(self) -> ComposeResult:
         with VerticalScroll(id="disk-formular"):
-            with Horizontal(classes="disk-zeile"):
+            with Horizontal(classes="disk-zeile disk-thema-zeile"):
                 yield Label(t("discussion.topic"))
-                yield Input(placeholder=t("discussion.topic_placeholder"),
-                            id="disk-thema", compact=True)
+                yield TextArea(placeholder=t("discussion.topic_placeholder"), id="disk-thema",
+                               compact=True, soft_wrap=True, show_line_numbers=False,
+                               tab_behavior="focus")
             with Horizontal(classes="disk-zeile"):
                 yield Label(t("discussion.positions"))
                 yield Input(placeholder=t("discussion.position_pro_placeholder"),
@@ -346,7 +352,9 @@ class DiskussionsPanel(Vertical):
 
     def auftrag(self) -> tuple[DiskussionsAuftrag | None, str]:
         """Baut den Auftrag aus dem Formular, oder nennt den ersten Grund, warum nicht."""
-        thema = self.query_one("#disk-thema", Input).value.strip()
+        # Zeilenumbrueche aus dem Feld werden zu Leerzeichen: das Thema landet in
+        # jeder Anweisung und im Kopf des Chats, dort soll es ein Satz bleiben.
+        thema = " ".join(self.query_one("#disk-thema", TextArea).text.split())
         runden = self._zahl("disk-runden")
         dauer = self._zahl("disk-dauer")
         neu = self._zahl("disk-neu")
@@ -420,6 +428,7 @@ class DiskussionsPanel(Vertical):
         self.query_one("#disk-ohne-kontext", Checkbox).disabled = not self._zahl("disk-neu")
 
     @on(Input.Changed)
+    @on(TextArea.Changed)
     @on(Checkbox.Changed)
     @on(Select.Changed)
     def _geaendert(self) -> None:

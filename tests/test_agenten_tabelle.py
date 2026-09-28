@@ -34,6 +34,7 @@ def _zeile(a: Agent, geteilt: set[str] | None = None) -> list[str]:
 
 NAME = 1
 ZEIT = AgentenTabelle._ZEIT_SPALTE
+KONTEXT = AgentenTabelle._KONTEXT_SPALTE
 
 
 class TestGeteilterName:
@@ -113,3 +114,53 @@ class TestAuswahlBleibtBeimRichtigen:
     def test_kennung_ueberlebt_die_veraenderlichen_felder(self) -> None:
         """Post und Kontext aendern sich im Sekundentakt."""
         assert kennung(_agent(post=0, kontext=1)) == kennung(_agent(post=3, kontext=99))
+
+
+class TestWarnzellenBlinken:
+    """Michael am 28.09.2026: verwaiste Sitzungen und kritischer Kontext sollen blinken.
+
+    Geblinkt wird von Hand im Takt (ANSI-blink ignoriert Windows Terminal), und
+    nur die Warnzellen werden per update_cell umgefaerbt - die Tabelle wird
+    dabei nicht neu aufgebaut.
+    """
+
+    async def test_nur_warnzellen_wechseln_die_farbe(self) -> None:
+        from textual.app import App, ComposeResult
+        from textual.widgets import DataTable
+
+        from claude_sanctuary.kern.modelle import KONTEXT_KRITISCH
+
+        class NurTabelle(App[None]):
+            def compose(self) -> ComposeResult:
+                yield AgentenTabelle(id="agenten")
+
+        alt = (datetime.now().astimezone() - timedelta(days=4)).isoformat()
+        frisch = datetime.now().astimezone().isoformat()
+        app = NurTabelle()
+        async with app.run_test(size=(200, 20)) as pilot:
+            widget = app.query_one("#agenten", AgentenTabelle)
+            widget.uebernehmen([
+                _agent(name="Luzie", letzte_zeit=alt),
+                _agent(name="Therese", letzte_zeit=frisch, kontext=KONTEXT_KRITISCH + 6000),
+                _agent(name="Ruhig", letzte_zeit=frisch, kontext=1000),
+            ])
+            await pilot.pause()
+            tabelle = app.query_one("#agenten-daten", DataTable)
+
+            def stile() -> dict[str, tuple[str, str]]:
+                ergebnis = {}
+                for i, a in enumerate(widget._sichtbar):
+                    zeile = tabelle.get_row_at(i)
+                    ergebnis[a.name] = (str(zeile[ZEIT].style), str(zeile[KONTEXT].style))
+                return ergebnis
+
+            vorher = stile()
+            widget._blinken()
+            await pilot.pause()
+            nachher = stile()
+            assert "on #e74c3c" in nachher["Luzie"][0], nachher
+            assert "on #e74c3c" in nachher["Therese"][1], nachher
+            assert nachher["Ruhig"] == vorher["Ruhig"], "eine ruhige Zeile blinkt nicht"
+            widget._blinken()
+            await pilot.pause()
+            assert stile() == vorher, "der zweite Takt stellt die Grundfarbe wieder her"

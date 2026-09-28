@@ -44,6 +44,13 @@ def _dauer(ms: int) -> str:
 
 
 ORDNER_BREITE = 28
+
+BLINK_TAKT = 0.6
+"""Sekunden je Halbtakt der Warnzellen."""
+
+BLINK_STIL = "bold #ffffff on #e74c3c"
+"""Die helle Phase: weiss auf dem Warnrot der Ampel. Feste Farben statt Theme-Variablen,
+weil die Farbe hier die Aussage ist."""
 """Ab hier wird der Pfad in der Tabelle gekuerzt."""
 
 
@@ -252,6 +259,7 @@ class AgentenTabelle(Vertical):
 
     _AUFGABEN_SPALTE = 3
     _ZEIT_SPALTE = 4
+    _KONTEXT_SPALTE = 5
     _ORDNER_SPALTE = 11
     """Spalten mit gekuerztem oder umgerechnetem Inhalt - dort haengt der
     volle Wert als Hinweis unter der Maus."""
@@ -268,6 +276,9 @@ class AgentenTabelle(Vertical):
         self._absteigend = True
         self._kopf: list[str] = []
         self._spalten: list[Any] = []
+        self._zeilen_schluessel: list[Any] = []
+        """Zeilenkennung je sichtbarem Agenten, fuer update_cell beim Blinken."""
+        self._blink_an = False
 
     def compose(self) -> ComposeResult:
         yield SearchInputWithHistory(
@@ -292,6 +303,8 @@ class AgentenTabelle(Vertical):
         # bleiben, zu wem die Zeile gehoert - die Ampel allein genuegt nicht.
         tabelle.fixed_columns = 2
         self._kopf_zeichnen()
+        # Blinken von Hand statt ANSI-blink - das ignoriert Windows Terminal.
+        self.set_interval(BLINK_TAKT, self._blinken)
 
     # -- Daten ----------------------------------------------------------
 
@@ -359,8 +372,11 @@ class AgentenTabelle(Vertical):
         tabelle.clear()
         hinweise: dict[tuple[int, int], str] = {}
         vergeben: set[str] = set()
+        self._zeilen_schluessel = []
         for zeile, a in enumerate(sichtbar):
-            tabelle.add_row(*self._zeile(a), key=eindeutig(kennung(a), vergeben))
+            self._zeilen_schluessel.append(
+                tabelle.add_row(*self._zeile(a), key=eindeutig(kennung(a), vergeben))
+            )
             # Nur wo wirklich gekuerzt wurde - sonst haengt an jeder Zelle ein
             # Hinweis, der dasselbe sagt wie die Zelle selbst.
             if a.cwd and len(a.cwd) > ORDNER_BREITE:
@@ -393,17 +409,8 @@ class AgentenTabelle(Vertical):
         # bleibt bewusst gruen - die Sitzung KANN Auftraege annehmen, sie tut
         # nur nichts. Markiert wird deshalb das Alter, denn genau das ist der
         # Befund, und dort steht auch der Beleg dafuer.
-        verwaist = a.verwaist()
-        alter = Text(
-            ("⚠ " if verwaist else "") + _alter(a.letzte_zeit),
-            justify="right",
-            style="bold #e74c3c" if verwaist else "dim",
-        )
-        kontext = Text(
-            _tokens(a.kontext),
-            style="bold red" if a.kontext_kritisch else ("yellow" if a.kontext_eng else "dim"),
-            justify="right",
-        )
+        alter = self._alter_zelle(a)
+        kontext = self._kontext_zelle(a)
         post = Text(
             str(a.post) if a.post else "-",
             style="bold" if a.post else "dim",
@@ -425,6 +432,55 @@ class AgentenTabelle(Vertical):
             Text(_ordner(a.cwd), style="dim"),
             Text(a.letztes_tool or "-", style="dim"),
         ]
+
+    # -- Warnzellen und Blinken -----------------------------------------
+
+    def _alter_zelle(self, a: Agent) -> Text:
+        # Verwaist: laeuft, aber seit einem Tag ruehrt sich nichts. Markiert
+        # und im Takt hervorgehoben wird das Alter, denn dort steht der Beleg.
+        verwaist = a.verwaist()
+        stil = "dim"
+        if verwaist:
+            stil = BLINK_STIL if self._blink_an else "bold #e74c3c"
+        return Text(("⚠ " if verwaist else "") + _alter(a.letzte_zeit), justify="right",
+                    style=stil)
+
+    def _kontext_zelle(self, a: Agent) -> Text:
+        if a.kontext_kritisch:
+            stil = BLINK_STIL if self._blink_an else "bold red"
+        else:
+            stil = "yellow" if a.kontext_eng else "dim"
+        return Text(_tokens(a.kontext), style=stil, justify="right")
+
+    def _blinken(self) -> None:
+        """Schaltet nur die Warnzellen um - kein Neuaufbau, Cursor und Scrollstand bleiben.
+
+        Blinkt, wenn eine Sitzung verwaist ist (Spalte Aktiv) oder ihr Kontext
+        kritisch voll ist (Spalte Kontext). Michael am 28.09.2026: die roten
+        Zellen fallen zwischen den uebrigen zu wenig auf.
+        """
+        warnende = [(i, a) for i, a in enumerate(self._sichtbar)
+                    if a.verwaist() or a.kontext_kritisch]
+        if not warnende:
+            self._blink_an = False
+            return
+        self._blink_an = not self._blink_an
+        tabelle = self.query_one("#agenten-daten", DataTable)
+        for i, a in warnende:
+            if i >= len(self._zeilen_schluessel):
+                continue
+            zeile = self._zeilen_schluessel[i]
+            try:
+                if a.verwaist():
+                    tabelle.update_cell(zeile, self._spalten[self._ZEIT_SPALTE],
+                                        self._alter_zelle(a))
+                if a.kontext_kritisch:
+                    tabelle.update_cell(zeile, self._spalten[self._KONTEXT_SPALTE],
+                                        self._kontext_zelle(a))
+            except Exception:
+                # Zeile gerade durch einen Neuaufbau ersetzt - der naechste Takt
+                # trifft die neue.
+                continue
 
     def _kopf_zeichnen(self) -> None:
         """Setzt den Sortierpfeil und haelt die Spaltenbreite stabil."""

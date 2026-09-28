@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 from test_app import FakeQuelle, _gefuellt  # pytest legt tests/ in den Suchpfad
-from textual.widgets import Button, Checkbox, Input, Select, Static
+from textual.widgets import Button, Checkbox, Input, Select, Static, TextArea
 
 from claude_sanctuary import debatte_ablauf
 from claude_sanctuary.debatte_ablauf import Ergebnis
@@ -67,7 +67,7 @@ class TestFormular:
         app = _app()
         async with app.run_test(size=(160, 50)) as pilot:
             panel = await _reiter(app, pilot)
-            panel.query_one("#disk-thema", Input).value = "Unity oder Godot?"
+            panel.query_one("#disk-thema", TextArea).text = "Unity oder Godot?"
             panel.query_one("#disk-position-pro", Input).value = "Unity"
             panel.query_one("#disk-position-contra", Input).value = "Godot"
             zeile = _zeile(panel, "Klara")
@@ -90,7 +90,7 @@ class TestFormular:
         app = _app()
         async with app.run_test(size=(160, 50)) as pilot:
             panel = await _reiter(app, pilot)
-            panel.query_one("#disk-thema", Input).value = "x"
+            panel.query_one("#disk-thema", TextArea).text = "x"
             _zeile(panel, "Klara").query_one(Checkbox).value = True
             await pilot.pause()
             assert panel.query_one("#disk-starten", Button).disabled
@@ -106,7 +106,7 @@ class TestFormular:
         app = _app()
         async with app.run_test(size=(160, 50)) as pilot:
             panel = await _reiter(app, pilot)
-            panel.query_one("#disk-thema", Input).value = "Thema"
+            panel.query_one("#disk-thema", TextArea).text = "Thema"
             _zeile(panel, "Klara").query_one(Checkbox).value = True
             await pilot.pause()
             panel.agenten_setzen([Agent(name="Klara", status="idle", rechner="TESTHOST"),
@@ -200,7 +200,7 @@ class TestAblauf:
         app = _app()
         async with app.run_test(size=(160, 50)) as pilot:
             panel = await _reiter(app, pilot)
-            panel.query_one("#disk-thema", Input).value = "Thema"
+            panel.query_one("#disk-thema", TextArea).text = "Thema"
             _zeile(panel, "Klara").query_one(Checkbox).value = True
             panel.query_one("#disk-neu", Input).value = "1"
             await pilot.pause()
@@ -237,3 +237,20 @@ class TestPlatz:
                 bereich = panel.query_one(widget_id).region
                 assert bereich.width > 1, widget_id
                 assert formular.region.contains_region(bereich), widget_id
+
+
+class TestThemaMehrzeilig:
+    async def test_drei_zeilen_und_umbrueche_werden_ein_satz(self) -> None:
+        app = _app()
+        async with app.run_test(size=(160, 50)) as pilot:
+            panel = await _reiter(app, pilot)
+            feld = panel.query_one("#disk-thema", TextArea)
+            assert feld.region.height == 3
+            feld.text = "Mad Max - Fury Road.\nAlte Fans mögen ihn nicht,\ndie jungen schon."
+            _zeile(panel, "Klara").query_one(Checkbox).value = True
+            panel.query_one("#disk-neu", Input).value = "1"
+            await pilot.pause()
+            auftrag, _grund = panel.auftrag()
+            assert auftrag is not None
+            assert auftrag.diskussion.thema == (
+                "Mad Max - Fury Road. Alte Fans mögen ihn nicht, die jungen schon.")
