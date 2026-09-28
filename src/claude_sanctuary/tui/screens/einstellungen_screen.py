@@ -34,6 +34,30 @@ def _namenspool_datei() -> Path:
     return Path(__file__).resolve().parents[4] / "skills" / "operator" / "namenspool.json"
 
 
+def _namenspool_lokal() -> Path:
+    """Lokale Ergaenzung zum Namenspool, per .gitignore aus dem Repo gehalten."""
+    return _namenspool_datei().with_name("namenspool.local.json")
+
+
+def _lies_json(datei: Path) -> dict[str, Any] | None:
+    try:
+        roh = json.loads(datei.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return roh if isinstance(roh, dict) else None
+
+
+def _schreibe_json(datei: Path, roh: dict[str, Any]) -> None:
+    with contextlib.suppress(OSError):
+        # newline="\n": ohne das macht Windows CRLF daraus, und die
+        # versionierte Datei taucht nach jedem Speichern als geaendert auf.
+        datei.write_text(
+            json.dumps(roh, indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+
+
 def _bus_datei() -> Path:
     import platform
 
@@ -80,48 +104,51 @@ class EinstellungenScreen(BaseSettingsScreen):  # type: ignore[misc]
     # -- Namenspool -----------------------------------------------------
 
     def _pool_laden(self) -> None:
-        try:
-            roh = json.loads(_namenspool_datei().read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            return
-        pools = roh.get("pools", {})
-        if isinstance(pools, dict):
-            for schluessel, eintrag in pools.items():
-                namen = eintrag.get("namen") if isinstance(eintrag, dict) else eintrag
-                if isinstance(namen, list):
-                    self._pools[str(schluessel)] = [str(n) for n in namen]
-        self._aktiv = str(roh.get("aktiv", ""))
+        """Liest mitgelieferte und lokale Datei, wie ``pool.mjs`` es tut.
+
+        Lokale Motive ergaenzen die mitgelieferten und ersetzen
+        gleichnamige, das lokale ``aktiv`` gewinnt.
+        """
+        for datei in (_namenspool_datei(), _namenspool_lokal()):
+            roh = _lies_json(datei)
+            if roh is None:
+                continue
+            pools = roh.get("pools", {})
+            if isinstance(pools, dict):
+                for schluessel, eintrag in pools.items():
+                    namen = eintrag.get("namen") if isinstance(eintrag, dict) else eintrag
+                    if isinstance(namen, list):
+                        self._pools[str(schluessel)] = [str(n) for n in namen]
+            if roh.get("aktiv"):
+                self._aktiv = str(roh["aktiv"])
 
     def _pool_speichern(self) -> None:
-        """Schreibt die Namenslisten zurueck.
+        """Schreibt die Namenslisten zurueck, jede in die Datei, aus der sie kam.
 
-        Anders als der Bus ist diese Datei kein Mehrschreiber-Fall - Node
-        fasst sie nur beim Motivwechsel an. Trotzdem wird der vorhandene
-        Inhalt gelesen und nur der Zweig ``pools`` ersetzt, damit nichts
-        verloren geht, was diese Fassung noch nicht kennt.
+        Anders als der Bus ist das kein Mehrschreiber-Fall - Node fasst die
+        Dateien nur beim Motivwechsel an. Trotzdem wird der vorhandene Inhalt
+        gelesen und nur der Zweig ``pools`` ersetzt, damit nichts verloren
+        geht, was diese Fassung noch nicht kennt. Das aktive Motiv landet
+        immer in der lokalen Datei: sonst waere die mitgelieferte nach jedem
+        Umschalten geaendert, und ein lokales Motiv stuende als aktiv im Repo.
         """
-        datei = _namenspool_datei()
-        try:
-            roh = json.loads(datei.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            return
-        pools = roh.get("pools", {})
-        if not isinstance(pools, dict):
-            return
-        for schluessel, namen in self._pools.items():
-            if schluessel in pools and isinstance(pools[schluessel], dict):
-                pools[schluessel]["namen"] = namen
-        roh["pools"] = pools
-        if self._aktiv:
-            roh["aktiv"] = self._aktiv
-        with contextlib.suppress(OSError):
-            # newline="\n": ohne das macht Windows CRLF daraus, und die
-            # versionierte Datei taucht nach jedem Speichern als geaendert auf.
-            datei.write_text(
-                json.dumps(roh, indent=2, ensure_ascii=False) + "\n",
-                encoding="utf-8",
-                newline="\n",
-            )
+        lokal_datei = _namenspool_lokal()
+        for datei in (_namenspool_datei(), lokal_datei):
+            roh = _lies_json(datei)
+            if roh is None:
+                continue
+            pools = roh.get("pools", {})
+            if not isinstance(pools, dict):
+                continue
+            for schluessel, namen in self._pools.items():
+                if schluessel in pools and isinstance(pools[schluessel], dict):
+                    pools[schluessel]["namen"] = namen
+            roh["pools"] = pools
+            if datei == lokal_datei and self._aktiv:
+                roh["aktiv"] = self._aktiv
+            _schreibe_json(datei, roh)
+        if self._aktiv and _lies_json(lokal_datei) is None:
+            _schreibe_json(lokal_datei, {"aktiv": self._aktiv})
 
     # -- Werte fuer die Auswahlfelder -----------------------------------
 

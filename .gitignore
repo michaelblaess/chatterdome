@@ -30,3 +30,7 @@ PLAN*.md
 # skills/operator/mesh.example.json
 skills/operator/mesh.json
 ROADMAP*.md
+
+# Lokale Motive fuer den Namenspool (Figuren geschuetzter Werke wie Comicmotiv
+# oder Beispielteam) und die Wahl des aktiven Motivs. Siehe pool.mjs.
+skills/operator/namenspool.local.json

@@ -566,7 +566,7 @@ function zeigeMotive(wunsch) {
     console.log(`  ${marke} ${m.schluessel.padEnd(15)}${m.motiv.padEnd(24)}${GRAU}${m.anzahl} Namen${R}`);
   }
   console.log(`\n  ${GRAU}Umschalten mit: operator.mjs motiv <schluessel>${R}`);
-  console.log(`  ${GRAU}Neues Motiv anlegen: Eintrag unter "pools" in namenspool.json${R}\n`);
+  console.log(`  ${GRAU}Neues Motiv anlegen: Eintrag unter "pools" in namenspool.local.json (bleibt lokal)${R}\n`);
 }
 
 /**

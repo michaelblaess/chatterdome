@@ -3,6 +3,11 @@
 // Die Datei namenspool.json haelt mehrere Motive und merkt sich, welches aktiv
 // ist. Ein neues Motiv ist ein weiterer Eintrag unter "pools", mehr nicht.
 //
+// Daneben liegt optional namenspool.local.json im selben Format, per
+// .gitignore aus dem Repo gehalten. Dort stehen Motive, die nicht
+// mitgeliefert werden duerfen (Figuren geschuetzter Werke), und die Wahl des
+// aktiven Motivs - ein Motivwechsel veraendert damit keine versionierte Datei.
+//
 // Bewusst als eigenes Modul: die Ladelogik lag vorher dreifach in operator.mjs,
 // starte.mjs und whoami.mjs. Genau so faengt Auseinanderdriften an - der Pool
 // war schon einmal doppelt vorhanden (PowerShell und Node), bevor er hierher
@@ -14,17 +19,39 @@ import { fileURLToPath } from 'node:url';
 import { homedir, hostname } from 'node:os';
 
 const DATEI = join(dirname(fileURLToPath(import.meta.url)), 'namenspool.json');
+const LOKAL = join(dirname(fileURLToPath(import.meta.url)), 'namenspool.local.json');
 
 // Greift, wenn die Datei fehlt oder unlesbar ist. Lieber ein paar Namen als
 // eine Instanz ohne Namen.
 const NOTNAGEL = ['Therese', 'Agatha', 'Jeanne', 'Lucia', 'Franziskus'];
 
-function lies() {
+function liesDatei(datei) {
   try {
-    return JSON.parse(readFileSync(DATEI, 'utf8'));
+    return JSON.parse(readFileSync(datei, 'utf8'));
   } catch {
     return null;
   }
+}
+
+/**
+ * Mitgelieferte und lokale Datei zusammengefuehrt. Lokale Motive ergaenzen
+ * die mitgelieferten und ersetzen gleichnamige, das lokale "aktiv" gewinnt.
+ * Fehlt die lokale Datei, ist das Ergebnis genau die mitgelieferte.
+ */
+function lies() {
+  const d = liesDatei(DATEI);
+  const lokal = liesDatei(LOKAL);
+  if (!lokal) return d;
+  if (!d) return lokal;
+  // Altes Format ohne Motive: dann bleibt die lokale Datei aussen vor, ein
+  // Mischformat waere schwerer zu durchschauen als der Verzicht.
+  if (Array.isArray(d.namen)) return d;
+  return {
+    ...d,
+    aktiv: lokal.aktiv || d.aktiv,
+    reserviert: [...new Set([...reservierte(d), ...reservierte(lokal)])],
+    pools: { ...(d.pools || {}), ...(lokal.pools || {}) },
+  };
 }
 
 /**
@@ -124,7 +151,11 @@ export function alleMotive() {
 export function setzeMotiv(schluessel) {
   const d = lies();
   if (!d || !d.pools || !d.pools[schluessel]) return null;
-  d.aktiv = schluessel;
-  writeFileSync(DATEI, JSON.stringify(d, null, 2) + '\n', 'utf8');
+  // Die Wahl landet in der lokalen Datei, die mitgelieferte bleibt unberuehrt.
+  // Vorher schrieb setzeMotiv die ganze zusammengefuehrte Sicht zurueck - mit
+  // der lokalen Datei hiesse das, geschuetzte Motive ins Repo zu kopieren.
+  const lokal = liesDatei(LOKAL) || {};
+  lokal.aktiv = schluessel;
+  writeFileSync(LOKAL, JSON.stringify(lokal, null, 2) + '\n', 'utf8');
   return { schluessel, motiv: d.pools[schluessel].motiv || schluessel, namen: d.pools[schluessel].namen };
 }
