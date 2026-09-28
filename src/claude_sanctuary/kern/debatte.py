@@ -29,8 +29,25 @@ from claude_sanctuary.kern.lokale_quelle import LokaleQuelle
 ABSENDER = "Sanctuary"
 THEMA_TOPIC = "diskussion"
 
-WOERTER_JE_BEITRAG = 120
-"""Kurze Beitraege lesen sich live besser und halten den wachsenden Kontext klein."""
+WOERTER_JE_BEITRAG = 80
+"""Kurze Beitraege lesen sich wie ein Gespraech. Mit 120 kamen Referate mit Fazit."""
+
+KEINE_RECHERCHE = "KEINE RECHERCHE"
+"""Erste Zeile einer Vorbereitung, deren Websuche gescheitert ist.
+
+Am 28.09.2026 scheiterten alle elf Suchaufrufe zweier Agenten an einem Ausfall der
+Freigabepruefung ("auto mode classifier gave no verdict"). Die Agenten schrieben
+trotzdem Notizen, und im Chat sah alles geprueft aus.
+"""
+
+STIL = (
+    "So klingt ein Beitrag: wie in einem echten Streitgespräch. Geh direkt auf den "
+    "letzten Beitrag ein, bring genau EIN Argument, gern mit einer Rückfrage. Kein "
+    "Fazit, keine Zusammenfassung, keine Wiederholung von bereits Gesagtem, keine "
+    "Aufzählungen, keine Überschriften."
+)
+"""Gegen die Referate aus den ersten Laeufen. Michael: "keine Zusammenfassungen im
+Chat, sondern wirklich eine Diskussion"."""
 
 FRIST_SEKUNDEN = 240.0
 """So lange wartet der Moderator auf einen Beitrag, dann gilt die Runde als ausgelassen."""
@@ -71,6 +88,8 @@ class Teilnehmer:
     """Freitext, der die Haltung ausschmueckt, etwa "Architekt im Konzern"."""
     seite: str = ""
     """``pro`` oder ``contra``. Nur im Format ``diskussion``, leer heisst: wird verteilt."""
+    ohne_recherche: str = ""
+    """Grund, wenn die Recherche in der Vorbereitung gescheitert ist."""
 
 
 @dataclass
@@ -85,6 +104,10 @@ class Beitrag:
     """``vorbereitung``, ``beitrag``, ``schlusswort``, ``ausgelassen`` oder ``fehler``."""
     hinweis: str = ""
     """Vermerk des Moderators, etwa eine deutlich ueberschrittene Laenge."""
+    seite: str = ""
+    """Seite des Redners, damit die Anzeige ihn einordnen kann, ohne nachzuschlagen."""
+    ungeprueft: bool = False
+    """Der Redner wollte recherchieren und konnte nicht - seine Fakten sind nicht live geprueft."""
 
 
 @dataclass
@@ -99,6 +122,14 @@ class Diskussion:
     """Vor Runde 1 eine Vorbereitung, in der jeder im Web recherchieren darf."""
     dauer_minuten: float = 0.0
     """0 heisst: nur die Runden begrenzen."""
+    positionen: tuple[str, str] = ("", "")
+    """Benannte Positionen fuer PRO und CONTRA, etwa ("Unity", "Godot").
+
+    Leer heisst Ja und Nein. Mit Namen geht auch ein Entweder-oder-Thema wie
+    "Unity oder Godot?", bei dem Ja und Nein nichts bedeuten.
+    """
+    schlussworte: bool = False
+    """Eine Schlussrunde. Vorgabe aus: die Schlussworte waren faktisch Zusammenfassungen."""
     beitraege: list[Beitrag] = field(default_factory=list)
     ende: str = ""
     """Warum die Diskussion endete, leer solange sie laeuft."""
@@ -127,6 +158,15 @@ class Diskussion:
             # seiten_verteilen sie auf, und die Pruefung haelt trotzdem.
             if "" not in seiten and not {PRO, CONTRA} <= seiten:
                 return "Eine Diskussion braucht mindestens eine PRO- und eine CONTRA-Stimme."
+        return ""
+
+    def position(self, seite: str) -> str:
+        """Die Position einer Seite in Worten, fuer Anweisung und Anzeige."""
+        pro, contra = self.positionen
+        if seite == PRO:
+            return pro.strip() or "Ja"
+        if seite == CONTRA:
+            return contra.strip() or "Nein"
         return ""
 
     def seiten_verteilen(self) -> None:
@@ -197,11 +237,11 @@ def anweisung(diskussion: Diskussion, redner: Teilnehmer, runde: int, schluss: b
     else:
         kopf = (f"Diskussion, Runde {runde} von {diskussion.runden}: Du bist dran, "
                 "ein neuer Beitrag ist erbeten.")
-        umfang = (f"Höchstens {WOERTER_JE_BEITRAG} Wörter, auf Deutsch, im Gesprächston, "
-                  "keine Aufzählungen und keine Überschriften.")
+        umfang = f"Höchstens {WOERTER_JE_BEITRAG} Wörter, auf Deutsch, im Gesprächston."
     zeilen = [
         kopf,
         umfang,
+        STIL,
         "",
         f'Thema: "{diskussion.thema}"',
         FORMATE[diskussion.format],
@@ -212,9 +252,8 @@ def anweisung(diskussion: Diskussion, redner: Teilnehmer, runde: int, schluss: b
         "Diskussion kann öffentlich gezeigt werden.",
     ]
     if redner.seite in SEITEN:
-        gegner = [t.name for t in diskussion.teilnehmer if t.seite and t.seite != redner.seite]
-        zeilen.append(f"Deine Seite ist {SEITEN[redner.seite]} Bleib dabei, auch wenn die "
-                      f"Gegenseite gute Argumente bringt. Gegenseite: {', '.join(gegner)}.")
+        zeilen.append(_seite_text(diskussion, redner) + " Bleib dabei, auch wenn die "
+                      "Gegenseite gute Argumente bringt.")
     if redner.rolle:
         zeilen.append(f"Deine Rolle: {redner.rolle}")
     eigene = [b.text for b in diskussion.beitraege
@@ -232,14 +271,24 @@ def anweisung(diskussion: Diskussion, redner: Teilnehmer, runde: int, schluss: b
     if schluss:
         zeilen.append("Was bleibt für Dich als Ergebnis? " + umfang)
     else:
-        zeilen.append(("Geh auf das bisher Gesagte ein. " if bisher else
-                       "Du eröffnest die Diskussion. ") + umfang)
+        zeilen.append(("Antworte jetzt auf den letzten Beitrag. " if bisher else
+                       "Du eröffnest die Diskussion mit Deinem stärksten Argument. ") + umfang)
     zeilen.append(
         "Benutze keine Werkzeuge ausser der Quittung und lies keine Dateien. Deinen Beitrag "
         "schickst Du ausschliesslich als Notiz der 200-Quittung auf diesen Auftrag, "
         "wörtlich und vollständig. Was nur in Deinem Fenster steht, erreicht niemanden."
     )
     return "\n".join(zeilen)
+
+
+def _seite_text(diskussion: Diskussion, redner: Teilnehmer) -> str:
+    """Welche Position der Redner vertritt und wer dagegen steht."""
+    gegenseite = CONTRA if redner.seite == PRO else PRO
+    gegner = ", ".join(t.name for t in diskussion.teilnehmer if t.seite == gegenseite)
+    if any(p.strip() for p in diskussion.positionen):
+        return (f"Du vertrittst: {diskussion.position(redner.seite)}. Die Gegenposition "
+                f"({diskussion.position(gegenseite)}) vertritt {gegner}.")
+    return f"Deine Seite ist {SEITEN[redner.seite]} Gegenseite: {gegner}."
 
 
 def vorbereitung(diskussion: Diskussion, redner: Teilnehmer) -> str:
@@ -257,12 +306,15 @@ def vorbereitung(diskussion: Diskussion, redner: Teilnehmer) -> str:
         f"Du bist {redner.name}.",
     ]
     if redner.seite in SEITEN:
-        zeilen.append(f"Deine Seite ist {SEITEN[redner.seite]}")
+        zeilen.append(_seite_text(diskussion, redner))
     if redner.rolle:
         zeilen.append(f"Deine Rolle: {redner.rolle}")
     zeilen += [
         "Du darfst dafür WebSearch und WebFetch benutzen, sonst keine Werkzeuge, und lies "
         "keine lokalen Dateien. Suche aktuelle Fakten, keine Meinungsartikel allein.",
+        "Scheitert ein Aufruf mit \"classifier gave no verdict\", ist das ein vorübergehender "
+        "Ausfall: versuch es einmal erneut. Kommst Du trotzdem an keine Quelle, beginne Deine "
+        f"Notiz mit der Zeile \"{KEINE_RECHERCHE}: <Grund>\" und erfinde keine Quellen.",
         "Nenne keine Kunden, Arbeitgeber, Firmen aus Deinem Umfeld und keine Personen - die "
         "Diskussion kann öffentlich gezeigt werden.",
         "Die Notizen bekommst nur Du in den folgenden Runden zurück. Schick sie "
@@ -280,6 +332,7 @@ def moderieren(
     kanal: Kanal,
     *,
     beim_beitrag: Callable[[Beitrag], None] | None = None,
+    beim_wort: Callable[[Teilnehmer, int], None] | None = None,
     stopp: threading.Event | None = None,
     uhr: Callable[[], float] = time.monotonic,
     schlafen: Callable[[float], None] = time.sleep,
@@ -290,6 +343,7 @@ def moderieren(
     """Fuehrt die Diskussion reihum bis Rundenzahl, Zeit oder Stopp, dann die Schlussworte.
 
     :param beim_beitrag: wird nach jedem Eintrag im Protokoll aufgerufen, fuer die Live-Ansicht.
+    :param beim_wort: wird gerufen, bevor ein Redner das Wort bekommt (Runde 0 = Schlusswort).
     :param stopp: von aussen gesetzt, beendet die Diskussion nach dem laufenden Beitrag.
     :returns: dieselbe Diskussion mit gefuelltem Protokoll und ``ende``.
     """
@@ -310,6 +364,8 @@ def moderieren(
             beim_beitrag(beitrag)
 
     def wort_geben(redner: Teilnehmer, runde: int, schluss: bool) -> None:
+        if beim_wort is not None:
+            beim_wort(redner, 0 if schluss else runde)
         kennung, fehler = kanal.senden(redner.name, anweisung(diskussion, redner, runde, schluss))
         if fehler:
             # Nicht erreichbar: faellt aus der Reihe, statt jede Runde erneut zu scheitern.
@@ -328,7 +384,9 @@ def moderieren(
                 woerter = len(text.split())
                 zu_lang = woerter > wortgrenze * 1.5
                 hinweis = f"{woerter} statt höchstens {wortgrenze} Wörter" if zu_lang else ""
-                eintragen(Beitrag(runde, redner.name, text, _jetzt(), art, hinweis))
+                eintragen(Beitrag(runde, redner.name, text, _jetzt(), art, hinweis,
+                                  seite=redner.seite,
+                                  ungeprueft=bool(redner.ohne_recherche)))
                 return
             if status is not None:
                 text = f"Quittung {status}" + (f": {notiz}" if notiz else " ohne Beitrag")
@@ -352,6 +410,7 @@ def moderieren(
                 aktiv.remove(redner)
             else:
                 offen[redner.name] = kennung
+        nach_name = {t.name: t for t in aktiv}
         abgabe = uhr() + frist_recherche
         while offen and uhr() < abgabe and not stopp.is_set():
             for name, kennung in list(offen.items()):
@@ -359,17 +418,30 @@ def moderieren(
                 if status is None:
                     continue
                 del offen[name]
+                teilnehmer = nach_name[name]
                 if status == 200 and notiz.strip():
-                    eintragen(Beitrag(0, name, notiz.strip(), _jetzt(), "vorbereitung"))
+                    text = notiz.strip()
+                    erste = text.splitlines()[0].strip()
+                    if erste.upper().startswith(KEINE_RECHERCHE):
+                        teilnehmer.ohne_recherche = erste[len(KEINE_RECHERCHE):].strip(" :-")
+                        hinweis = "Recherche gescheitert, Fakten nicht live geprüft"
+                    else:
+                        hinweis = ""
+                    eintragen(Beitrag(0, name, text, _jetzt(), "vorbereitung", hinweis,
+                                      seite=teilnehmer.seite,
+                                      ungeprueft=bool(teilnehmer.ohne_recherche)))
                 else:
+                    teilnehmer.ohne_recherche = f"Quittung {status}"
                     text = f"Vorbereitung: Quittung {status}" + (f": {notiz}" if notiz else "")
-                    eintragen(Beitrag(0, name, text, _jetzt(), "fehler"))
+                    eintragen(Beitrag(0, name, text, _jetzt(), "fehler", seite=teilnehmer.seite))
             if offen:
                 schlafen(takt)
         # Wer in der Vorbereitung schweigt, diskutiert trotzdem mit - nur ohne Notizen.
         for name in offen:
+            nach_name[name].ohne_recherche = "keine Antwort"
             grund = f"Vorbereitung ohne Ergebnis nach {frist_recherche:.0f} s"
-            eintragen(Beitrag(0, name, grund, _jetzt(), "ausgelassen"))
+            eintragen(Beitrag(0, name, grund, _jetzt(), "ausgelassen",
+                              seite=nach_name[name].seite))
 
     if diskussion.recherche:
         vorbereiten()
@@ -392,9 +464,9 @@ def moderieren(
             continue
         break
 
-    # Schlussworte auch nach Zeitablauf, nicht aber nach einem Stopp von Hand -
-    # wer stoppt, will, dass es aufhoert.
-    if not stopp.is_set() and len(aktiv) >= 2:
+    # Schlussworte nur auf Wunsch, dann auch nach Zeitablauf, nicht aber nach
+    # einem Stopp von Hand - wer stoppt, will, dass es aufhoert.
+    if diskussion.schlussworte and not stopp.is_set() and len(aktiv) >= 2:
         for redner in list(aktiv):
             wort_geben(redner, diskussion.runden, schluss=True)
 

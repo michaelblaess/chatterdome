@@ -41,9 +41,6 @@ CLASSIC: dict[str, KeyBinding] = {
     "toggle_local": KeyBinding(("o", "O")),
     "show_usage": KeyBinding(("v", "V")),
     "broadcast": KeyBinding(("b", "B")),
-    # "d" liegt bei den Details, und h/j/k/l/g verdeckt die Vim-Ebene - bleibt
-    # "a" wie "argue". Waehrend einer Diskussion haelt dieselbe Taste sie an.
-    "discussion": KeyBinding(("a", "A")),
     "restart_agent": KeyBinding(("r", "R")),
     "show_memory": KeyBinding(("m", "M")),
     # "s" liegt bei den Einstellungen - fuer die Volltextsuche bleibt "f".
@@ -99,7 +96,6 @@ LABEL_KEYS: dict[str, str] = {
     "toggle_local": "binding.local",
     "show_usage": "binding.usage",
     "broadcast": "binding.broadcast",
-    "discussion": "binding.discussion",
     "restart_agent": "binding.restart",
     "show_memory": "binding.memory",
     "show_search": "binding.search",
@@ -124,7 +120,6 @@ TOOLTIP_KEYS: dict[str, str] = {
     "toggle_local": "tooltip.local",
     "show_usage": "tooltip.usage",
     "broadcast": "tooltip.broadcast",
-    "discussion": "tooltip.discussion",
     "restart_agent": "tooltip.restart",
     "show_memory": "tooltip.memory",
     "show_search": "tooltip.search",

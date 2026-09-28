@@ -68,6 +68,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--format", choices=sorted(FORMATE), default="diskussion")
     parser.add_argument("--runden", type=int, default=3)
     parser.add_argument("--dauer", type=float, default=0.0, help="Minuten, 0 = nur Runden")
+    parser.add_argument("--positionen", nargs=2, default=["", ""], metavar=("PRO", "CONTRA"),
+                        help='benannte Positionen, etwa: --positionen Unity Godot')
+    parser.add_argument("--schlussworte", action="store_true",
+                        help="eine Schlussrunde (Vorgabe aus)")
     parser.add_argument("--recherche", action="store_true",
                         help="vor Runde 1 eine Vorbereitung mit Websuche")
     parser.add_argument("--ohne-kontext", action="store_true",
@@ -84,6 +88,8 @@ def main(argv: list[str] | None = None) -> int:
         runden=args.runden,
         dauer_minuten=args.dauer,
         recherche=args.recherche,
+        positionen=(args.positionen[0], args.positionen[1]),
+        schlussworte=args.schlussworte,
     )
     # Vorab pruefen, bevor irgendein Fenster aufgeht - mit Platzhaltern fuer
     # die frischen Teilnehmer, deren Namen noch niemand kennt.

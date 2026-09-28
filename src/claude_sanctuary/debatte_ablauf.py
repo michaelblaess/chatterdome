@@ -45,6 +45,10 @@ ANLAUF = 15.0
 ZUSAMMENFASSUNG_FRIST = 240.0
 """Sekunden fuer den einmaligen Aufruf, der die Diskussion zusammenfasst."""
 
+ZUSAMMENFASSUNG_LAEUFT = "Zusammenfassung wird erstellt ..."
+"""Meldung waehrend der Zusammenfassung. Der Ablauf ist sprachneutral, die Oberflaeche
+erkennt die Meldung an dieser Konstante und zeigt ihren eigenen Text."""
+
 
 @dataclass
 class Ergebnis:
@@ -185,6 +189,8 @@ def ausfuehren(
     ohne_eigenen_kontext: bool = False,
     melden: Callable[[str], None] = lambda _text: None,
     beim_beitrag: Callable[[Beitrag], None] | None = None,
+    beim_wort: Callable[[Teilnehmer, int], None] | None = None,
+    beim_start: Callable[[Diskussion], None] | None = None,
     stopp: threading.Event | None = None,
     quelle: LokaleQuelle | None = None,
 ) -> Ergebnis:
@@ -195,6 +201,8 @@ def ausfuehren(
         Seite und Rolle werden auf die tatsaechlich vergebenen Namen uebertragen.
     :param ohne_eigenen_kontext: frische Sitzungen ohne eigene CLAUDE.md und Memory.
     :param melden: Fortschrittsmeldungen ausserhalb der Beitraege.
+    :param beim_wort: siehe ``moderieren``.
+    :param beim_start: bekommt die Diskussion, sobald alle Teilnehmer ihre Namen haben.
     """
     quelle = quelle or LokaleQuelle()
     stopp = stopp or threading.Event()
@@ -233,14 +241,16 @@ def ausfuehren(
 
         namen = ", ".join(t.name for t in diskussion.teilnehmer)
         melden(f'Diskussion: "{diskussion.thema}" mit {namen}')
+        if beim_start is not None:
+            beim_start(diskussion)
         moderieren(diskussion, BusKanal(quelle, rechner()), beim_beitrag=beim_beitrag,
-                   stopp=stopp)
+                   beim_wort=beim_wort, stopp=stopp)
     finally:
         for meldung in aufraeumen(quelle, gestartet):
             melden(f"Nicht beendet: {meldung}")
 
     if any(b.art in ("beitrag", "schlusswort") for b in diskussion.beitraege):
-        melden("Zusammenfassung wird erstellt ...")
+        melden(ZUSAMMENFASSUNG_LAEUFT)
         grund = zusammenfassen(diskussion, lambda auftrag: claude_einmal(auftrag, ordner))
         if grund:
             melden(f"Keine Zusammenfassung: {grund}")

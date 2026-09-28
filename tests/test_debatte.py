@@ -10,6 +10,7 @@ from claude_sanctuary.kern.debatte import (
     als_markdown,
     anweisung,
     moderieren,
+    vorbereitung,
     zusammenfassen,
     zusammenfassung_auftrag,
 )
@@ -52,6 +53,9 @@ class Attrappe:
             return None, ""
         if art == "lehnt_ab":
             return 409, "stecke in etwas anderem"
+        if art == "ohne_netz":
+            # So meldet sich ein Agent, dessen Websuche gescheitert ist.
+            return 200, f"KEINE RECHERCHE: classifier gave no verdict\n{an} zu {kennung}"
         return 200, f"{an} sagt etwas zu {kennung}"
 
 
@@ -69,21 +73,40 @@ def _lauf(d: Diskussion, kanal: Attrappe, **werte: object) -> Diskussion:
 
 
 class TestReihenfolge:
-    def test_reihum_je_runde_und_danach_schlussworte(self) -> None:
+    def test_reihum_je_runde_und_auf_wunsch_schlussworte(self) -> None:
         kanal = Attrappe()
-        d = _lauf(_diskussion(runden=2), kanal)
+        d = _lauf(_diskussion(runden=2, schlussworte=True), kanal)
         redner = [an for an, _ in kanal.gesendet]
         assert redner == ["Amalia", "Tamino", "Kerstin"] * 3
         assert [b.art for b in d.beitraege].count("beitrag") == 6
         assert [b.art for b in d.beitraege].count("schlusswort") == 3
         assert d.ende == "2 Runden gespielt"
 
+    def test_ohne_wunsch_keine_schlussworte(self) -> None:
+        # Michael: "keine Zusammenfassungen im Chat" - Schlussworte waren genau das.
+        kanal = Attrappe()
+        d = _lauf(_diskussion(runden=2), kanal)
+        assert len(kanal.gesendet) == 6
+        assert "schlusswort" not in [b.art for b in d.beitraege]
+
     def test_immer_nur_einer_hat_das_wort(self) -> None:
         # Jede Anweisung geht an genau einen Empfaenger - keine Lawine.
         kanal = Attrappe()
-        _lauf(_diskussion(runden=1), kanal)
+        _lauf(_diskussion(runden=1, schlussworte=True), kanal)
         assert all(isinstance(an, str) for an, _ in kanal.gesendet)
         assert len(kanal.gesendet) == 6
+
+    def test_beim_wort_meldet_jeden_redner_vorher(self) -> None:
+        kanal = Attrappe()
+        gerufen: list[tuple[str, int]] = []
+        _lauf(_diskussion(runden=1), kanal,
+              beim_wort=lambda redner, runde: gerufen.append((redner.name, runde)))
+        assert gerufen == [("Amalia", 1), ("Tamino", 1), ("Kerstin", 1)]
+
+    def test_beitrag_kennt_die_seite_seines_redners(self) -> None:
+        d = _lauf(_diskussion(runden=1), Attrappe())
+        assert [(b.name, b.seite) for b in d.beitraege] == [
+            ("Amalia", "pro"), ("Tamino", "contra"), ("Kerstin", "pro")]
 
     def test_verlauf_wandert_in_die_naechste_anweisung(self) -> None:
         kanal = Attrappe()
@@ -98,7 +121,7 @@ class TestGrenzen:
         kanal = Attrappe()
         # Jeder Beitrag kostet in der Attrappe einen Takt von 3 s, die Grenze
         # liegt bei 0,1 min = 6 s: nach zwei Rednern ist Schluss.
-        d = _lauf(_diskussion(runden=10, dauer_minuten=0.1), kanal)
+        d = _lauf(_diskussion(runden=10, dauer_minuten=0.1, schlussworte=True), kanal)
         assert d.ende.startswith("Zeit abgelaufen")
         assert [b.art for b in d.beitraege].count("beitrag") == 2
         assert [b.art for b in d.beitraege].count("schlusswort") == 3
@@ -196,6 +219,54 @@ class TestSeiten:
         d.seiten_verteilen()
         assert all(t.seite == "" for t in d.teilnehmer)
         assert "Deine Seite" not in anweisung(d, d.teilnehmer[0], 1, schluss=False)
+
+
+class TestGescheiterteRecherche:
+    """Befund vom 28.09.2026: alle Suchaufrufe scheiterten, im Chat sah alles geprueft aus."""
+
+    def test_vermerk_haengt_an_den_beitraegen_des_betroffenen(self) -> None:
+        kanal = Attrappe({"Tamino": "ohne_netz"})
+        d = _lauf(_diskussion(runden=1, recherche=True), kanal)
+        tamino = next(t for t in d.teilnehmer if t.name == "Tamino")
+        assert tamino.ohne_recherche == "classifier gave no verdict"
+        runde = {b.name: b.ungeprueft for b in d.beitraege if b.art == "beitrag"}
+        assert runde == {"Amalia": False, "Tamino": True, "Kerstin": False}
+        notiz = next(b for b in d.beitraege if b.art == "vorbereitung" and b.name == "Tamino")
+        assert "nicht live geprüft" in notiz.hinweis
+
+    def test_schweigen_in_der_vorbereitung_zaehlt_als_ungeprueft(self) -> None:
+        kanal = Attrappe({"Tamino": "schweigt"})
+        d = _lauf(_diskussion(runden=1, recherche=True), kanal, frist=10.0, frist_recherche=30.0)
+        assert next(t for t in d.teilnehmer if t.name == "Tamino").ohne_recherche
+
+    def test_vorbereitung_bittet_um_zweiten_versuch_und_um_den_vermerk(self) -> None:
+        d = _diskussion(recherche=True)
+        text = vorbereitung(d, d.teilnehmer[0])
+        assert "einmal erneut" in text
+        assert "KEINE RECHERCHE" in text
+
+
+class TestPositionen:
+    def test_benannte_positionen_statt_ja_und_nein(self) -> None:
+        d = _diskussion(thema="Unity oder Godot?", positionen=("Unity", "Godot"))
+        d.seiten_verteilen()
+        text = anweisung(d, d.teilnehmer[1], 1, schluss=False)
+        assert "Du vertrittst: Godot." in text
+        assert "Gegenposition (Unity) vertritt Amalia, Kerstin." in text
+        assert "mit Ja" not in text
+
+    def test_ohne_namen_bleibt_es_bei_ja_und_nein(self) -> None:
+        d = _diskussion()
+        assert d.position("pro") == "Ja"
+        assert d.position("contra") == "Nein"
+
+    def test_anweisung_verlangt_ein_gespraech_und_kein_referat(self) -> None:
+        d = _diskussion()
+        d.seiten_verteilen()
+        text = anweisung(d, d.teilnehmer[0], 1, schluss=False)
+        assert "genau EIN Argument" in text
+        assert "Kein Fazit, keine Zusammenfassung" in text
+        assert "Höchstens 80 Wörter" in text
 
 
 class TestRecherche:

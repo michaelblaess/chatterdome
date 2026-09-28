@@ -60,6 +60,7 @@ from claude_sanctuary.tui.starter import oeffne_ordner
 from claude_sanctuary.tui.widgets.agenten_tabelle import AgentenTabelle
 from claude_sanctuary.tui.widgets.bus_detail import BusDetail
 from claude_sanctuary.tui.widgets.bus_tabelle import BusTabelle
+from claude_sanctuary.tui.widgets.diskussion_panel import DiskussionsPanel
 from claude_sanctuary.tui.widgets.gedaechtnis_detail import GedaechtnisDetail
 from claude_sanctuary.tui.widgets.kopf_panel import KopfPanel
 from claude_sanctuary.tui.widgets.notizen_tabelle import NotizenTabelle
@@ -212,6 +213,8 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
                 yield BusTabelle(id="bus-liste")
                 yield VerticalSplitter(target_id="bus-liste", min_size=50, id="bus-splitter")
                 yield BusDetail(id="bus-detail")
+            with TabPane(t("tab.discussion"), id="tab-diskussion"):
+                yield DiskussionsPanel(id="diskussion")
             with TabPane(t("tab.stats"), id="tab-statistik"):
                 yield StatistikDashboard(id="statistik")
             with TabPane(t("tab.search"), id="tab-suche"):
@@ -324,6 +327,8 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
 
     def _bestand_uebernehmen(self, bestand: Bestand, verbrauch: bool = False) -> None:
         self._bestand = bestand
+        with contextlib.suppress(NoMatches):
+            self.query_one("#diskussion", DiskussionsPanel).agenten_setzen(bestand.agenten)
         # Den Wert MERKEN, nicht nur ein Sichtbar-Flag setzen: die naechste
         # Taktabfrage laeuft ohne --tokens und liefert wieder 0. Wer nur ein
         # Flag setzt, zeigt ab dann eine Null als waere sie gemessen.
@@ -1019,31 +1024,19 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
 
     # -- Diskussion -----------------------------------------------------
 
-    def action_discussion(self) -> None:
-        """Oeffnet den Dialog - oder haelt eine laufende Diskussion an."""
-        from claude_sanctuary.tui.screens.bestaetigung_screen import BestaetigungScreen
-        from claude_sanctuary.tui.screens.diskussion_screen import DiskussionScreen
-
+    def on_diskussions_panel_starten(self, ereignis: DiskussionsPanel.Starten) -> None:
+        """Das Formular im Reiter ist vollstaendig - Ablauf im Hintergrund starten."""
         if self._diskussion_stopp is not None:
-            self.push_screen(
-                BestaetigungScreen(titel=t("discussion.stop_title"),
-                                   text=t("discussion.stop_text")),
-                callback=self._diskussion_anhalten,
-            )
-            return
-        self.push_screen(DiskussionScreen(self._bestand.agenten),
-                         callback=self._diskussion_bestaetigt)
-
-    def _diskussion_anhalten(self, ja: bool | None) -> None:
-        if ja and self._diskussion_stopp is not None:
-            self._diskussion_stopp.set()
-
-    def _diskussion_bestaetigt(self, auftrag: Any | None) -> None:
-        if auftrag is None:
-            return
+            return  # laeuft schon, der Knopf ist dann ohnehin verdeckt
+        auftrag = ereignis.auftrag
         self._diskussion_stopp = threading.Event()
-        self.notify(t("discussion.running"))
+        self.query_one("#diskussion", DiskussionsPanel).beginnen(auftrag.diskussion, auftrag.neu)
+        self._schreibe_log(t("log.discussion_note", text=auftrag.diskussion.thema))
         self._diskussion_ausfuehren(auftrag, self._diskussion_stopp)
+
+    def on_diskussions_panel_anhalten(self, _ereignis: DiskussionsPanel.Anhalten) -> None:
+        if self._diskussion_stopp is not None:
+            self._diskussion_stopp.set()
 
     @work(thread=True, group="diskussion")
     def _diskussion_ausfuehren(self, auftrag: Any, stopp: threading.Event) -> None:
@@ -1054,52 +1047,42 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         """
         from claude_sanctuary import debatte_ablauf
 
-        def melden(text: str) -> None:
-            self.call_from_thread(self._schreibe_log, t("log.discussion_note", text=text))
+        panel = self.query_one("#diskussion", DiskussionsPanel)
 
-        def beitrag(eintrag: Any) -> None:
-            self.call_from_thread(self._diskussion_beitrag, eintrag)
+        def melden(text: str) -> None:
+            if text == debatte_ablauf.ZUSAMMENFASSUNG_LAEUFT:
+                text = t("discussion.summary_pending")
+            self.call_from_thread(panel.meldung, text)
 
         try:
             ergebnis = debatte_ablauf.ausfuehren(
                 auftrag.diskussion, auftrag.neu,
                 ohne_eigenen_kontext=auftrag.ohne_kontext,
-                melden=melden, beim_beitrag=beitrag, stopp=stopp,
+                melden=melden,
+                beim_beitrag=lambda b: self.call_from_thread(panel.beitrag, b),
+                beim_wort=lambda r, runde: self.call_from_thread(panel.redner, r.name, runde),
+                beim_start=lambda d: self.call_from_thread(panel.teilnehmer_bekannt, d),
+                stopp=stopp,
                 quelle=self._quelle if isinstance(self._quelle, LokaleQuelle) else None,
             )
         finally:
             self.call_from_thread(self._diskussion_vorbei)
         self.call_from_thread(self._diskussion_fertig, ergebnis)
 
-    def _diskussion_beitrag(self, beitrag: Any) -> None:
-        koepfe = {
-            "beitrag": t("discussion.head_round", runde=beitrag.runde),
-            "schlusswort": t("discussion.head_closing"),
-            "vorbereitung": t("discussion.head_research"),
-        }
-        kopf = koepfe.get(beitrag.art)
-        if kopf is None:
-            # Ausgelassen oder Fehler: der Text ist schon der Grund.
-            self._schreibe_log(t("log.discussion_note", text=f"{beitrag.name}: {beitrag.text}"),
-                               "warning")
-            return
-        self._schreibe_log(t("log.discussion_contribution", name=beitrag.name, kopf=kopf,
-                             text=beitrag.text))
-
     def _diskussion_vorbei(self) -> None:
         self._diskussion_stopp = None
 
     def _diskussion_fertig(self, ergebnis: Any) -> None:
+        panel = self.query_one("#diskussion", DiskussionsPanel)
+        diskussion = ergebnis.diskussion
         if ergebnis.fehler:
             self._schreibe_log(t("log.discussion_failed", grund=ergebnis.fehler), "error")
             self.notify(ergebnis.fehler, severity="error", markup=False)
+            panel.fertig(diskussion, ergebnis.fehler, "")
             return
-        diskussion = ergebnis.diskussion
-        if diskussion.zusammenfassung:
-            self._schreibe_log(t("log.discussion_summary", text=diskussion.zusammenfassung))
-        meldung = t("log.discussion_done", ende=diskussion.ende, pfad=str(ergebnis.protokoll))
-        self._schreibe_log(meldung, "success")
-        self.notify(meldung, markup=False)
+        pfad = str(ergebnis.protokoll)
+        panel.fertig(diskussion, diskussion.ende, pfad)
+        self._schreibe_log(t("log.discussion_done", ende=diskussion.ende, pfad=pfad), "success")
         self.aktualisieren()
 
     # -- Neustart -------------------------------------------------------
