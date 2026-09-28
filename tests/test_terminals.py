@@ -131,3 +131,14 @@ class TestZeilenenden:
         monkeypatch.setattr(sys, "platform", "linux")
         pfad = startdatei([], str(tmp_path), ["sanctuary", "start"])
         assert b"\r" not in pfad.read_bytes()
+
+
+class TestEindeutigeStartdatei:
+    """Drei Starts kurz hintereinander duerfen sich nicht ueberschreiben (28.09.2026)."""
+
+    def test_jeder_aufruf_eigene_datei(self, tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+        monkeypatch.setattr(sys, "platform", "win32")
+        pfade = [startdatei([], str(tmp_path), ["sanctuary", "start", n]) for n in ("A", "B", "C")]
+        assert len({p for p in pfade}) == 3
+        for pfad, name in zip(pfade, ("A", "B", "C"), strict=True):
+            assert pfad.read_text(encoding="utf-8").rstrip().endswith(f"start {name}")

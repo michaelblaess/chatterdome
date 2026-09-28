@@ -20,6 +20,7 @@ import shutil
 import stat
 import sys
 import tempfile
+import time
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -125,14 +126,18 @@ def startdatei(zeilen: list[str], ordner: str, endbefehl: list[str],
         PowerShell-Syntax geschrieben (``powershell -File`` lehnt eine .cmd ab),
         und die Vorbereitungsbefehle muessen ohnehin PowerShell sein.
     :returns:
-        Pfad der erzeugten Datei. Sie loescht sich nicht selbst - sie liegt im
-        temporaeren Verzeichnis des Systems und ist winzig.
+        Pfad der erzeugten Datei. Jeder Aufruf bekommt eine eigene: bis
+        28.09.2026 hiess sie immer ``start.cmd``, und drei Starts kurz
+        hintereinander oeffneten dreimal den letzten Agenten - das Terminal
+        liest die Datei erst, wenn der naechste Aufruf sie schon ueberschrieben
+        hat. Dateien aelter als einen Tag raeumt der naechste Aufruf weg.
     """
     ordner_ = Path(tempfile.gettempdir()) / "claude-sanctuary"
     ordner_.mkdir(parents=True, exist_ok=True)
+    _alte_startdateien_weg(ordner_)
 
     if sys.platform == "win32" and powershell:
-        pfad = ordner_ / "start.ps1"
+        pfad = _neue_startdatei(ordner_, ".ps1")
         start = "& " + " ".join(_zitat_ps(teil) for teil in endbefehl)
         inhalt = [f"Set-Location -LiteralPath {_zitat_ps(ordner)}", *zeilen, start]
         # BOM (utf-8-sig), damit PowerShell 5.1 Sonderzeichen richtig liest.
@@ -142,14 +147,14 @@ def startdatei(zeilen: list[str], ordner: str, endbefehl: list[str],
         return pfad
 
     if sys.platform == "win32":
-        pfad = ordner_ / "start.cmd"
+        pfad = _neue_startdatei(ordner_, ".cmd")
         start = " ".join(_zitat_win(teil) for teil in endbefehl)
         inhalt = ["@echo off", f'cd /d "{ordner}"', *zeilen, start]
         # newline="" wie oben - sonst landet \r\r\n in der .cmd.
         pfad.write_text("\r\n".join(inhalt) + "\r\n", encoding="utf-8", newline="")
         return pfad
 
-    pfad = ordner_ / "start.sh"
+    pfad = _neue_startdatei(ordner_, ".sh")
     inhalt = ["#!/usr/bin/env bash", f'cd "{ordner}" || exit 1', *zeilen,
               " ".join(_zitat_posix(t) for t in endbefehl)]
     # newline="\n": eine .sh vertraegt kein CRLF, auch nicht wenn sie
@@ -157,6 +162,25 @@ def startdatei(zeilen: list[str], ordner: str, endbefehl: list[str],
     pfad.write_text("\n".join(inhalt) + "\n", encoding="utf-8", newline="\n")
     pfad.chmod(pfad.stat().st_mode | stat.S_IXUSR)
     return pfad
+
+
+def _neue_startdatei(ordner: Path, endung: str) -> Path:
+    """Legt eine leere Startdatei mit eindeutigem Namen an."""
+    kennung, pfad = tempfile.mkstemp(prefix="start-", suffix=endung, dir=ordner)
+    os.close(kennung)
+    return Path(pfad)
+
+
+def _alte_startdateien_weg(ordner: Path, alter_sekunden: float = 86400.0) -> None:
+    """Loescht Startdateien, die kein Terminal mehr braucht."""
+    grenze = time.time() - alter_sekunden
+    for datei in ordner.glob("start*.*"):
+        try:
+            if datei.stat().st_mtime < grenze:
+                datei.unlink()
+        except OSError:
+            # Gerade von einem Terminal geoeffnet oder schon weg - beides egal.
+            continue
 
 
 def _zitat_win(text: str) -> str:
