@@ -170,3 +170,14 @@ class TestSprachdateien:
             or any(wert.lower().startswith(teil) for teil in verdaechtig)
         ]
         assert not treffer, f"Ersatzschreibung statt Umlaut: {treffer}"
+
+    def test_footer_beschriftungen_beginnen_gross(self) -> None:
+        # Michael am 29.09.2026: "memory" und "search" standen klein zwischen
+        # "Settings" und "Quit" - der Footer soll einheitlich aussehen.
+        klein = [
+            f"{sprache}:{schluessel}"
+            for sprache in ("de", "en")
+            for schluessel, wert in _laden(sprache).items()
+            if schluessel.startswith("binding.") and wert[:1].islower()
+        ]
+        assert not klein, f"Footer-Beschriftung beginnt klein: {klein}"
