@@ -44,7 +44,9 @@ CLASSIC: dict[str, KeyBinding] = {
     "restart_agent": KeyBinding(("r", "R")),
     "show_memory": KeyBinding(("m", "M")),
     # "s" liegt bei den Einstellungen - fuer die Volltextsuche bleibt "f".
-    "show_search": KeyBinding(("f", "F")),
+    # Dazu ctrl+f, die Taste, die jeder fuers Suchen kennt. Sie geht auch aus
+    # einem Eingabefeld heraus, weil Input sie nicht selbst belegt.
+    "show_search": KeyBinding(("f", "F", "ctrl+f")),
     # "b" liegt beim Rundruf und "n" beim Starten - fuer den Bus bleibt "u".
     "show_bus": KeyBinding(("u", "U")),
     # "s" liegt bei den Einstellungen, "t" beim Thema - bleibt "k" fuer Kennzahlen.
@@ -64,20 +66,22 @@ APP_FUNCTION_KEYS: dict[str, KeyBinding] = {
     "show_bus": KeyBinding(("f7", "u", "U")),
     "show_stats": KeyBinding(("f8",)),
     "show_memory": KeyBinding(("f9", "m", "M")),
-    "show_search": KeyBinding(("f10", "f", "F")),
+    # Nicht mehr f10: gnome-terminal oeffnet damit sein Menue (senza).
+    "show_search": KeyBinding(("ctrl+f", "f", "F")),
 }
 """Was diese Anwendung im F-Tasten-Stil selbst vergibt.
 
-``f1`` bis ``f6`` kommen aus der gemeinsamen Konvention. Ab ``f7`` liegen die
-vier Ansichten neben den Agenten - reine Ansichten, nichts Destruktives, damit
-ein Vertipper auf der F-Reihe nichts anrichtet. Starten, Neustart und Beenden
+``f1`` bis ``f6`` kommen aus der gemeinsamen Konvention. Ab ``f7`` liegen
+drei Ansichten neben den Agenten, die Suche liegt auf ``ctrl+f``. Reine
+Ansichten, nichts Destruktives, damit ein Vertipper auf der F-Reihe nichts
+anrichtet. Starten, Neustart und Beenden
 bleiben bewusst auf Buchstaben bzw. DEL.
 
 Drei Buchstaben fallen im F-Tasten-Stil weg, alle wegen der Vim-Ebene: ``l``
 (Log, jetzt ``f4``/``alt+l``), ``h`` (Hilfe, jetzt ``?``) und ``k`` (Statistik,
 jetzt ``f8``). Damit ist dieser Stil mit eingeschalteter Vim-Navigation frei
-von verdeckten Tasten. ``f11`` und ``f12`` bleiben frei, viele Terminals nehmen
-sie fuer Vollbild.
+von verdeckten Tasten. ``f10`` bis ``f12`` bleiben frei: gnome-terminal nimmt
+``f10`` fuer sein Menue, viele Terminals ``f11`` fuer Vollbild.
 """
 
 FUNCTION_KEYS: dict[str, KeyBinding] = {**COMMON_FUNCTION_KEYS, **APP_FUNCTION_KEYS}

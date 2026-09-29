@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from textual.widgets import DataTable, Static
+from textual.widgets import DataTable, Static, TabbedContent
 
 from chatterdome.kern.modelle import Bestand, Busbestand, Namenspool
 from chatterdome.kern.suche import Suchindex
@@ -124,6 +124,29 @@ class TestSuchreiter:
         async with app.run_test(size=(140, 45)) as pilot:
             await _oeffnen(pilot, app)
 
+            fokus = app.focused
+            assert fokus is not None and fokus.id == "such-eingabe"
+
+    async def test_ctrl_f_oeffnet_die_suche_auch_aus_dem_filterfeld(
+        self, app: ChatterdomeApp
+    ) -> None:
+        """Ctrl+F statt F10 (Michael am 29.09.2026) - auch mitten im Tippen.
+
+        Aus dem Filterfeld heraus zaehlt es: ein Buchstabe ginge dort ins Feld,
+        ctrl+f belegt Input nicht und kommt deshalb bei der App an.
+        """
+        async with app.run_test(size=(140, 45)) as pilot:
+            app.action_focus_filter()
+            await pilot.pause()
+            assert app.focused is not None and app.focused.id == "agenten-filter"
+
+            await pilot.press("ctrl+f")
+            for _ in range(300):
+                await pilot.pause()
+                if app._index_gebaut:
+                    break
+
+            assert app.query_one("#bereiche", TabbedContent).active == "tab-suche"
             fokus = app.focused
             assert fokus is not None and fokus.id == "such-eingabe"
 

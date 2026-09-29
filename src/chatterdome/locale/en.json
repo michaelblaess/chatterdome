@@ -396,7 +396,7 @@
   "settings.keymap_style": "Key bindings",
   "settings.keymap_style_auto": "Follow operating system",
   "settings.keymap_style_classic": "Classic (letters only)",
-  "settings.keymap_style_function_keys": "With function keys (F1 to F10)",
+  "settings.keymap_style_function_keys": "With function keys (F1 to F9)",
   "settings.keymap_vim": "Vim navigation in tables",
   "settings.keymap_vim_tip": "j and k move the cursor, h and l the column, g and G jump to start and end, Ctrl+D and Ctrl+U page through. Only while a table has focus.",
   "settings.keymap_custom_hint": "Custom bindings: settings.json, section keymap_custom.",

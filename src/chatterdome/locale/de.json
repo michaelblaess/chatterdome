@@ -396,7 +396,7 @@
   "settings.keymap_style": "Belegung",
   "settings.keymap_style_auto": "Nach Betriebssystem",
   "settings.keymap_style_classic": "Klassisch (nur Buchstaben)",
-  "settings.keymap_style_function_keys": "Mit F-Tasten (F1 bis F10)",
+  "settings.keymap_style_function_keys": "Mit F-Tasten (F1 bis F9)",
   "settings.keymap_vim": "Vim-Navigation in Tabellen",
   "settings.keymap_vim_tip": "j und k bewegen den Zeiger, h und l die Spalte, g und G springen an Anfang und Ende, Strg+D und Strg+U blättern seitenweise. Gilt nur, solange eine Tabelle den Fokus hat.",
   "settings.keymap_custom_hint": "Eigene Belegungen: settings.json, Abschnitt keymap_custom.",

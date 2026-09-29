@@ -93,7 +93,15 @@ def test_beide_stile_sind_kollisionsfrei(stil: KeymapStyle) -> None:
 def test_klassisch_laesst_alles_wie_bisher() -> None:
     bindings = keymap.resolve(_mit("classic")).bindings
     for action, tasten in ALTE_BELEGUNG.items():
-        assert bindings[action].keys == tasten, action
+        # Die alten Tasten bleiben vorn, also auch im Footer. Dahinter darf etwas
+        # dazukommen (ctrl+f fuer die Suche).
+        assert bindings[action].keys[: len(tasten)] == tasten, action
+    zusaetzlich = {
+        action: bindings[action].keys[len(tasten) :]
+        for action, tasten in ALTE_BELEGUNG.items()
+        if bindings[action].keys[len(tasten) :]
+    }
+    assert zusaetzlich == {"show_search": ("ctrl+f",)}
     # Die Hilfe behaelt h vorn, "?" kommt nur dazu.
     assert bindings["show_help"].keys[:2] == ("h", "H")
 
@@ -133,24 +141,30 @@ def test_destruktives_bleibt_auf_buchstaben() -> None:
 # --- F-Tasten und Footer-Reihenfolge --------------------------------------------
 
 
-def test_f_reihe_ist_lueckenlos_von_1_bis_10() -> None:
+def test_f_reihe_ist_lueckenlos_von_1_bis_9() -> None:
     bindings = keymap.resolve(_mit("function_keys")).bindings
     nummern = sorted(n for b in bindings.values() if (n := function_key_number(b)) is not None)
-    assert nummern == list(range(1, 11))
+    assert nummern == list(range(1, 10))
 
 
-def test_f11_und_f12_bleiben_frei() -> None:
+def test_f10_bis_f12_bleiben_frei() -> None:
+    # f10 oeffnet in gnome-terminal das Menue - die Suche liegt deshalb auf ctrl+f.
     bindings = keymap.resolve(_mit("function_keys")).bindings
     belegt = {key for b in bindings.values() for key in b.keys}
-    assert not belegt & {"f11", "f12"}
+    assert not belegt & {"f10", "f11", "f12"}
+
+
+def test_suche_liegt_in_beiden_stilen_auf_ctrl_f() -> None:
+    for stil in ("classic", "function_keys"):
+        assert "ctrl+f" in keymap.resolve(_mit(stil)).bindings["show_search"].keys
 
 
 def test_footer_beginnt_mit_den_f_tasten_in_der_richtigen_reihenfolge() -> None:
     bindings = keymap.resolve(_mit("function_keys")).bindings
     sichtbar = [keymap.key_display(b.keys[0]) for b in bindings.values() if b.show]
     # F3 fehlt bewusst - der Filter steht nicht im Footer.
-    assert sichtbar[:9] == ["F1", "F2", "F4", "F5", "F6", "F7", "F8", "F9", "F10"]
-    assert all(not e.startswith("F") for e in sichtbar[9:])
+    assert sichtbar[:8] == ["F1", "F2", "F4", "F5", "F6", "F7", "F8", "F9"]
+    assert all(not e.startswith("F") for e in sichtbar[8:])
 
 
 def test_klassischer_stil_behaelt_seine_reihenfolge() -> None:
