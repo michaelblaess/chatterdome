@@ -563,7 +563,8 @@ class TestPositionen:
             seiten = [str(w.render()) for w in zeile.query(".disk-seite")]
             assert seiten == ["PRO", "CONTRA"]
             assert "Entweder-oder" in str(panel.query_one("#disk-positionen-hinweis").render())
-            assert panel.query_one("#disk-positionen-hinweis").region.height == 1, "passt in eine Zeile"
+            hinweis = panel.query_one("#disk-positionen-hinweis")
+            assert hinweis.region.height == 1, "passt in eine Zeile"
             panel.query_one("#disk-format", Select).value = "team"
             await pilot.pause()
             assert not zeile.display
