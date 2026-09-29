@@ -128,8 +128,12 @@ describe('Oeffnen unter fremder Sperre', () => {
   test('ohne Sperre kostet das Oeffnen nichts', () => {
     // Gegenstueck zum Test darueber: die Wiederholung darf den Normalfall
     // nicht ausbremsen.
+    // Erst anlegen, dann messen: das erste Oeffnen legt Datei und Schema an und
+    // brauchte auf dem Windows-Runner mal 530, mal 1.585 ms (29.09.2026). Das ist
+    // Kaltstart, keine Wartepause - gemessen werden soll nur die Wiederholung.
     const dir = tempDir();
     try {
+      oeffne(dir).close();
       const start = Date.now();
       oeffne(dir).close();
       assert.ok(Date.now() - start < 500, `${Date.now() - start} ms`);
