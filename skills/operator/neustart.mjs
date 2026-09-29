@@ -36,7 +36,7 @@ import { xUmgebung } from './shot.mjs';
 import { fortsetzbar } from './transkript.mjs';
 
 const HIER = dirname(fileURLToPath(import.meta.url));
-const AUFGABE = 'ClaudeSanctuaryNeustart';
+const AUFGABE = 'ClaudeChatterdomeNeustart';
 const R = '\x1b[0m', GRAU = '\x1b[38;5;244m', GRUEN = '\x1b[38;5;77m', ROT = '\x1b[38;5;203m';
 
 /** Wie lange auf das Ergebnis der geplanten Aufgabe gewartet wird. */
@@ -300,7 +300,7 @@ function ueberAufgabe(sessionId, verzeichnis) {
 /**
  * Stoesst den Neustart auf einem anderen Rechner an.
  *
- * Wie bei shot.mjs zwei Versuche: ein nacktes ssh findet "sanctuary" nur,
+ * Wie bei shot.mjs zwei Versuche: ein nacktes ssh findet "chatterdome" nur,
  * wenn ~/.local/bin schon im PATH ist - in einer nicht-interaktiven Sitzung
  * ist es das oft nicht, deshalb der zweite Weg ueber die Login-Shell.
  *
@@ -381,7 +381,7 @@ function main(argv) {
   }
   if (!kennung) {
     console.error(`${ROT}Ohne Sitzungskennung gibt es nichts fortzusetzen.${R}`
-      + `\n${GRAU}sanctuary restart <Name>  |  --session <id> [--host RECHNER]${R}`);
+      + `\n${GRAU}chatterdome restart <Name>  |  --session <id> [--host RECHNER]${R}`);
     return 1;
   }
 

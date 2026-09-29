@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from claude_sanctuary.i18n import current_language, load_locale
-from claude_sanctuary.tui.widgets.status_zeile import _tokens
+from chatterdome.i18n import current_language, load_locale
+from chatterdome.tui.widgets.status_zeile import _tokens
 
 
 @pytest.fixture(autouse=True)

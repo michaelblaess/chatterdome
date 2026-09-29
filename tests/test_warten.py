@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from claude_sanctuary.kern.warten import (
+from chatterdome.kern.warten import (
     OFFENE_ZUSTAENDE,
     PUNKTE_TAKTE,
     dauer_kurz,

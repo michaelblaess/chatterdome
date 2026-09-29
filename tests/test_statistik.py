@@ -14,8 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from claude_sanctuary.kern.modelle import Auftrag, Ereignis
-from claude_sanctuary.kern.statistik import (
+from chatterdome.kern.modelle import Auftrag, Ereignis
+from chatterdome.kern.statistik import (
     Anfrage,
     Sitzungsspanne,
     alterskoerbe,
@@ -81,7 +81,7 @@ class TestLesen:
                     "type": "assistant",
                     "timestamp": _iso(1),
                     "sessionId": "s1",
-                    "cwd": "C:/Repos/claude-sanctuary",
+                    "cwd": "C:/Repos/chatterdome",
                     "message": {
                         "usage": {
                             "input_tokens": 10,
@@ -97,7 +97,7 @@ class TestLesen:
         gelesen = list(lies_anfragen(tmp_path))
 
         assert len(gelesen) == 1
-        assert gelesen[0].ordner == "claude-sanctuary"
+        assert gelesen[0].ordner == "chatterdome"
         assert gelesen[0].gesamt == 100
         # "echt" laesst die Cache-Lesung weg - das ist der ganze Zweck.
         assert gelesen[0].echt == 70
@@ -274,7 +274,7 @@ def _auftrag(
     return Auftrag(
         auftrag_id=kennung,
         zustand=zustand,
-        von="Sanctuary",
+        von="Chatterdome",
         an="Marga",
         erstellt=erstellt,
         geaendert=geaendert,

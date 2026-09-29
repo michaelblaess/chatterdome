@@ -13,7 +13,7 @@ kann. Genau das haelt dieser Test fest.
 
 from __future__ import annotations
 
-from claude_sanctuary.__main__ import soll_grafik_wecken
+from chatterdome.__main__ import soll_grafik_wecken
 
 
 class TestGrafikWecken:

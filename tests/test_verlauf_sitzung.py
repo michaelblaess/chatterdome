@@ -11,9 +11,9 @@ from __future__ import annotations
 import sys
 from datetime import date, datetime
 
-from claude_sanctuary.i18n import format_time, load_locale
-from claude_sanctuary.kern.lokale_quelle import LokaleQuelle
-from claude_sanctuary.kern.modelle import startzeit
+from chatterdome.i18n import format_time, load_locale
+from chatterdome.kern.lokale_quelle import LokaleQuelle
+from chatterdome.kern.modelle import startzeit
 
 # Gibt die eigenen Argumente als Auftragstext zurueck - so sieht der Test, was
 # die Quelle dem Bus tatsaechlich uebergibt.

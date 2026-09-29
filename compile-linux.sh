@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-# Baut die Sanctuary-Oberflaeche zu einer eigenstaendigen Linux-Binary.
+# Baut die Chatterdome-Oberflaeche zu einer eigenstaendigen Linux-Binary.
 #
 # Nuitka --standalone, also ein Ordner statt einer selbstentpackenden Datei.
 # Voraussetzungen auf der Baumaschine: gcc, patchelf, python3-dev.
 #
-# Ergebnis: dist/claude-sanctuary/sanctuary-tui
-#           dist/claude-sanctuary-vX.Y.Z-linux-x86_64.tar.gz
+# Ergebnis: dist/chatterdome/chatterdome-tui
+#           dist/chatterdome-vX.Y.Z-linux-x86_64.tar.gz
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-entry="$root/src/claude_sanctuary/__main__.py"
-init_py="$root/src/claude_sanctuary/__init__.py"
+entry="$root/src/chatterdome/__main__.py"
+init_py="$root/src/chatterdome/__init__.py"
 out_dir="$root/dist"
-dist_dir="$out_dir/claude-sanctuary"
+dist_dir="$out_dir/chatterdome"
 
 for werkzeug in gcc patchelf; do
     command -v "$werkzeug" >/dev/null 2>&1 || {
@@ -46,7 +46,7 @@ if ! "$python" -m nuitka --version >/dev/null 2>&1; then
     uv pip install --python "$python" nuitka
 fi
 
-echo "Kompiliere claude-sanctuary v$version..."
+echo "Kompiliere chatterdome v$version..."
 rm -rf "$dist_dir"
 started=$(date +%s)
 
@@ -54,11 +54,11 @@ started=$(date +%s)
     --standalone \
     --assume-yes-for-downloads \
     --remove-output \
-    --include-package=claude_sanctuary \
-    --include-package-data=claude_sanctuary \
+    --include-package=chatterdome \
+    --include-package-data=chatterdome \
     --include-package=textual_image \
     --output-dir="$out_dir" \
-    --output-filename=sanctuary-tui \
+    --output-filename=chatterdome-tui \
     "$entry"
 
 # Nuitka benennt den Ordner nach dem Hauptmodul.
@@ -67,18 +67,18 @@ started=$(date +%s)
 # Selbsttest gegen die FERTIGE Binary: ein gruener Compile beweist nicht,
 # dass Sprachdateien und Layout mitgekommen sind.
 echo "Selbsttest..."
-ausgabe="$("$dist_dir/sanctuary-tui" --version 2>&1)"
+ausgabe="$("$dist_dir/chatterdome-tui" --version 2>&1)"
 case "$ausgabe" in
     *"$version"*) echo "  $ausgabe" ;;
     *) echo "Selbsttest lieferte '$ausgabe', erwartet wurde $version" >&2; exit 1 ;;
 esac
 
 elapsed=$(( $(date +%s) - started ))
-tarball="$out_dir/claude-sanctuary-v$version-linux-x86_64.tar.gz"
+tarball="$out_dir/chatterdome-v$version-linux-x86_64.tar.gz"
 rm -f "$tarball"
 # tar statt zip: es bewahrt das Ausfuehrungsrecht der Binary.
-tar -czf "$tarball" -C "$out_dir" claude-sanctuary
+tar -czf "$tarball" -C "$out_dir" chatterdome
 
 echo "Fertig in ${elapsed}s"
 echo "  Archiv: $tarball"
-echo "  Start:  $dist_dir/sanctuary-tui"
+echo "  Start:  $dist_dir/chatterdome-tui"

@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from claude_sanctuary.kern import einstellungen
-from claude_sanctuary.kern.debatte import Beitrag, Diskussion, Teilnehmer, Verbrauch
-from claude_sanctuary.kern.diskussionsarchiv import Diskussionsarchiv, archiv_datei
+from chatterdome.kern import einstellungen
+from chatterdome.kern.debatte import Beitrag, Diskussion, Teilnehmer, Verbrauch
+from chatterdome.kern.diskussionsarchiv import Diskussionsarchiv, archiv_datei
 
 
 def _diskussion(thema: str = "Unity oder Godot?",

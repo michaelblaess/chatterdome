@@ -12,9 +12,9 @@ describe('Aufgabe aus dem Transkript', () => {
   test('der gemeldete Fall - Platzhalter steht vor dem Text', () => {
     const inhalt = [
       { type: 'text', text: '[Image: source: C:\\tmp\\Greenshot\\2026-08-14 00_36_32.png]' },
-      { type: 'text', text: 'claude-sanctuary sieht gut aus unter Linux' },
+      { type: 'text', text: 'chatterdome sieht gut aus unter Linux' },
     ];
-    assert.equal(aufgabeAusInhalt(inhalt), 'claude-sanctuary sieht gut aus unter Linux');
+    assert.equal(aufgabeAusInhalt(inhalt), 'chatterdome sieht gut aus unter Linux');
   });
 
   test('Text und Platzhalter im selben Block', () => {

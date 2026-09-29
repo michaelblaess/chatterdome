@@ -16,10 +16,10 @@ import pytest
 from textual.widgets import Static
 from textual_plotext import PlotextPlot
 
-from claude_sanctuary.kern.modelle import Auftrag, Bestand, Busbestand, Ereignis, Namenspool
-from claude_sanctuary.kern.statistik import lade_statistik as echte_auswertung
-from claude_sanctuary.tui import app as app_modul
-from claude_sanctuary.tui.app import SanctuaryApp
+from chatterdome.kern.modelle import Auftrag, Bestand, Busbestand, Ereignis, Namenspool
+from chatterdome.kern.statistik import lade_statistik as echte_auswertung
+from chatterdome.tui import app as app_modul
+from chatterdome.tui.app import ChatterdomeApp
 
 JETZT = datetime.now(UTC)
 
@@ -35,7 +35,7 @@ BUS = Busbestand(
         Auftrag(
             auftrag_id="offen",
             zustand="submitted",
-            von="Sanctuary",
+            von="Chatterdome",
             an="Marga",
             erstellt=_iso(3),
             geaendert=_iso(3),
@@ -77,7 +77,7 @@ def projekte(tmp_path: Path) -> Path:
                 "type": "assistant",
                 "timestamp": _iso(vor),
                 "sessionId": kennung,
-                "cwd": "C:/Repos/claude-sanctuary",
+                "cwd": "C:/Repos/chatterdome",
                 "message": {
                     "usage": {
                         "input_tokens": 1000,
@@ -99,7 +99,7 @@ def projekte(tmp_path: Path) -> Path:
 @pytest.fixture
 def app(
     projekte: Path, monkeypatch: pytest.MonkeyPatch, _eigene_einstellungen: Path
-) -> SanctuaryApp:
+) -> ChatterdomeApp:
     # Den Stil festlegen statt ihn der Plattform zu ueberlassen - sonst haengt
     # die Taste, mit der der Test den Reiter oeffnet, am Rechner.
     _eigene_einstellungen.write_text('{"keymap_style": "function_keys"}', encoding="utf-8")
@@ -110,12 +110,12 @@ def app(
         "lade_statistik",
         lambda _pfad, auftraege=None, **rest: echte_auswertung(projekte, auftraege, **rest),
     )
-    gebaut = SanctuaryApp(quelle=StilleQuelle())
+    gebaut = ChatterdomeApp(quelle=StilleQuelle())
     monkeypatch.setattr(gebaut, "_frage_disclaimer", lambda: None)
     return gebaut
 
 
-async def _oeffnen(pilot: object, app: SanctuaryApp) -> None:
+async def _oeffnen(pilot: object, app: ChatterdomeApp) -> None:
     await pilot.press("f8")  # type: ignore[attr-defined]
     for _ in range(300):
         await pilot.pause()  # type: ignore[attr-defined]
@@ -126,7 +126,7 @@ async def _oeffnen(pilot: object, app: SanctuaryApp) -> None:
 
 
 class TestTab:
-    async def test_taste_k_oeffnet_den_tab_und_rechnet(self, app: SanctuaryApp) -> None:
+    async def test_taste_k_oeffnet_den_tab_und_rechnet(self, app: ChatterdomeApp) -> None:
         async with app.run_test() as pilot:
             await _oeffnen(pilot, app)
 
@@ -134,7 +134,7 @@ class TestTab:
             assert app._statistik is not None
             assert app._statistik.anfragen_gesamt == 4
 
-    async def test_alle_sechs_sektionen_stehen(self, app: SanctuaryApp) -> None:
+    async def test_alle_sechs_sektionen_stehen(self, app: ChatterdomeApp) -> None:
         async with app.run_test(size=(200, 60)) as pilot:
             await _oeffnen(pilot, app)
 
@@ -145,7 +145,7 @@ class TestTab:
             assert str(app.query_one("#stats-ordner", Static).content).strip()
             assert app.query_one("#stats-warnung", Static)
 
-    async def test_kopfzeile_nennt_cache_anteil_und_spitze(self, app: SanctuaryApp) -> None:
+    async def test_kopfzeile_nennt_cache_anteil_und_spitze(self, app: ChatterdomeApp) -> None:
         async with app.run_test(size=(200, 60)) as pilot:
             await _oeffnen(pilot, app)
 
@@ -155,7 +155,7 @@ class TestTab:
             assert "2" in text
             assert "%" in text
 
-    async def test_diagramme_tragen_daten(self, app: SanctuaryApp) -> None:
+    async def test_diagramme_tragen_daten(self, app: ChatterdomeApp) -> None:
         """Ein leeres Diagramm sieht aus wie ein gefuelltes ohne Werte."""
         async with app.run_test(size=(200, 60)) as pilot:
             await _oeffnen(pilot, app)
@@ -163,7 +163,7 @@ class TestTab:
             gebaut = app.query_one("#stats-verbrauch", PlotextPlot).plt.build()
             assert "█" in gebaut
 
-    async def test_warnung_meldet_den_vererbbaren_auftrag(self, app: SanctuaryApp) -> None:
+    async def test_warnung_meldet_den_vererbbaren_auftrag(self, app: ChatterdomeApp) -> None:
         async with app.run_test(size=(200, 60)) as pilot:
             await _oeffnen(pilot, app)
 
@@ -172,7 +172,7 @@ class TestTab:
             assert str(app.query_one("#stats-warnung", Static).content).strip()
 
     async def test_ohne_transkripte_kein_absturz(
-        self, app: SanctuaryApp, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+        self, app: ChatterdomeApp, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         # Bewusst die urspruengliche Funktion und nicht app_modul.lade_statistik:
         # die zeigt an dieser Stelle schon auf die Ersatzfunktion der Fixture,

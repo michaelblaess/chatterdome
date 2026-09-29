@@ -1,6 +1,6 @@
 """Tests der Anbindung an den Kurzbefehl.
 
-Statt des echten ``sanctuary`` laeuft ein Python-Einzeiler, der eine feste
+Statt des echten ``chatterdome`` laeuft ein Python-Einzeiler, der eine feste
 Antwort ausgibt. Damit ist der Umgang mit der Ausgabe geprueft, ohne dass ein
 laufender Bus noetig waere.
 """
@@ -10,8 +10,8 @@ from __future__ import annotations
 import json
 import sys
 
-from claude_sanctuary.kern.lokale_quelle import LokaleQuelle
-from claude_sanctuary.kern.modelle import Ampel
+from chatterdome.kern.lokale_quelle import LokaleQuelle
+from chatterdome.kern.modelle import Ampel
 
 ANTWORT = {
     "rechner": "TESTHOST",
@@ -102,7 +102,7 @@ NODE_FEHLER = (
     "  throw err;\n"
     "  ^\n"
     "\n"
-    "Error: Cannot find module 'C:\\ZusatzSW\\repos\\claude-sanctuary\\bin\\sanctuary.mjs'\n"
+    "Error: Cannot find module 'C:\\ZusatzSW\\repos\\chatterdome\\bin\\chatterdome.mjs'\n"
     "    at Module._resolveFilename (node:internal/modules/cjs/loader:1517:15)\n"
     "    at Module._load (node:internal/modules/cjs/loader:1294:5) {\n"
     "  code: 'MODULE_NOT_FOUND',\n"
@@ -178,7 +178,7 @@ class TestFehlermeldung:
     def test_node_fehler_nennt_das_fehlende_modul(self) -> None:
         fehler = _scheiternde_quelle(NODE_FEHLER).bestand().fehler[0]
         assert "Cannot find module" in fehler
-        assert "sanctuary.mjs" in fehler
+        assert "chatterdome.mjs" in fehler
 
     def test_fundstelle_steht_nicht_allein_im_protokoll(self) -> None:
         fehler = _scheiternde_quelle(NODE_FEHLER).bestand().fehler[0]

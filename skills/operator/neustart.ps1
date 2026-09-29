@@ -1,6 +1,6 @@
 # Setzt eine Claude-Sitzung in einem neuen Fenster fort.
 #
-# Wird von der geplanten Aufgabe ClaudeSanctuaryNeustart aufgerufen, damit der
+# Wird von der geplanten Aufgabe ClaudeChatterdomeNeustart aufgerufen, damit der
 # Start im angemeldeten Benutzerkontext passiert. Ueber ssh laeuft der Aufruf
 # sonst in Session 0 und kommt an keinen Desktop.
 #

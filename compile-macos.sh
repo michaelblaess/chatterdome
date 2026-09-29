@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Baut die Sanctuary-Oberflaeche zu einer eigenstaendigen macOS-Binary.
+# Baut die Chatterdome-Oberflaeche zu einer eigenstaendigen macOS-Binary.
 #
 # Voraussetzung: Xcode Command Line Tools (xcode-select --install).
 # Kein .app-Bundle - das hier ist ein Terminalprogramm.
@@ -8,15 +8,15 @@
 # laeuft NICHT auf Intel (Rosetta uebersetzt nur in die andere Richtung).
 # Deshalb steht sie im Archivnamen.
 #
-# Ergebnis: dist/claude-sanctuary/sanctuary-tui
-#           dist/claude-sanctuary-vX.Y.Z-macos-<arch>.tar.gz
+# Ergebnis: dist/chatterdome/chatterdome-tui
+#           dist/chatterdome-vX.Y.Z-macos-<arch>.tar.gz
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-entry="$root/src/claude_sanctuary/__main__.py"
-init_py="$root/src/claude_sanctuary/__init__.py"
+entry="$root/src/chatterdome/__main__.py"
+init_py="$root/src/chatterdome/__init__.py"
 out_dir="$root/dist"
-dist_dir="$out_dir/claude-sanctuary"
+dist_dir="$out_dir/chatterdome"
 
 command -v clang >/dev/null 2>&1 || {
     echo "Fehlt: clang (xcode-select --install)" >&2
@@ -42,7 +42,7 @@ if ! "$python" -m nuitka --version >/dev/null 2>&1; then
     uv pip install --python "$python" nuitka
 fi
 
-echo "Kompiliere claude-sanctuary v$version..."
+echo "Kompiliere chatterdome v$version..."
 rm -rf "$dist_dir"
 started=$(date +%s)
 
@@ -50,11 +50,11 @@ nuitka_args=(
     --standalone
     --assume-yes-for-downloads
     --remove-output
-    --include-package=claude_sanctuary
-    --include-package-data=claude_sanctuary
+    --include-package=chatterdome
+    --include-package-data=chatterdome
     --include-package=textual_image
     --output-dir="$out_dir"
-    --output-filename=sanctuary-tui
+    --output-filename=chatterdome-tui
 )
 
 # Nuitka will hier ein natives .icns - ein PNG laesst es mit "Need to
@@ -68,7 +68,7 @@ fi
 [ -d "$out_dir/__main__.dist" ] && mv "$out_dir/__main__.dist" "$dist_dir"
 
 echo "Selbsttest..."
-ausgabe="$("$dist_dir/sanctuary-tui" --version 2>&1)"
+ausgabe="$("$dist_dir/chatterdome-tui" --version 2>&1)"
 case "$ausgabe" in
     *"$version"*) echo "  $ausgabe" ;;
     *) echo "Selbsttest lieferte '$ausgabe', erwartet wurde $version" >&2; exit 1 ;;
@@ -76,13 +76,13 @@ esac
 
 elapsed=$(( $(date +%s) - started ))
 arch="$(uname -m)"
-tarball="$out_dir/claude-sanctuary-v$version-macos-$arch.tar.gz"
+tarball="$out_dir/chatterdome-v$version-macos-$arch.tar.gz"
 rm -f "$tarball"
-tar -czf "$tarball" -C "$out_dir" claude-sanctuary
+tar -czf "$tarball" -C "$out_dir" chatterdome
 
 echo "Fertig in ${elapsed}s"
 echo "  Archiv: $tarball"
-echo "  Start:  $dist_dir/sanctuary-tui"
+echo "  Start:  $dist_dir/chatterdome-tui"
 echo
 echo "Hinweis fuer Empfaenger: nach dem Download einmal"
-echo "  xattr -dr com.apple.quarantine sanctuary-tui"
+echo "  xattr -dr com.apple.quarantine chatterdome-tui"

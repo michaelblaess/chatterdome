@@ -12,7 +12,7 @@ import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from claude_sanctuary.kern.transkripte import (
+from chatterdome.kern.transkripte import (
     CLAUDE,
     CODEX,
     ClaudeQuelle,
@@ -55,7 +55,7 @@ def _claude_bestand(wurzel: Path) -> None:
                 "type": "assistant",
                 "timestamp": _iso(2),
                 "sessionId": "s1",
-                "cwd": "C:/Repos/claude-sanctuary",
+                "cwd": "C:/Repos/chatterdome",
                 "message": {"usage": _verbrauch(input_tokens=10, output_tokens=40)},
             },
         ],
@@ -109,7 +109,7 @@ class TestClaudeQuelle:
 
         gelesen = list(lies_anfragen(tmp_path))
 
-        assert [a.ordner for a in gelesen] == ["claude-sanctuary", "swatch-chronos"]
+        assert [a.ordner for a in gelesen] == ["chatterdome", "swatch-chronos"]
 
     def test_namen_ueberspringen_subagenten(self, tmp_path: Path) -> None:
         """Ein Subagent hat keinen eigenen Poolnamen - er erbt die Sitzung."""

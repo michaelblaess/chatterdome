@@ -13,14 +13,14 @@ from datetime import datetime, timedelta
 import pytest
 from textual.widgets import Button, DataTable, Input
 
-from claude_sanctuary.i18n import t
-from claude_sanctuary.kern.modelle import Agent, Auftrag, Bestand, Ereignis, Namenspool
-from claude_sanctuary.kern.protokolle import Quelle
-from claude_sanctuary.tui import starter as starter_modul
-from claude_sanctuary.tui.app import ABSENDER, SanctuaryApp
-from claude_sanctuary.tui.screens.rundruf_screen import RundrufErgebnis, RundrufScreen
-from claude_sanctuary.tui.widgets.agenten_tabelle import AgentenTabelle
-from claude_sanctuary.tui.widgets.verlauf_panel import VerlaufPanel
+from chatterdome.i18n import t
+from chatterdome.kern.modelle import Agent, Auftrag, Bestand, Ereignis, Namenspool
+from chatterdome.kern.protokolle import Quelle
+from chatterdome.tui import starter as starter_modul
+from chatterdome.tui.app import ABSENDER, ChatterdomeApp
+from chatterdome.tui.screens.rundruf_screen import RundrufErgebnis, RundrufScreen
+from chatterdome.tui.widgets.agenten_tabelle import AgentenTabelle
+from chatterdome.tui.widgets.verlauf_panel import VerlaufPanel
 
 
 class FakeQuelle:
@@ -126,7 +126,7 @@ class FakeQuelle:
         return self.update_version, self.update_fehler
 
 
-async def _gefuellt(app: SanctuaryApp, pilot: object) -> DataTable[object]:
+async def _gefuellt(app: ChatterdomeApp, pilot: object) -> DataTable[object]:
     """Wartet, bis die erste Abfrage durch ist."""
     tabelle = app.query_one("#agenten-daten", DataTable)
     for _ in range(120):
@@ -143,14 +143,14 @@ def quelle() -> FakeQuelle:
 
 class TestOberflaeche:
     async def test_agenten_erscheinen(self, quelle: FakeQuelle) -> None:
-        app = SanctuaryApp(quelle=quelle)
+        app = ChatterdomeApp(quelle=quelle)
         app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
         async with app.run_test(size=(160, 50)) as pilot:
             tabelle = await _gefuellt(app, pilot)
             assert tabelle.row_count == 2
 
     async def test_sortierung_schaltet_um(self, quelle: FakeQuelle) -> None:
-        app = SanctuaryApp(quelle=quelle)
+        app = ChatterdomeApp(quelle=quelle)
         app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
         async with app.run_test(size=(160, 50)) as pilot:
             tabelle = await _gefuellt(app, pilot)
@@ -166,7 +166,7 @@ class TestOberflaeche:
             assert "▲" in nachher[1]
 
     async def test_filter_reduziert(self, quelle: FakeQuelle) -> None:
-        app = SanctuaryApp(quelle=quelle)
+        app = ChatterdomeApp(quelle=quelle)
         app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
         async with app.run_test(size=(160, 50)) as pilot:
             tabelle = await _gefuellt(app, pilot)
@@ -175,7 +175,7 @@ class TestOberflaeche:
             assert tabelle.row_count == 1
 
     async def test_verlauf_erscheint_zur_auswahl(self, quelle: FakeQuelle) -> None:
-        app = SanctuaryApp(quelle=quelle)
+        app = ChatterdomeApp(quelle=quelle)
         app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
         async with app.run_test(size=(160, 50)) as pilot:
             await _gefuellt(app, pilot)
@@ -186,7 +186,7 @@ class TestOberflaeche:
             assert len(panel.children) == 2
 
     async def test_senden_ohne_text_meldet(self, quelle: FakeQuelle) -> None:
-        app = SanctuaryApp(quelle=quelle)
+        app = ChatterdomeApp(quelle=quelle)
         app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
         async with app.run_test(size=(160, 50)) as pilot:
             await _gefuellt(app, pilot)
@@ -195,7 +195,7 @@ class TestOberflaeche:
             assert quelle.gesendet == []
 
     async def test_senden_legt_auftrag_ab(self, quelle: FakeQuelle) -> None:
-        app = SanctuaryApp(quelle=quelle)
+        app = ChatterdomeApp(quelle=quelle)
         app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
         async with app.run_test(size=(160, 50)) as pilot:
             await _gefuellt(app, pilot)
@@ -221,7 +221,7 @@ class TestOberflaeche:
         Der Operator liest dafuer jedes Transkript vollstaendig. Liefe das im
         Fuenf-Sekunden-Takt mit, waere die Oberflaeche dauerhaft langsam.
         """
-        app = SanctuaryApp(quelle=quelle)
+        app = ChatterdomeApp(quelle=quelle)
         app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
         async with app.run_test(size=(160, 50)) as pilot:
             await _gefuellt(app, pilot)
@@ -241,7 +241,7 @@ class TestOberflaeche:
         Mit Ziel ginge der Aufruf ueber ssh auf den eigenen Rechner - also
         durch den Dienstkontext, der unter Windows keinen Desktop sieht.
         """
-        app = SanctuaryApp(quelle=quelle)
+        app = ChatterdomeApp(quelle=quelle)
         app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
         async with app.run_test(size=(160, 50)) as pilot:
             await _gefuellt(app, pilot)
@@ -253,7 +253,7 @@ class TestOberflaeche:
             assert quelle.fotos == [""], f"Ziel wurde mitgegeben: {quelle.fotos}"
 
     async def test_fremder_rechner_wird_benannt(self, quelle: FakeQuelle) -> None:
-        app = SanctuaryApp(quelle=quelle)
+        app = ChatterdomeApp(quelle=quelle)
         app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
         async with app.run_test(size=(160, 50)) as pilot:
             await _gefuellt(app, pilot)
@@ -265,7 +265,7 @@ class TestOberflaeche:
             assert quelle.fotos == ["SENZA"]
 
     async def test_hilfe_oeffnet_und_schliesst(self, quelle: FakeQuelle) -> None:
-        app = SanctuaryApp(quelle=quelle)
+        app = ChatterdomeApp(quelle=quelle)
         app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
         async with app.run_test(size=(160, 50)) as pilot:
             await _gefuellt(app, pilot)
@@ -279,7 +279,7 @@ class TestOberflaeche:
 
     async def test_eigene_sitzung_bekommt_keinen_auftrag(self, quelle: FakeQuelle) -> None:
         """An sich selbst wird nichts gesendet - Feld und Knopf sind gesperrt."""
-        app = SanctuaryApp(quelle=quelle)
+        app = ChatterdomeApp(quelle=quelle)
         app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
         async with app.run_test(size=(160, 50)) as pilot:
             tabelle = await _gefuellt(app, pilot)
@@ -302,7 +302,7 @@ class TestOberflaeche:
             assert quelle.gesendet == []
 
     async def test_fremder_agent_bleibt_sendbar(self, quelle: FakeQuelle) -> None:
-        app = SanctuaryApp(quelle=quelle)
+        app = ChatterdomeApp(quelle=quelle)
         app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
         async with app.run_test(size=(160, 50)) as pilot:
             tabelle = await _gefuellt(app, pilot)
@@ -318,7 +318,7 @@ class TestBedienung:
     """Doppelklick, Kontextmenue und Schnellbefehle."""
 
     async def test_doppelklick_oeffnet_die_detailansicht(self, quelle: FakeQuelle) -> None:
-        app = SanctuaryApp(quelle=quelle)
+        app = ChatterdomeApp(quelle=quelle)
         app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
         async with app.run_test(size=(160, 50)) as pilot:
             tabelle = await _gefuellt(app, pilot)
@@ -333,7 +333,7 @@ class TestBedienung:
             assert type(app.screen).__name__ != "DetailScreen"
 
     async def test_rechtsklick_oeffnet_das_kontextmenue(self, quelle: FakeQuelle) -> None:
-        app = SanctuaryApp(quelle=quelle)
+        app = ChatterdomeApp(quelle=quelle)
         app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
         async with app.run_test(size=(160, 50)) as pilot:
             tabelle = await _gefuellt(app, pilot)
@@ -346,7 +346,7 @@ class TestBedienung:
 
     async def test_schnellbefehl_fuellt_nur_das_feld(self, quelle: FakeQuelle) -> None:
         """Der Text landet im Eingabefeld - gesendet wird bewusst separat."""
-        app = SanctuaryApp(quelle=quelle)
+        app = ChatterdomeApp(quelle=quelle)
         app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
         async with app.run_test(size=(160, 50)) as pilot:
             await _gefuellt(app, pilot)
@@ -363,7 +363,7 @@ class TestBedienung:
         Peer-Nachricht grundsaetzlich nicht aus. Der Auftrag endete jedes Mal mit
         einer Absage. Was hier steht, muss ein Agent auch tun koennen.
         """
-        from claude_sanctuary.tui.app import SCHNELLBEFEHLE
+        from chatterdome.tui.app import SCHNELLBEFEHLE
 
         for schluessel in SCHNELLBEFEHLE:
             text = t(f"quick.{schluessel}_text")
@@ -372,7 +372,7 @@ class TestBedienung:
     async def test_statusleiste_zeigt_kennzahlen(self, quelle: FakeQuelle) -> None:
         from textual_widgets import StatusBar
 
-        app = SanctuaryApp(quelle=quelle)
+        app = ChatterdomeApp(quelle=quelle)
         app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
         async with app.run_test(size=(160, 50)) as pilot:
             await _gefuellt(app, pilot)
@@ -384,9 +384,9 @@ class TestBedienung:
             assert leiste.styles.border.top[0] == "solid"
 
     async def test_namenspool_erscheint_im_kopf(self, quelle: FakeQuelle) -> None:
-        from claude_sanctuary.tui.widgets.kopf_panel import KopfPanel
+        from chatterdome.tui.widgets.kopf_panel import KopfPanel
 
-        app = SanctuaryApp(quelle=quelle)
+        app = ChatterdomeApp(quelle=quelle)
         app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
         async with app.run_test(size=(160, 50)) as pilot:
             await _gefuellt(app, pilot)
@@ -407,7 +407,7 @@ class TestAufgabenspalte:
     """
 
     async def test_tabelle_zeigt_aufgabe_und_alter(self, quelle: FakeQuelle) -> None:
-        app = SanctuaryApp(quelle=quelle)
+        app = ChatterdomeApp(quelle=quelle)
         app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
         async with app.run_test(size=(200, 50)) as pilot:
             tabelle = await _gefuellt(app, pilot)
@@ -426,9 +426,9 @@ class TestAufgabenspalte:
         Frueher standen beide Spalten am rechten Ende - bei 141 Zeichen
         Gesamtbreite und rund 70 sichtbaren war das dasselbe wie gar nicht da.
         """
-        from claude_sanctuary.tui.widgets.agenten_tabelle import AgentenDaten
+        from chatterdome.tui.widgets.agenten_tabelle import AgentenDaten
 
-        app = SanctuaryApp(quelle=quelle)
+        app = ChatterdomeApp(quelle=quelle)
         app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
         # Bewusst schmal: 120 Zeichen sind ein normales Fenster.
         async with app.run_test(size=(120, 45)) as pilot:
@@ -452,9 +452,9 @@ class TestAufgabenspalte:
         """Die Spalte ist gekuerzt - der volle Text muss erreichbar bleiben."""
         from textual.coordinate import Coordinate
 
-        from claude_sanctuary.tui.widgets.agenten_tabelle import AgentenDaten
+        from chatterdome.tui.widgets.agenten_tabelle import AgentenDaten
 
-        app = SanctuaryApp(quelle=quelle)
+        app = ChatterdomeApp(quelle=quelle)
         app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
         async with app.run_test(size=(200, 50)) as pilot:
             await _gefuellt(app, pilot)
@@ -476,7 +476,7 @@ class TestAufgabenspalte:
             assert tabelle.tooltip is None
 
     def test_langer_auftrag_wird_gekuerzt(self) -> None:
-        from claude_sanctuary.tui.widgets.agenten_tabelle import _aufgabe
+        from chatterdome.tui.widgets.agenten_tabelle import _aufgabe
 
         lang = "Bitte alle Tests laufen lassen und danach den Release bauen"
         gekuerzt = _aufgabe(lang, breite=40)
@@ -491,7 +491,7 @@ class TestAufgabenspalte:
         Sonst waere jede Erwartung hier eine Zeitbombe - richtig, bis die
         Minute umspringt.
         """
-        from claude_sanctuary.tui.widgets.agenten_tabelle import _alter
+        from chatterdome.tui.widgets.agenten_tabelle import _alter
 
         jetzt = datetime(2026, 8, 4, 13, 0).astimezone()
 
@@ -508,7 +508,7 @@ class TestAufgabenspalte:
 
 class TestBildschirmfotoTaste:
     async def test_taste_p_nimmt_auf(self, quelle: FakeQuelle) -> None:
-        app = SanctuaryApp(quelle=quelle)
+        app = ChatterdomeApp(quelle=quelle)
         app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
         async with app.run_test(size=(160, 50)) as pilot:
             await _gefuellt(app, pilot)
@@ -529,8 +529,8 @@ class TestBildschirmfotoTaste:
         """
         from textual.app import App
 
-        assert SanctuaryApp.action_screenshot is App.action_screenshot
-        assert hasattr(SanctuaryApp, "action_bildschirmfoto")
+        assert ChatterdomeApp.action_screenshot is App.action_screenshot
+        assert hasattr(ChatterdomeApp, "action_bildschirmfoto")
 
 
 class TestProtokoll:
@@ -584,7 +584,7 @@ class TestRundruf:
         assert rechner == {"TESTHOST", "SENZA"}
 
     async def test_senden_erreicht_jeden_einzeln(self, quelle: FakeQuelle) -> None:
-        app = SanctuaryApp(quelle=quelle)
+        app = ChatterdomeApp(quelle=quelle)
         app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
         async with app.run_test(size=(160, 50)) as pilot:
             await _gefuellt(app, pilot)
@@ -608,7 +608,7 @@ class TestRundruf:
 
 class TestNeustart:
     async def test_ohne_sitzungskennung_kein_neustart(self, quelle: FakeQuelle) -> None:
-        app = SanctuaryApp(quelle=quelle)
+        app = ChatterdomeApp(quelle=quelle)
         app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
         async with app.run_test(size=(160, 50)) as pilot:
             await _gefuellt(app, pilot)
@@ -631,7 +631,7 @@ class TestNeustart:
         monkeypatch.setattr(starter_modul, "starte_resume", fake_resume)
         monkeypatch.setattr(zeit_modul, "sleep", lambda _s: None)
 
-        app = SanctuaryApp(quelle=quelle)
+        app = ChatterdomeApp(quelle=quelle)
         app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
         async with app.run_test(size=(160, 50)) as pilot:
             await _gefuellt(app, pilot)
@@ -658,7 +658,7 @@ class TestNeustart:
         )
         monkeypatch.setattr(zeit_modul, "sleep", lambda _s: None)
 
-        app = SanctuaryApp(quelle=quelle)
+        app = ChatterdomeApp(quelle=quelle)
         app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
         async with app.run_test(size=(160, 50)) as pilot:
             await _gefuellt(app, pilot)
@@ -675,7 +675,7 @@ class TestAktualisierung:
     async def test_update_nimmt_verfahren_aus_den_einstellungen(
         self, quelle: FakeQuelle
     ) -> None:
-        app = SanctuaryApp(quelle=quelle)
+        app = ChatterdomeApp(quelle=quelle)
         app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
         async with app.run_test(size=(160, 50)) as pilot:
             await _gefuellt(app, pilot)
@@ -688,7 +688,7 @@ class TestAktualisierung:
     async def test_eigener_rechner_ohne_ziel(self, quelle: FakeQuelle) -> None:
         """Der eigene Rechner wird ohne Namen aufgerufen - sonst ginge es
         ueber ssh zu sich selbst, und das braucht einen Schluessel."""
-        app = SanctuaryApp(quelle=quelle)
+        app = ChatterdomeApp(quelle=quelle)
         app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
         async with app.run_test(size=(160, 50)) as pilot:
             await _gefuellt(app, pilot)
@@ -709,7 +709,7 @@ class TestDialoge:
     async def test_einstellungen_zeigen_die_neuen_reiter(self, quelle: FakeQuelle) -> None:
         from textual.widgets import Select, TabPane, TextArea
 
-        app = SanctuaryApp(quelle=quelle)
+        app = ChatterdomeApp(quelle=quelle)
         app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
         async with app.run_test(size=(160, 50)) as pilot:
             await _gefuellt(app, pilot)
@@ -725,7 +725,7 @@ class TestDialoge:
     async def test_rundruf_zeigt_die_empfaenger(self, quelle: FakeQuelle) -> None:
         from textual.widgets import Static
 
-        app = SanctuaryApp(quelle=quelle)
+        app = ChatterdomeApp(quelle=quelle)
         app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
         async with app.run_test(size=(160, 50)) as pilot:
             await _gefuellt(app, pilot)
@@ -768,10 +768,10 @@ class TestAuswahlBeiGleichemNamen:
     """
 
     async def test_markierung_bleibt_nach_neuaufbau_auf_dem_gewaehlten(self) -> None:
-        from claude_sanctuary.tui.widgets.agenten_tabelle import AgentenTabelle
+        from chatterdome.tui.widgets.agenten_tabelle import AgentenTabelle
 
         quelle = ZweiPetrasQuelle()
-        app = SanctuaryApp(quelle=quelle)
+        app = ChatterdomeApp(quelle=quelle)
         app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
         async with app.run_test(size=(200, 50)) as pilot:
             daten = await _gefuellt(app, pilot)
@@ -828,7 +828,7 @@ class TestDoppelterAgentReisstNichtsMit:
         Neuaufbau heraus, der im Sekundentakt laeuft. Der Absturzschirm fing
         es ab, der naechste Durchlauf warf es erneut.
         """
-        app = SanctuaryApp(quelle=ZweimalDerselbeQuelle())
+        app = ChatterdomeApp(quelle=ZweimalDerselbeQuelle())
         app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
         async with app.run_test(size=(160, 50)) as pilot:
             daten = await _gefuellt(app, pilot)
@@ -842,9 +842,9 @@ class TestQImBrowser:
     async def test_q_beendet_im_browser_nicht(
         self, quelle: FakeQuelle, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        monkeypatch.setattr(SanctuaryApp, "is_web", property(lambda self: True))
+        monkeypatch.setattr(ChatterdomeApp, "is_web", property(lambda self: True))
         meldungen: list[str] = []
-        app = SanctuaryApp(quelle=quelle)
+        app = ChatterdomeApp(quelle=quelle)
         app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
         monkeypatch.setattr(app, "notify", lambda text, **_: meldungen.append(str(text)))
         async with app.run_test(size=(160, 50)) as pilot:
@@ -855,7 +855,7 @@ class TestQImBrowser:
             assert meldungen == [t("notify.web_quit")]
 
     async def test_gegenprobe_im_terminal_beendet_q(self, quelle: FakeQuelle) -> None:
-        app = SanctuaryApp(quelle=quelle)
+        app = ChatterdomeApp(quelle=quelle)
         app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
         async with app.run_test(size=(160, 50)) as pilot:
             await _gefuellt(app, pilot)
@@ -881,7 +881,7 @@ class TestVerlaufNachSendenUndRundruf:
         # Verlaufsabfrage - die traegt sonst einen Eintrag nach, egal was die
         # Aufrufstelle uebergibt. Genau daran war der erste Anlauf dieses
         # Tests blind.
-        app = SanctuaryApp(quelle=quelle)
+        app = ChatterdomeApp(quelle=quelle)
         app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
         async with app.run_test(size=(160, 50)) as pilot:
             await _gefuellt(app, pilot)
@@ -894,7 +894,7 @@ class TestVerlaufNachSendenUndRundruf:
     async def test_rundruf_uebergibt_den_agenten(
         self, quelle: FakeQuelle, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        app = SanctuaryApp(quelle=quelle)
+        app = ChatterdomeApp(quelle=quelle)
         app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
         async with app.run_test(size=(160, 50)) as pilot:
             await _gefuellt(app, pilot)
@@ -913,7 +913,7 @@ class TestAuswahlBeimAbbau:
     """
 
     async def test_fehlende_eingabe_bricht_den_handler_nicht(self, quelle: FakeQuelle) -> None:
-        app = SanctuaryApp(quelle=quelle)
+        app = ChatterdomeApp(quelle=quelle)
         app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
         agent = Agent(name="Klara", status="idle", rechner="TESTHOST")
         async with app.run_test(size=(160, 50)) as pilot:
@@ -950,7 +950,7 @@ class TestVerlaufHaengtAnDerSitzung:
 
     async def test_die_abfrage_nennt_sitzung_und_startzeit(self) -> None:
         quelle = SitzungsQuelle()
-        app = SanctuaryApp(quelle=quelle)
+        app = ChatterdomeApp(quelle=quelle)
         app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
         async with app.run_test(size=(160, 50)) as pilot:
             await _gefuellt(app, pilot)
@@ -993,10 +993,10 @@ class TestKeinZweitesFensterAufEinemGespraech:
         monkeypatch.setattr(zeit_modul, "sleep", lambda _s: None)
 
         quelle = NochLaufendQuelle()
-        app = SanctuaryApp(quelle=quelle)
+        app = ChatterdomeApp(quelle=quelle)
         app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
         # Ohne die kurze Frist wartete der Test acht Sekunden auf sein Ergebnis.
-        monkeypatch.setattr(SanctuaryApp, "STERBEFRIST", 0.2)
+        monkeypatch.setattr(ChatterdomeApp, "STERBEFRIST", 0.2)
         async with app.run_test(size=(160, 50)) as pilot:
             await _gefuellt(app, pilot)
             app._neustart_ausfuehren("Klara", "sid-42", r"C:\Repos\test")

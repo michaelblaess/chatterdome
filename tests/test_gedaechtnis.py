@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from claude_sanctuary.kern.gedaechtnis import (
+from chatterdome.kern.gedaechtnis import (
     Recallbericht,
     lade_gedaechtnis,
     normalisiere,

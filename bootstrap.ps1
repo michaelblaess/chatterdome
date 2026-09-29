@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Richtet die Entwicklungsumgebung fuer die Sanctuary-Oberflaeche ein.
+    Richtet die Entwicklungsumgebung fuer die Chatterdome-Oberflaeche ein.
 .DESCRIPTION
     Legt die virtuelle Umgebung an und installiert Laufzeit- und
     Entwicklungsabhaengigkeiten. Mehrfach aufrufbar.

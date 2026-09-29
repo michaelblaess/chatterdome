@@ -8,7 +8,7 @@
 // content-Array sieht so aus:
 //
 //   [ { type: 'text', text: '[Image: source: C:\\tmp\\...png]' },
-//     { type: 'text', text: 'claude-sanctuary sieht gut aus unter Linux' } ]
+//     { type: 'text', text: 'chatterdome sieht gut aus unter Linux' } ]
 //
 // Wer den ersten text-Block nimmt, bekommt also den Dateipfad statt der
 // Aufgabe. Hier wird stattdessen der erste Block genommen, von dem nach dem

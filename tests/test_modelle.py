@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from claude_sanctuary.kern.modelle import (
+from chatterdome.kern.modelle import (
     KONTEXT_ENG,
     KONTEXT_KRITISCH,
     VERWAIST_STUNDEN,
@@ -166,15 +166,15 @@ class TestAdressenEinesEreignisses:
 
     def test_beide_seiten_mit_rechner(self) -> None:
         e = Ereignis(
-            art="auftrag", ts="", von="Sanctuary", host="rainbow", an="Petra", an_host="senza"
+            art="auftrag", ts="", von="Chatterdome", host="rainbow", an="Petra", an_host="senza"
         )
-        assert e.absender == "Sanctuary@RAINBOW"
+        assert e.absender == "Chatterdome@RAINBOW"
         assert e.empfaenger == "Petra@SENZA"
 
     def test_ohne_rechner_bleibt_der_blosse_name(self) -> None:
         """Altbestand im Bus kennt an_host nicht - dann kein leeres "Petra@"."""
-        e = Ereignis(art="auftrag", ts="", von="Sanctuary", an="Petra")
-        assert e.absender == "Sanctuary"
+        e = Ereignis(art="auftrag", ts="", von="Chatterdome", an="Petra")
+        assert e.absender == "Chatterdome"
         assert e.empfaenger == "Petra"
 
     def test_fehlende_namen_werden_markiert(self) -> None:

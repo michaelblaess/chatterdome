@@ -1,4 +1,4 @@
-# claude-sanctuary
+# chatterdome
 
 <p align="center">
   <img src="docs/flags/gb.svg" height="13" alt=""> <b>English</b> ·
@@ -32,32 +32,49 @@ telemetry. What crosses machine boundaries goes over SSH inside your own Tailnet
 ## Setup
 
 ```bash
-git clone https://github.com/michaelblaess/claude-sanctuary.git
-cd claude-sanctuary
+git clone https://github.com/michaelblaess/chatterdome.git
+cd chatterdome
 ./setup.sh                                          # Linux, macOS
 powershell -ExecutionPolicy Bypass -File setup.ps1  # Windows
 ```
 
 The script points `~/.claude/skills/operator` and `~/.claude/skills/claude-bus` at this repo.
 Nothing changes for Claude Code - the skills stay exactly where it expects them. An existing
-real directory is **never deleted**, it is moved aside as `.vor-sanctuary`.
+real directory is **never deleted**, it is moved aside as `.vor-chatterdome`.
+
+### Moving from claude-sanctuary
+
+Until 29.09.2026 the project was called **claude-sanctuary**. A machine with the old clone moves
+over in two steps. First close everything running inside the folder (Claude sessions, the old
+TUI, terminals), then run from the old folder:
+
+```bash
+git pull
+bash scripts/umzug-chatterdome.sh                                   # Linux, macOS
+powershell -ExecutionPolicy Bypass -File scripts\umzug-chatterdome.ps1  # Windows
+```
+
+The script renames the folder to `chatterdome`, updates the git remote, rebuilds `.venv` and
+runs setup and bootstrap. Settings, search index and discussion archive are copied from
+`~/.claude-sanctuary` to `~/.chatterdome` on first start. The old `sanctuary` command stays
+as an alias: other machines call it over ssh, and their state may be older than this one.
 
 ## Usage
 
-Setup installs a `sanctuary` shortcut into `~/.local/bin` covering both skills:
+Setup installs a `chatterdome` shortcut into `~/.local/bin` covering both skills:
 
 ```bash
-sanctuary status              # table of all sessions
-sanctuary status --mesh       # include the other machines
-sanctuary status --json       # machine readable
-sanctuary watch 2 --json      # NDJSON stream for tooling
-sanctuary start [name]        # new session, named in the tab title
-sanctuary stop <name>         # end a session
+chatterdome status              # table of all sessions
+chatterdome status --mesh       # include the other machines
+chatterdome status --json       # machine readable
+chatterdome watch 2 --json      # NDJSON stream for tooling
+chatterdome start [name]        # new session, named in the tab title
+chatterdome stop <name>         # end a session
 
-sanctuary send Klara "Please run the tests" --erwartet-quittung
-sanctuary auftraege           # what is waiting for me
-sanctuary ack <id> 200 "done"
-sanctuary hilfe               # all commands
+chatterdome send Klara "Please run the tests" --erwartet-quittung
+chatterdome auftraege           # what is waiting for me
+chatterdome ack <id> 200 "done"
+chatterdome hilfe               # all commands
 ```
 
 The scripts can still be called directly
@@ -106,7 +123,7 @@ Since then the bus distinguishes two kinds of address:
 So the overview does not just count open, done and failed, it also states **how
 many open messages can still be inherited at all**. That number would have
 predicted the incident. Next to it the expiry deadline (24 hours by default,
-changed via `sanctuary config`) and the oldest task still open, with its age.
+changed via `chatterdome config`) and the oldest task still open, with its age.
 
 This tab is read-only as well. Sending still happens in the agents tab.
 
@@ -168,7 +185,7 @@ snapshots.**
 ## The search tab
 
 Key `f`. Full-text search across all transcripts - Claude Code and Codex CLI -
-using SQLite with FTS5. The index lives at `~/.claude-sanctuary/suche.db` and
+using SQLite with FTS5. The index lives at `~/.chatterdome/suche.db` and
 is disposable at any time: it holds nothing that is not also in the
 transcripts.
 
@@ -230,10 +247,10 @@ A difference that catches everyone once:
 
 ```bash
 ssh senza                          # interactive login shell - everything as usual
-sanctuary status                   # simply works there
+chatterdome status                   # simply works there
 
-ssh senza "sanctuary status"       # NOT found
-ssh senza 'bash -lc "sanctuary status"'   # this works
+ssh senza "chatterdome status"       # NOT found
+ssh senza 'bash -lc "chatterdome status"'   # this works
 ```
 
 Reason: `ssh host "command"` does **not** start a login shell. Ubuntu bails out in the first
@@ -292,7 +309,7 @@ Controlled by the `zustellung` setting:
 | `stop-hook` | Always the previous route. The only one available on Windows anyway. |
 
 ```bash
-sanctuary bus config zustellung socket
+chatterdome bus config zustellung socket
 ```
 
 **Prerequisite:** `~/.claude/settings.json` needs `"crossSessionInbound": "accept"`. Without it
@@ -310,12 +327,12 @@ sessions are real and have their own IDs. What has to be unambiguous is not the 
 address:
 
 ```bash
-sanctuary send Petra@SENZA "..."
+chatterdome send Petra@SENZA "..."
 ```
 
 While the name is unique across the mesh, plain `send Petra` keeps working. Once it is not, the
 bus stops and names both variants instead of silently picking one. The table renders such names
-as `Petra@RAINBOW`, and `sanctuary bus doctor` lists them.
+as `Petra@RAINBOW`, and `chatterdome bus doctor` lists them.
 
 ### Stale sessions
 

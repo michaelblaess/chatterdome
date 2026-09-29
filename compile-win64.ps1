@@ -1,14 +1,14 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Baut die Sanctuary-Oberflaeche zu einer eigenstaendigen Windows-Binary.
+    Baut die Chatterdome-Oberflaeche zu einer eigenstaendigen Windows-Binary.
 .DESCRIPTION
     Nuitka --standalone, also ein Ordner statt einer selbstentpackenden
     Datei: --onefile entpackt sich bei JEDEM Start nach Temp und frisst den
     Startvorteil wieder auf. Verteilt wird das erzeugte ZIP.
 
-    Ergebnis: dist\claude-sanctuary\sanctuary-tui.exe
-              dist\claude-sanctuary-vX.Y.Z-win64.zip
+    Ergebnis: dist\chatterdome\chatterdome-tui.exe
+              dist\chatterdome-vX.Y.Z-win64.zip
 #>
 $ErrorActionPreference = "Stop"
 
@@ -51,10 +51,10 @@ function Invoke-Nativ {
 }
 
 $root = $PSScriptRoot
-$entry = Join-Path $root "src\claude_sanctuary\__main__.py"
-$initPy = Join-Path $root "src\claude_sanctuary\__init__.py"
+$entry = Join-Path $root "src\chatterdome\__main__.py"
+$initPy = Join-Path $root "src\chatterdome\__init__.py"
 $outDir = Join-Path $root "dist"
-$distDir = Join-Path $outDir "claude-sanctuary"
+$distDir = Join-Path $outDir "chatterdome"
 
 $version = ([regex]'__version__\s*=\s*"([^"]+)"').Match((Get-Content -Raw $initPy)).Groups[1].Value
 if (-not $version) { throw "Konnte __version__ nicht aus $initPy lesen" }
@@ -92,7 +92,7 @@ if (-not $vorhanden) {
     Invoke-Nativ uv pip install --python $python nuitka
 }
 
-Write-Host "Kompiliere claude-sanctuary v$version..." -ForegroundColor Cyan
+Write-Host "Kompiliere chatterdome v$version..." -ForegroundColor Cyan
 if (Test-Path $distDir) { Remove-Item -Recurse -Force $distDir }
 $started = Get-Date
 
@@ -100,17 +100,17 @@ $nuitkaArgs = @(
     "--standalone",
     "--assume-yes-for-downloads",
     "--remove-output",
-    "--include-package=claude_sanctuary",
+    "--include-package=chatterdome",
     # Ohne das fehlen locale\*.json und tui\*.tcss zur Laufzeit - die App
     # startet dann ohne Beschriftungen und ohne Layout.
-    "--include-package-data=claude_sanctuary",
+    "--include-package-data=chatterdome",
     # textual_image wird erst innerhalb einer Funktion importiert. Explizit
     # mitnehmen, sonst fehlt die Bildanzeige im fertigen Paket.
     "--include-package=textual_image",
     "--output-dir=$outDir",
-    "--output-filename=sanctuary-tui.exe",
+    "--output-filename=chatterdome-tui.exe",
     "--company-name=Michael Blaess",
-    "--product-name=claude-sanctuary",
+    "--product-name=chatterdome",
     "--file-version=$version",
     "--product-version=$version"
 )
@@ -126,11 +126,11 @@ Invoke-Nativ $python -m nuitka @nuitkaArgs $entry
 
 # Nuitka benennt den Ordner nach dem Hauptmodul.
 $nuitkaDist = Join-Path $outDir "__main__.dist"
-if (Test-Path $nuitkaDist) { Rename-Item -Path $nuitkaDist -NewName "claude-sanctuary" }
+if (Test-Path $nuitkaDist) { Rename-Item -Path $nuitkaDist -NewName "chatterdome" }
 
 # Selbsttest gegen die FERTIGE Binary: ein gruener Compile beweist nicht,
 # dass die Sprachdateien und das Layout mitgekommen sind.
-$exe = Join-Path $distDir "sanctuary-tui.exe"
+$exe = Join-Path $distDir "chatterdome-tui.exe"
 Write-Host "Selbsttest..." -ForegroundColor Cyan
 $ErrorActionPreference = "Continue"
 $ausgabe = (& $exe --version 2>&1 | Out-String).Trim()
@@ -143,7 +143,7 @@ if ($ausgabe -notmatch [regex]::Escape($version)) {
 Write-Host "  $ausgabe" -ForegroundColor Green
 
 $elapsed = [int]((Get-Date) - $started).TotalSeconds
-$zip = Join-Path $outDir "claude-sanctuary-v$version-win64.zip"
+$zip = Join-Path $outDir "chatterdome-v$version-win64.zip"
 if (Test-Path $zip) { Remove-Item -Force $zip }
 Compress-Archive -Path $distDir -DestinationPath $zip
 

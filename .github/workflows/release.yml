@@ -8,7 +8,7 @@ name: Release
 # Ein vollstaendiger Lauf kostet dadurch rund 260 Minuten, davon 200 fuer
 # macOS allein. Wer das nicht braucht, nimmt macos-latest aus der Matrix.
 #
-# Was die Pakete NICHT enthalten: den Kurzbefehl sanctuary (Node), die
+# Was die Pakete NICHT enthalten: den Kurzbefehl chatterdome (Node), die
 # Skills und die Hooks. Das ist die Oberflaeche, nicht die ganze Zentrale -
 # die wird weiterhin ueber setup.ps1 / setup.sh aus dem Repo eingerichtet.
 
@@ -70,8 +70,8 @@ jobs:
           # Artefakte zaehlen gegen den Speicher des Kontos.
           retention-days: 1
           path: |
-            dist/claude-sanctuary-v*.zip
-            dist/claude-sanctuary-v*.tar.gz
+            dist/chatterdome-v*.zip
+            dist/chatterdome-v*.tar.gz
 
   release:
     needs: build

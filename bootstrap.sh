@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Richtet die Entwicklungsumgebung fuer die Sanctuary-Oberflaeche ein.
+# Richtet die Entwicklungsumgebung fuer die Chatterdome-Oberflaeche ein.
 # Mehrfach aufrufbar.
 set -euo pipefail
 

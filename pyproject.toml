@@ -3,7 +3,7 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "claude-sanctuary"
+name = "chatterdome"
 version = "0.2.0"
 description = "Zentrale fuer mehrere gleichzeitig laufende Claude-Code-Instanzen"
 requires-python = ">=3.12"
@@ -33,7 +33,7 @@ dev = [
     "httpx>=0.27",
     # Selbstbezug: mypy prueft web/serve.py und braucht dafuer textual-serve.
     # Ohne das war die CI ab ed3b055 rot, weil sie nur "--extra dev" installiert.
-    "claude-sanctuary[web]",
+    "chatterdome[web]",
 ]
 web = [
     "textual-serve>=1.1.3",
@@ -50,18 +50,18 @@ web = [
 ]
 
 [project.scripts]
-sanctuary-tui = "claude_sanctuary.__main__:main"
+chatterdome-tui = "chatterdome.__main__:main"
 # Browser-Zugang ueber textual-serve, braucht das Extra "web". Schnellschuss
-# vom 15.09.2026, faellt weg sobald sanctuary-http die Uebersicht kann.
-sanctuary-web = "claude_sanctuary.web.serve:main"
+# vom 15.09.2026, faellt weg sobald chatterdome-http die Uebersicht kann.
+chatterdome-web = "chatterdome.web.serve:main"
 # Eigene Weboberflaeche mit Agentenliste und Terminal, braucht dasselbe Extra.
-sanctuary-http = "claude_sanctuary.web.app:main"
+chatterdome-http = "chatterdome.web.app:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-claude_sanctuary = [
+chatterdome = [
     "locale/*.json",
     "tui/*.tcss",
     # Vorlagen und Bibliotheken der Weboberflaeche. xterm.js und Tabler liegen

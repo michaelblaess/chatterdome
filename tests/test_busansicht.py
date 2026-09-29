@@ -11,8 +11,8 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from claude_sanctuary.kern.busansicht import alter_stunden, filtere, kennzahlen
-from claude_sanctuary.kern.modelle import Auftrag, Ereignis
+from chatterdome.kern.busansicht import alter_stunden, filtere, kennzahlen
+from chatterdome.kern.modelle import Auftrag, Ereignis
 
 JETZT = datetime(2026, 8, 7, 12, 0, tzinfo=UTC)
 
@@ -21,7 +21,7 @@ def auftrag(
     kennung: str = "a1",
     *,
     zustand: str = "submitted",
-    von: str = "Sanctuary",
+    von: str = "Chatterdome",
     an: str = "Marga",
     text: str = "gib mir das aktuelle Datum",
     topic: str = "allgemein",

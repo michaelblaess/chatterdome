@@ -13,22 +13,22 @@ import pytest
 from test_app import FakeQuelle, _gefuellt  # pytest legt tests/ in den Suchpfad
 from textual.widgets import Button, Checkbox, Input, Select, Static, TextArea
 
-from claude_sanctuary import debatte_ablauf
-from claude_sanctuary.debatte_ablauf import Ergebnis
-from claude_sanctuary.kern.debatte import Beitrag, Diskussion, Teilnehmer
-from claude_sanctuary.tui.app import SanctuaryApp
-from claude_sanctuary.tui.widgets.diskussion_panel import DiskussionsPanel, _AgentZeile
+from chatterdome import debatte_ablauf
+from chatterdome.debatte_ablauf import Ergebnis
+from chatterdome.kern.debatte import Beitrag, Diskussion, Teilnehmer
+from chatterdome.tui.app import ChatterdomeApp
+from chatterdome.tui.widgets.diskussion_panel import DiskussionsPanel, _AgentZeile
 
 
-def _app() -> SanctuaryApp:
+def _app() -> ChatterdomeApp:
     # FakeQuelle aus test_app erfuellt das Protokoll nicht ganz (bestandsverlauf
     # fehlt) - dieselbe Altlast wie dort, fuer diese Tests ohne Belang.
-    app = SanctuaryApp(quelle=FakeQuelle())  # type: ignore[arg-type]
+    app = ChatterdomeApp(quelle=FakeQuelle())  # type: ignore[arg-type]
     app._frage_disclaimer = lambda: None  # type: ignore[method-assign]
     return app
 
 
-async def _reiter(app: SanctuaryApp, pilot: Any) -> DiskussionsPanel:
+async def _reiter(app: ChatterdomeApp, pilot: Any) -> DiskussionsPanel:
     await _gefuellt(app, pilot)
     app.query_one("#bereiche").active = "tab-diskussion"  # type: ignore[attr-defined]
     panel = app.query_one("#diskussion", DiskussionsPanel)
@@ -103,7 +103,7 @@ class TestFormular:
         # Absturz vom 28.09.2026 bei Michael: NoMatches '.disk-agent-haken'. Die
         # Zeilen waren eingehaengt, ihre Kinder noch nicht aufgebaut, und die
         # Pruefung lief genau dazwischen.
-        from claude_sanctuary.kern.modelle import Agent
+        from chatterdome.kern.modelle import Agent
 
         app = _app()
         async with app.run_test(size=(160, 50)) as pilot:
@@ -296,7 +296,7 @@ class TestLesbarkeit:
             assert farbe.name.lower() == app.theme_variables["accent"].lower()
 
 
-def _gespeichert(app: SanctuaryApp, *namen: str) -> Diskussion:
+def _gespeichert(app: ChatterdomeApp, *namen: str) -> Diskussion:
     d = Diskussion("Roundhouse oder Chinwag?",
                    [Teilnehmer(namen[0], seite="pro"), Teilnehmer(namen[1], seite="contra")],
                    runden=2, beginn="2026-09-28T17:12:00", ende="2 Runden gespielt")
@@ -310,7 +310,7 @@ class TestArchivImReiter:
     async def test_liste_zeigt_gespeicherte_und_oeffnet_den_chat(self) -> None:
         from textual.widgets import DataTable
 
-        from claude_sanctuary.tui.widgets.status_zeile import StatusZeile
+        from chatterdome.tui.widgets.status_zeile import StatusZeile
 
         app = _app()
         async with app.run_test(size=(160, 50)) as pilot:
@@ -419,7 +419,7 @@ class TestModellwahl:
 
 class TestAnimationen:
     async def test_tipp_anzeige_auf_der_seite_des_redners_bis_zum_beitrag(self) -> None:
-        from claude_sanctuary.tui.widgets.diskussion_panel import _Laeuft
+        from chatterdome.tui.widgets.diskussion_panel import _Laeuft
 
         app = _app()
         async with app.run_test(size=(160, 50)) as pilot:
@@ -440,7 +440,7 @@ class TestAnimationen:
             assert len(list(panel.query(".disk-blase"))) == 1
 
     async def test_recherche_je_teilnehmer_mit_fortschritt_im_kopf(self) -> None:
-        from claude_sanctuary.tui.widgets.diskussion_panel import _Laeuft
+        from chatterdome.tui.widgets.diskussion_panel import _Laeuft
 
         app = _app()
         async with app.run_test(size=(160, 50)) as pilot:
@@ -463,7 +463,7 @@ class TestAnimationen:
             assert not list(panel.query(_Laeuft))
 
     def test_laufbalken_bleibt_im_rahmen(self) -> None:
-        from claude_sanctuary.tui.widgets.diskussion_panel import BALKEN_BREITE, _balken
+        from chatterdome.tui.widgets.diskussion_panel import BALKEN_BREITE, _balken
 
         balken = [_balken(i) for i in range(60)]
         assert all(len(x) == BALKEN_BREITE and x.count("▰") == 5 for x in balken)
@@ -528,7 +528,7 @@ class TestHistorie:
             assert panel.query_one("#disk-runden", Input).value == "2"
 
     async def test_loeschen_nur_nach_bestaetigung(self) -> None:
-        from claude_sanctuary.tui.screens.bestaetigung_screen import BestaetigungScreen
+        from chatterdome.tui.screens.bestaetigung_screen import BestaetigungScreen
 
         app = _app()
         async with app.run_test(size=(160, 50)) as pilot:
@@ -602,7 +602,7 @@ class TestFarbenJePerson:
 
 class TestReinrufen:
     async def test_nachricht_geht_in_den_verlauf_und_die_tipp_anzeige_bleibt(self) -> None:
-        from claude_sanctuary.tui.widgets.diskussion_panel import _Laeuft
+        from chatterdome.tui.widgets.diskussion_panel import _Laeuft
 
         app = _app()
         async with app.run_test(size=(160, 50)) as pilot:

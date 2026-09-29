@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Startet die Sanctuary-Oberflaeche aus dem Quellcode.
+# Startet die Chatterdome-Oberflaeche aus dem Quellcode.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -10,4 +10,4 @@ else
     python="python3"
 fi
 
-exec "$python" -m claude_sanctuary "$@"
+exec "$python" -m chatterdome "$@"

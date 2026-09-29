@@ -257,7 +257,7 @@ gibt `sessionTitle` aus. Claude speichert das als **zwei** Einträge in der Sitz
 `custom-title` und `agent-name`. In der Titel-Priorität `agentName || customTitle || aiTitle`
 gewinnt damit der eigene Titel - nur so klebt der Name stabil im Tab.
 
-Der Preis fiel beim Resume-Hinweis auf: `claude --resume "Luzie · claude-sanctuary"` sagte
+Der Preis fiel beim Resume-Hinweis auf: `claude --resume "Luzie · chatterdome"` sagte
 nicht mehr, woran die Sitzung sass, weil die automatische Zusammenfassung verdrängt wurde.
 Seit dem 05.08.2026 schlägt der Hook sie deshalb selbst nach. Sie steht als
 `{"type":"ai-title","aiTitle":"..."}` in derselben Datei und wird bei jedem Prompt neben dem
@@ -314,7 +314,7 @@ Grund SENDET `zustellenAn` weiterhin `uebernehmen`: das versteht jede Fassung,
 
 ## Aktualisieren: `update.mjs`
 
-`sanctuary update [RECHNER] [--method claude|npm|winget|choco|brew]`, mit
+`chatterdome update [RECHNER] [--method claude|npm|winget|choco|brew]`, mit
 `--check` nur die Version melden, mit `--json` maschinenlesbar.
 
 **Das Verfahren wird mitgegeben und NICHT erraten.** Wie Claude Code
@@ -335,9 +335,9 @@ Argumentliste eine Liste.
 ## Neustart: `neustart.mjs`
 
 ```bash
-sanctuary restart <Name>                          # auf diesem Rechner
-sanctuary restart --session <id> --host SENZA     # auf einem anderen
-sanctuary restart --setup                         # Windows, einmalig je Rechner
+chatterdome restart <Name>                          # auf diesem Rechner
+chatterdome restart --session <id> --host SENZA     # auf einem anderen
+chatterdome restart --setup                         # Windows, einmalig je Rechner
 ```
 
 Beendet die Sitzung und öffnet sie mit `claude --resume` in einem neuen Fenster. Der Zweck ist
@@ -382,7 +382,7 @@ $ ssh senza 'ps -o pid,stat,etime,cmd -p 1319787 -p 3585570'
 
 **Zwei lebende Prozesse auf einer Sitzungskennung, beide im selben Transkript.** Ursache:
 `neustart.mjs` öffnete nur ein Fenster mit `--resume`. Das Beenden lag beim Aufrufer, und der
-ferne Weg der Oberfläche hatte keinen - `sanctuary stop` kennt kein Ziel. Der Name heißt
+ferne Weg der Oberfläche hatte keinen - `chatterdome stop` kennt kein Ziel. Der Name heißt
 "restart", der Code machte "start".
 
 Drei Schichten sind seitdem eingezogen, jede fängt etwas anderes:
@@ -394,7 +394,7 @@ Drei Schichten sind seitdem eingezogen, jede fängt etwas anderes:
 | `eindeutig()` in `agenten_tabelle.py` | Hängt bei einer doppelten Zeilenkennung einen Zähler an, statt `add_row` werfen zu lassen. Bewusst kein Entdoppeln: zwei Prozesse auf einer Sitzung sind ein echter Zustand, und den soll man sehen. |
 
 Die Oberfläche wartet beim lokalen Weg jetzt ebenfalls, bis die Sitzung aus der Liste ist
-(`SanctuaryApp.STERBEFRIST`, 8 s). Dort stand ein festes `sleep(1.5)`, also dasselbe Loch,
+(`ChatterdomeApp.STERBEFRIST`, 8 s). Dort stand ein festes `sleep(1.5)`, also dasselbe Loch,
 nur schmaler. Gefragt wird die Quelle, **nicht** die PID: eine Nummer kann nach dem Ausstieg
 längst neu vergeben sein, und über Rechnergrenzen hat die Oberfläche ohnehin keinen Zugriff
 darauf. Wahr ist, was die Instanzliste sagt.
@@ -415,7 +415,7 @@ Vertrauensdialog für `/home/michael`, und dahinter wartete nur eine Fehlermeldu
 Ursachen, beide belegt:
 
 - **Der Ordner war nicht als vertraut hinterlegt.** In `~/.claude.json` stand für
-  `/home/michael` ein `hasTrustDialogAccepted: false`, für `~/repos/claude-sanctuary`
+  `/home/michael` ein `hasTrustDialogAccepted: false`, für `~/repos/chatterdome`
   dagegen `true`. Das Fenster ging im richtigen Verzeichnis auf - `/proc/<pid>/cwd` zeigte
   `/home/michael`, genau das cwd der Sitzung. Der Dialog ist also kein Fehler der Kette,
   sondern eine Sicherheitsabfrage von Claude Code.
@@ -583,7 +583,7 @@ auf Word warteten, ist eine unbelegte Vermutung (siehe [[reference_word_com_bear
   seinen Zeileneditor in die geerbte Standardeingabe - das war das Terminal der laufenden
   TUI. Ergebnis: Rückfrage mitten im Bild, Maus-Steuerzeichen überall, Oberfläche blockiert
   bis zum Timeout. Es sah nach einem Absturz aus und war keiner. Nachgestellt mit
-  `sanctuary stop <Name> --ja < /dev/null`, worauf `... wirklich beenden? [j/N]` in der
+  `chatterdome stop <Name> --ja < /dev/null`, worauf `... wirklich beenden? [j/N]` in der
   Ausgabe stand. `frage()` prüft jetzt `process.stdin.isTTY` und lehnt ohne Terminal ab,
   statt zu fragen. Die Gegenseite (`stdin=DEVNULL`) steht im python-specialist.
 - **Die PID aus `sammle()` ist eine Momentaufnahme.** Ist die Instanz zwischen Abfrage und

@@ -16,11 +16,11 @@ from typing import Any
 import pytest
 from textual.widgets import DataTable, Static
 
-from claude_sanctuary.kern.modelle import Bestand, Busbestand, Namenspool
-from claude_sanctuary.kern.suche import Suchindex
-from claude_sanctuary.kern.transkripte import ClaudeQuelle
-from claude_sanctuary.tui.app import SanctuaryApp
-from claude_sanctuary.tui.widgets.such_panel import SuchPanel
+from chatterdome.kern.modelle import Bestand, Busbestand, Namenspool
+from chatterdome.kern.suche import Suchindex
+from chatterdome.kern.transkripte import ClaudeQuelle
+from chatterdome.tui.app import ChatterdomeApp
+from chatterdome.tui.widgets.such_panel import SuchPanel
 
 
 class StilleQuelle:
@@ -62,8 +62,8 @@ def projekte(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
-def app(projekte: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SanctuaryApp:
-    gebaut = SanctuaryApp(quelle=StilleQuelle())
+def app(projekte: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ChatterdomeApp:
+    gebaut = ChatterdomeApp(quelle=StilleQuelle())
     monkeypatch.setattr(gebaut, "_frage_disclaimer", lambda: None)
     # Der Index bekommt eine eigene Datei UND eine eigene Quelle - sonst liest
     # der Test den echten Bestand des Entwicklers.
@@ -77,7 +77,7 @@ def app(projekte: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Sanc
     return gebaut
 
 
-async def _oeffnen(pilot: Any, app: SanctuaryApp) -> None:
+async def _oeffnen(pilot: Any, app: ChatterdomeApp) -> None:
     await pilot.press("f")
     for _ in range(300):
         await pilot.pause()
@@ -87,7 +87,7 @@ async def _oeffnen(pilot: Any, app: SanctuaryApp) -> None:
         await pilot.pause()
 
 
-async def _tippen(pilot: Any, app: SanctuaryApp, text: str) -> None:
+async def _tippen(pilot: Any, app: ChatterdomeApp, text: str) -> None:
     """Tippt und wartet, bis die Entprellung die Abfrage ausgeloest hat.
 
     ``pilot.pause()`` gibt nur den Ereignisstrang frei und laesst KEINE Zeit
@@ -111,7 +111,7 @@ async def _tippen(pilot: Any, app: SanctuaryApp, text: str) -> None:
 
 
 class TestSuchreiter:
-    async def test_taste_oeffnet_und_baut_den_index(self, app: SanctuaryApp) -> None:
+    async def test_taste_oeffnet_und_baut_den_index(self, app: ChatterdomeApp) -> None:
         async with app.run_test(size=(140, 45)) as pilot:
             await _oeffnen(pilot, app)
 
@@ -119,7 +119,7 @@ class TestSuchreiter:
             assert app._index_gebaut is True
             assert app._suchindex.bestand() == (1, 2)
 
-    async def test_cursor_steht_im_suchfeld(self, app: SanctuaryApp) -> None:
+    async def test_cursor_steht_im_suchfeld(self, app: ChatterdomeApp) -> None:
         """Wer den Reiter oeffnet, will tippen - nicht erst ein Feld suchen."""
         async with app.run_test(size=(140, 45)) as pilot:
             await _oeffnen(pilot, app)
@@ -127,7 +127,7 @@ class TestSuchreiter:
             fokus = app.focused
             assert fokus is not None and fokus.id == "such-eingabe"
 
-    async def test_index_wird_nur_einmal_gebaut(self, app: SanctuaryApp) -> None:
+    async def test_index_wird_nur_einmal_gebaut(self, app: ChatterdomeApp) -> None:
         """EIN Tastendruck loest zwei Wege aus - gebaut werden darf nur einmal.
 
         ``action_show_search`` setzt den Reiter, das feuert ``TabActivated``,
@@ -149,7 +149,7 @@ class TestSuchreiter:
 
         assert len(laeufe) == 1
 
-    async def test_tippen_fuellt_die_trefferliste(self, app: SanctuaryApp) -> None:
+    async def test_tippen_fuellt_die_trefferliste(self, app: ChatterdomeApp) -> None:
         async with app.run_test(size=(140, 45)) as pilot:
             await _oeffnen(pilot, app)
             await _tippen(pilot, app, "subagenten")
@@ -157,7 +157,7 @@ class TestSuchreiter:
             tabelle = app.query_one("#such-treffer", DataTable)
             assert tabelle.row_count == 1
 
-    async def test_ohne_treffer_bleibt_die_liste_leer(self, app: SanctuaryApp) -> None:
+    async def test_ohne_treffer_bleibt_die_liste_leer(self, app: ChatterdomeApp) -> None:
         async with app.run_test(size=(140, 45)) as pilot:
             await _oeffnen(pilot, app)
             await _tippen(pilot, app, "nashorn")
@@ -166,7 +166,7 @@ class TestSuchreiter:
             fuss = app.query_one("#such-fuss", Static)
             assert "Nichts gefunden" in str(fuss.content)
 
-    async def test_syntaxzeichen_reissen_nichts_um(self, app: SanctuaryApp) -> None:
+    async def test_syntaxzeichen_reissen_nichts_um(self, app: ChatterdomeApp) -> None:
         """Ein Anfuehrungszeichen in der Eingabe wuerde eine rohe Abfrage abbrechen."""
         async with app.run_test(size=(140, 45)) as pilot:
             await _oeffnen(pilot, app)
@@ -175,7 +175,7 @@ class TestSuchreiter:
             # Zusicherung ist, dass die Oberflaeche noch steht.
             assert app.query_one("#suche", SuchPanel) is not None
 
-    async def test_alle_bedienelemente_sind_sichtbar(self, app: SanctuaryApp) -> None:
+    async def test_alle_bedienelemente_sind_sichtbar(self, app: ChatterdomeApp) -> None:
         """Ein Feld hinter dem unteren Rand ist vorhanden und trotzdem unbenutzbar."""
         async with app.run_test(size=(140, 30)) as pilot:
             await _oeffnen(pilot, app)

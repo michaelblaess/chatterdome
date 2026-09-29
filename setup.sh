@@ -2,8 +2,8 @@
 # setup.sh - Haengt ~/.claude/skills/<name> auf dieses Repo (Linux/macOS)
 #
 # Verwendung:
-#   git clone https://github.com/michaelblaess/claude-sanctuary.git
-#   cd claude-sanctuary && ./setup.sh
+#   git clone https://github.com/michaelblaess/chatterdome.git
+#   cd chatterdome && ./setup.sh
 #
 # Die Skills liegen hier, damit die Anwendung ihr eigenes Repo hat. Fuer Claude
 # Code aendert sich nichts: die Symlinks stellen sie an genau der Stelle
@@ -38,15 +38,15 @@ verlinke() {
         echo "[UM]   $name - war: $alt"
     elif [ -e "$link" ]; then
         # Echtes Verzeichnis: niemals loeschen, nur beiseite legen.
-        mv "$link" "$link.vor-sanctuary"
-        echo "[!]    $name war ein echtes Verzeichnis - gesichert als $name.vor-sanctuary"
+        mv "$link" "$link.vor-chatterdome"
+        echo "[!]    $name war ein echtes Verzeichnis - gesichert als $name.vor-chatterdome"
     fi
 
     ln -s "$ziel" "$link"
     echo "[OK]   $name -> $ziel"
 }
 
-echo "Claude Sanctuary - Setup"
+echo "Chatterdome - Setup"
 echo "========================"
 echo "Repo:   $REPO_DIR"
 echo "Skills: $SKILL_DIR"
@@ -55,7 +55,7 @@ echo ""
 verlinke operator
 verlinke claude-bus
 
-# --- Kurzbefehl "sanctuary" ins PATH-Verzeichnis ---
+# --- Kurzbefehl "chatterdome" ins PATH-Verzeichnis ---
 #
 # Ein Wrapper statt eines Symlinks auf die .mjs: der Symlink wuerde zwar
 # funktionieren, aber unter Git Bash auf Windows haengt die Ausfuehrbarkeit
@@ -63,19 +63,23 @@ verlinke claude-bus
 # und ist damit ueberall gleich.
 BIN_DIR="$HOME/.local/bin"
 mkdir -p "$BIN_DIR"
-cat > "$BIN_DIR/sanctuary" <<WRAPPER
+# "sanctuary" ist der alte Name und bleibt als Alias: andere Rechner rufen ihn
+# ueber ssh auf, und deren Stand kann aelter sein als dieser.
+for kurz in chatterdome sanctuary; do
+    cat > "$BIN_DIR/$kurz" <<WRAPPER
 #!/usr/bin/env bash
-exec node "$REPO_DIR/bin/sanctuary.mjs" "\$@"
+exec node "$REPO_DIR/bin/chatterdome.mjs" "\$@"
 WRAPPER
-chmod +x "$BIN_DIR/sanctuary"
-echo "[OK]   sanctuary -> $BIN_DIR/sanctuary"
+    chmod +x "$BIN_DIR/$kurz"
+    echo "[OK]   $kurz -> $BIN_DIR/$kurz"
+done
 
 echo ""
-if ! command -v sanctuary >/dev/null 2>&1; then
+if ! command -v chatterdome >/dev/null 2>&1; then
     echo "HINWEIS: $BIN_DIR liegt nicht im PATH. Ergaenzen mit:"
     echo "  echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.bashrc"
     echo ""
 fi
 echo "Fertig. Probe:"
-echo "  sanctuary status"
-echo "  sanctuary doctor"
+echo "  chatterdome status"
+echo "  chatterdome doctor"

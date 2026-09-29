@@ -1,6 +1,6 @@
 // Stellt den Vorfall vom 07.08.2026 ueber die echte Kommandozeile nach.
 //
-// Der Ablauf ist genau der gemeldete: Sanctuary legt einen Auftrag an Marga
+// Der Ablauf ist genau der gemeldete: Chatterdome legt einen Auftrag an Marga
 // ab, diese Sitzung endet, der Name geht zurueck in den Pool und wird an eine
 // voellig andere Sitzung neu vergeben. Danach wird gemessen, was die neue
 // Sitzung in ihrer Warteschlange findet.
@@ -74,7 +74,7 @@ describe('Ein neu vergebener Name erbt keine Post', () => {
     const bus = busUmgebung(t);
     bus.namen({ [SITZUNG_ALT]: 'Marga' });
 
-    const gesendet = bus.lauf(['send', 'Marga', 'gib mir das aktuelle Datum', '--von', 'Sanctuary', '--host', RECHNER]);
+    const gesendet = bus.lauf(['send', 'Marga', 'gib mir das aktuelle Datum', '--von', 'Chatterdome', '--host', RECHNER]);
     assert.equal(gesendet.code, 0, gesendet.aus);
 
     // Die Sitzung endet, der Name geht zurueck in den Pool und wird neu vergeben.
@@ -87,7 +87,7 @@ describe('Ein neu vergebener Name erbt keine Post', () => {
   test('Gegenprobe - die gemeinte Sitzung bekommt ihn sehr wohl', (t) => {
     const bus = busUmgebung(t);
     bus.namen({ [SITZUNG_ALT]: 'Marga' });
-    bus.lauf(['send', 'Marga', 'gib mir das aktuelle Datum', '--von', 'Sanctuary', '--host', RECHNER]);
+    bus.lauf(['send', 'Marga', 'gib mir das aktuelle Datum', '--von', 'Chatterdome', '--host', RECHNER]);
 
     const gemeint = bus.warteschlange(SITZUNG_ALT);
     assert.equal(gemeint.meine.length, 1, 'sonst kommt ueberhaupt nichts mehr an');
@@ -97,7 +97,7 @@ describe('Ein neu vergebener Name erbt keine Post', () => {
   test('Gegenprobe - mit --rolle ueberlebt der Auftrag den Namenswechsel', (t) => {
     const bus = busUmgebung(t);
     bus.namen({ [SITZUNG_ALT]: 'Marga' });
-    bus.lauf(['send', 'Marga', 'wer auch immer das liest', '--rolle', '--von', 'Sanctuary', '--host', RECHNER]);
+    bus.lauf(['send', 'Marga', 'wer auch immer das liest', '--rolle', '--von', 'Chatterdome', '--host', RECHNER]);
 
     bus.namen({ [SITZUNG_NEU]: 'Marga' });
 
@@ -113,7 +113,7 @@ describe('Adressierung', () => {
     const bus = busUmgebung(t);
     bus.namen({ [SITZUNG_ALT]: 'Marga' });
 
-    const { code, aus } = bus.lauf(['send', 'Schmid', 'Text', '--von', 'Sanctuary', '--host', RECHNER]);
+    const { code, aus } = bus.lauf(['send', 'Schmid', 'Text', '--von', 'Chatterdome', '--host', RECHNER]);
 
     assert.equal(code, 1, 'ein Auftrag ins Leere ist genau der Bestand, der spaeter jemanden trifft');
     assert.match(aus, /trägt gerade niemand/);
@@ -123,7 +123,7 @@ describe('Adressierung', () => {
     const bus = busUmgebung(t);
     bus.namen({ [SITZUNG_ALT]: 'Marga' });
 
-    const { code } = bus.lauf(['send', 'Schmid', 'Text', '--rolle', '--von', 'Sanctuary', '--host', RECHNER]);
+    const { code } = bus.lauf(['send', 'Schmid', 'Text', '--rolle', '--von', 'Chatterdome', '--host', RECHNER]);
     assert.equal(code, 0);
   });
 
@@ -131,7 +131,7 @@ describe('Adressierung', () => {
     const bus = busUmgebung(t);
     bus.namen({ [SITZUNG_ALT]: 'Marga', [SITZUNG_NEU]: 'Schmid' });
 
-    bus.lauf(['send', 'alle', 'Ich fasse gleich claude-config an', '--von', 'Sanctuary']);
+    bus.lauf(['send', 'alle', 'Ich fasse gleich claude-config an', '--von', 'Chatterdome']);
 
     assert.equal(bus.warteschlange(SITZUNG_ALT).meine.length, 1);
     assert.equal(bus.warteschlange(SITZUNG_NEU).meine.length, 1);

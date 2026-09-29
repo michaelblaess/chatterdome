@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from claude_sanctuary.tui.starter import saubere_umgebung
+from chatterdome.tui.starter import saubere_umgebung
 
 
 def test_sitzungsmarker_fallen_weg(monkeypatch: pytest.MonkeyPatch) -> None:

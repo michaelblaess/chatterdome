@@ -11,9 +11,9 @@ from __future__ import annotations
 import pytest
 from textual.widgets import DataTable, Select, Static
 
-from claude_sanctuary.kern.modelle import Auftrag, Bestand, Busbestand, Ereignis, Namenspool
-from claude_sanctuary.tui.app import SanctuaryApp
-from claude_sanctuary.tui.widgets.bus_tabelle import BusTabelle
+from chatterdome.kern.modelle import Auftrag, Bestand, Busbestand, Ereignis, Namenspool
+from chatterdome.tui.app import ChatterdomeApp
+from chatterdome.tui.widgets.bus_tabelle import BusTabelle
 
 
 def _auftrag(
@@ -30,7 +30,7 @@ def _auftrag(
     return Auftrag(
         auftrag_id=kennung,
         zustand=zustand,
-        von="Sanctuary",
+        von="Chatterdome",
         an=an,
         topic="allgemein",
         text=text,
@@ -85,13 +85,13 @@ class StilleQuelle:
 
 
 @pytest.fixture
-def app(monkeypatch: pytest.MonkeyPatch) -> SanctuaryApp:
-    gebaut = SanctuaryApp(quelle=StilleQuelle())
+def app(monkeypatch: pytest.MonkeyPatch) -> ChatterdomeApp:
+    gebaut = ChatterdomeApp(quelle=StilleQuelle())
     monkeypatch.setattr(gebaut, "_frage_disclaimer", lambda: None)
     return gebaut
 
 
-async def _oeffnen(pilot: object, app: SanctuaryApp) -> None:
+async def _oeffnen(pilot: object, app: ChatterdomeApp) -> None:
     """Oeffnet den Tab und wartet, bis der Bestand steht."""
     await pilot.press("u")  # type: ignore[attr-defined]
     for _ in range(200):
@@ -103,7 +103,7 @@ async def _oeffnen(pilot: object, app: SanctuaryApp) -> None:
 
 
 class TestTab:
-    async def test_taste_u_oeffnet_den_tab_und_laedt(self, app: SanctuaryApp) -> None:
+    async def test_taste_u_oeffnet_den_tab_und_laedt(self, app: ChatterdomeApp) -> None:
         async with app.run_test() as pilot:
             await _oeffnen(pilot, app)
 
@@ -111,13 +111,13 @@ class TestTab:
             assert app._busbestand is not None
             assert len(app._busbestand.auftraege) == 3
 
-    async def test_nachrichten_stehen_in_der_tabelle(self, app: SanctuaryApp) -> None:
+    async def test_nachrichten_stehen_in_der_tabelle(self, app: ChatterdomeApp) -> None:
         async with app.run_test() as pilot:
             await _oeffnen(pilot, app)
 
             assert app.query_one("#bus-daten", DataTable).row_count == 3
 
-    async def test_uebersicht_nennt_offene_und_verfall(self, app: SanctuaryApp) -> None:
+    async def test_uebersicht_nennt_offene_und_verfall(self, app: ChatterdomeApp) -> None:
         async with app.run_test() as pilot:
             await _oeffnen(pilot, app)
 
@@ -127,7 +127,7 @@ class TestTab:
             # Umbau vom 07.08.2026 - fehlt sie, ist die Uebersicht eine Liste.
             assert "1" in text
 
-    async def test_zustandsfilter_engt_ein(self, app: SanctuaryApp) -> None:
+    async def test_zustandsfilter_engt_ein(self, app: ChatterdomeApp) -> None:
         async with app.run_test() as pilot:
             await _oeffnen(pilot, app)
 
@@ -137,7 +137,7 @@ class TestTab:
 
             assert app.query_one("#bus-daten", DataTable).row_count == 1
 
-    async def test_bindungsfilter_trennt_person_von_rolle(self, app: SanctuaryApp) -> None:
+    async def test_bindungsfilter_trennt_person_von_rolle(self, app: ChatterdomeApp) -> None:
         async with app.run_test() as pilot:
             await _oeffnen(pilot, app)
 
@@ -147,7 +147,7 @@ class TestTab:
 
             assert app.query_one("#bus-daten", DataTable).row_count == 1
 
-    async def test_suche_findet_ueber_den_agenten(self, app: SanctuaryApp) -> None:
+    async def test_suche_findet_ueber_den_agenten(self, app: ChatterdomeApp) -> None:
         async with app.run_test() as pilot:
             await _oeffnen(pilot, app)
 
@@ -159,7 +159,7 @@ class TestTab:
             assert app.query_one("#bus-daten", DataTable).row_count == 1
 
     async def test_auswahl_zeigt_den_auftrag_und_esc_fuehrt_zurueck(
-        self, app: SanctuaryApp
+        self, app: ChatterdomeApp
     ) -> None:
         async with app.run_test() as pilot:
             await _oeffnen(pilot, app)
@@ -174,7 +174,7 @@ class TestTab:
 
             assert app._auftrag is not None
             text = str(app.query_one("#bus-inhalt", Static).content)
-            assert "Sanctuary" in text
+            assert "Chatterdome" in text
 
             await pilot.press("escape")
             for _ in range(20):
@@ -182,7 +182,7 @@ class TestTab:
 
             assert app._auftrag is None
 
-    async def test_verfallsgrund_steht_beim_auftrag(self, app: SanctuaryApp) -> None:
+    async def test_verfallsgrund_steht_beim_auftrag(self, app: ChatterdomeApp) -> None:
         """Ohne den Grund fragt der Absender, wo sein Auftrag geblieben ist."""
         async with app.run_test() as pilot:
             await _oeffnen(pilot, app)

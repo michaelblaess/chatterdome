@@ -13,9 +13,9 @@ from importlib import resources
 from pathlib import Path
 from string import Formatter
 
-from claude_sanctuary.i18n import format_number
+from chatterdome.i18n import format_number
 
-QUELLE = Path(__file__).resolve().parents[1] / "src" / "claude_sanctuary"
+QUELLE = Path(__file__).resolve().parents[1] / "src" / "chatterdome"
 
 ZUSAMMENGESETZT = (
     "binding.",
@@ -70,7 +70,7 @@ hier heraus. Sie darf nicht wachsen.
 
 
 def _laden(sprache: str) -> dict[str, str]:
-    datei = resources.files("claude_sanctuary") / "locale" / f"{sprache}.json"
+    datei = resources.files("chatterdome") / "locale" / f"{sprache}.json"
     werte = json.loads(datei.read_text(encoding="utf-8"))
     return {str(k): str(v) for k, v in werte.items()}
 

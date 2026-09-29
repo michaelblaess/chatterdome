@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from claude_sanctuary.debatte_ablauf import Verbrauchszaehler, _json_antwort, namen_zuordnen
-from claude_sanctuary.kern.debatte import Verbrauch
+from chatterdome.debatte_ablauf import Verbrauchszaehler, _json_antwort, namen_zuordnen
+from chatterdome.kern.debatte import Verbrauch
 
 
 def _zeile(kennung: str, ein: int, cache: int, aus: int) -> str:
@@ -82,7 +82,7 @@ class TestModellImAufruf:
     ) -> None:
         import subprocess
 
-        from claude_sanctuary import debatte_ablauf
+        from chatterdome import debatte_ablauf
 
         befehle: list[list[str]] = []
 

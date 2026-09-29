@@ -12,8 +12,8 @@ from pathlib import Path
 
 import pytest
 
-from claude_sanctuary.kern.suche import Suchindex, _frage, index_datei
-from claude_sanctuary.kern.transkripte import ClaudeQuelle, CodexQuelle
+from chatterdome.kern.suche import Suchindex, _frage, index_datei
+from chatterdome.kern.transkripte import ClaudeQuelle, CodexQuelle
 
 
 def _claude(wurzel: Path, sitzung: str, saetze: list[tuple[str, str]]) -> None:

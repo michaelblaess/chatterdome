@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import sys
 
-from claude_sanctuary.kern.terminals import (
+from chatterdome.kern.terminals import (
     AUTOMATISCH,
     TERMINALS,
     finde,
@@ -59,9 +59,10 @@ class TestVorbereitung:
 
 class TestStartdatei:
     def test_befehle_stehen_vor_dem_start(self, tmp_path: object) -> None:
-        pfad = startdatei(["set HTTPS_PROXY=http://p:8080"], str(tmp_path), ["sanctuary", "start"])
+        pfad = startdatei(["set HTTPS_PROXY=http://p:8080"], str(tmp_path),
+                          ["chatterdome", "start"])
         inhalt = pfad.read_text(encoding="utf-8")
-        assert inhalt.index("HTTPS_PROXY") < inhalt.index("sanctuary")
+        assert inhalt.index("HTTPS_PROXY") < inhalt.index("chatterdome")
 
     def test_sonderzeichen_bleiben_unangetastet(self, tmp_path: object) -> None:
         """Genau dafuer gibt es die Datei.
@@ -70,11 +71,11 @@ class TestStartdatei:
         Befehlszeile durch zwei Shells gegangen und dabei zerlegt worden.
         """
         zeile = 'set NO_PROXY="localhost,127.0.0.1" & echo (fertig)'
-        pfad = startdatei([zeile], str(tmp_path), ["sanctuary", "start"])
+        pfad = startdatei([zeile], str(tmp_path), ["chatterdome", "start"])
         assert zeile in pfad.read_text(encoding="utf-8")
 
     def test_wechselt_zuerst_ins_verzeichnis(self, tmp_path: object) -> None:
-        pfad = startdatei([], str(tmp_path), ["sanctuary", "start"])
+        pfad = startdatei([], str(tmp_path), ["chatterdome", "start"])
         zeilen = [z for z in pfad.read_text(encoding="utf-8").splitlines() if z.strip()]
         # Zeile 0 ist die Kopfzeile (@echo off bzw. die Shebang-Zeile).
         assert str(tmp_path) in zeilen[1]
@@ -93,13 +94,13 @@ class TestStartdatei:
         """
         monkeypatch.setattr(sys, "platform", "win32")
         pfad = startdatei(["$env:HTTPS_PROXY = 'http://p:8080'"], str(tmp_path),
-                          ["sanctuary", "start", "Peanut"], powershell=True)
+                          ["chatterdome", "start", "Peanut"], powershell=True)
         assert pfad.suffix == ".ps1"
         inhalt = pfad.read_text(encoding="utf-8-sig")
         assert "@echo off" not in inhalt                    # keine Batch-Syntax
         assert "Set-Location -LiteralPath" in inhalt
         assert "$env:HTTPS_PROXY" in inhalt                 # PS-Vorbefehl unangetastet
-        assert "& 'sanctuary' 'start' 'Peanut'" in inhalt   # PS-Call-Operator
+        assert "& 'chatterdome' 'start' 'Peanut'" in inhalt   # PS-Call-Operator
 
 
 class TestZeilenenden:
@@ -113,14 +114,14 @@ class TestZeilenenden:
     def test_cmd_hat_einfaches_crlf(self, tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
         """Ohne newline="" macht der Textmodus unter Windows \\r\\r\\n daraus."""
         monkeypatch.setattr(sys, "platform", "win32")
-        pfad = startdatei([], str(tmp_path), ["sanctuary", "start"])
+        pfad = startdatei([], str(tmp_path), ["chatterdome", "start"])
         rohdaten = pfad.read_bytes()
         assert b"\r\r\n" not in rohdaten
         assert b"\r\n" in rohdaten
 
     def test_ps1_hat_einfaches_crlf(self, tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
         monkeypatch.setattr(sys, "platform", "win32")
-        pfad = startdatei([], str(tmp_path), ["sanctuary", "start"], powershell=True)
+        pfad = startdatei([], str(tmp_path), ["chatterdome", "start"], powershell=True)
         rohdaten = pfad.read_bytes()
         assert rohdaten.startswith(b"\xef\xbb\xbf")   # BOM fuer PowerShell 5.1
         assert b"\r\r\n" not in rohdaten
@@ -129,7 +130,7 @@ class TestZeilenenden:
     def test_sh_hat_kein_cr(self, tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
         """Eine .sh vertraegt kein CR, auch nicht unter Windows erzeugt."""
         monkeypatch.setattr(sys, "platform", "linux")
-        pfad = startdatei([], str(tmp_path), ["sanctuary", "start"])
+        pfad = startdatei([], str(tmp_path), ["chatterdome", "start"])
         assert b"\r" not in pfad.read_bytes()
 
 
@@ -138,7 +139,8 @@ class TestEindeutigeStartdatei:
 
     def test_jeder_aufruf_eigene_datei(self, tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
         monkeypatch.setattr(sys, "platform", "win32")
-        pfade = [startdatei([], str(tmp_path), ["sanctuary", "start", n]) for n in ("A", "B", "C")]
+        pfade = [startdatei([], str(tmp_path), ["chatterdome", "start", n])
+                 for n in ("A", "B", "C")]
         assert len({p for p in pfade}) == 3
         for pfad, name in zip(pfade, ("A", "B", "C"), strict=True):
             assert pfad.read_text(encoding="utf-8").rstrip().endswith(f"start {name}")

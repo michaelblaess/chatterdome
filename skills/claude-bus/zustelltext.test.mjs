@@ -11,7 +11,7 @@ import { GRENZMARKE, absenderName, empfaengerName, zustelltext } from './zustell
 
 const AUFTRAG = {
   auftrag_id: 'a1b2c3',
-  von: 'Sanctuary',
+  von: 'Chatterdome',
   von_host: 'rainbow',
   an: 'Operator',
   host: 'RAINBOW',
@@ -24,11 +24,11 @@ describe('Absender', () => {
   test('wird mit dem Rechner qualifiziert', () => {
     // Derselbe Name kann auf zwei Rechnern leben - ohne Rechner ist er keine
     // Antwortadresse.
-    assert.equal(absenderName(AUFTRAG), 'Sanctuary@RAINBOW');
+    assert.equal(absenderName(AUFTRAG), 'Chatterdome@RAINBOW');
   });
 
   test('ohne bekannten Rechner bleibt der blosse Name', () => {
-    assert.equal(absenderName({ ...AUFTRAG, von_host: '' }), 'Sanctuary');
+    assert.equal(absenderName({ ...AUFTRAG, von_host: '' }), 'Chatterdome');
   });
 
   test('ohne Absender wird nichts erfunden', () => {
@@ -53,7 +53,7 @@ describe('Empfaenger', () => {
 describe('Zustelltext', () => {
   test('nennt Absender und Auftrags-ID', () => {
     const t = zustelltext(AUFTRAG);
-    assert.match(t, /Sanctuary@RAINBOW/);
+    assert.match(t, /Chatterdome@RAINBOW/);
     assert.match(t, /a1b2c3/);
   });
 
@@ -96,7 +96,7 @@ describe('Zustelltext', () => {
   test('ein leerer Text laesst den Aufbau heil', () => {
     const t = zustelltext({ ...AUFTRAG, text: '' });
     assert.match(t, /a1b2c3/);
-    assert.match(t, /Sanctuary@RAINBOW an Operator@RAINBOW/);
+    assert.match(t, /Chatterdome@RAINBOW an Operator@RAINBOW/);
   });
 
   test('die Grenzmarke bleibt kurz - sie geht in jeden Kontext', () => {

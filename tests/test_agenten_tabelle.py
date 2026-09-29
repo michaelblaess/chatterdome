@@ -16,8 +16,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from claude_sanctuary.kern.modelle import Agent, kennung
-from claude_sanctuary.tui.widgets.agenten_tabelle import AgentenTabelle
+from chatterdome.kern.modelle import Agent, kennung
+from chatterdome.tui.widgets.agenten_tabelle import AgentenTabelle
 
 
 def _agent(**felder: object) -> Agent:
@@ -128,7 +128,7 @@ class TestWarnzellenBlinken:
         from textual.app import App, ComposeResult
         from textual.widgets import DataTable
 
-        from claude_sanctuary.kern.modelle import KONTEXT_KRITISCH
+        from chatterdome.kern.modelle import KONTEXT_KRITISCH
 
         class NurTabelle(App[None]):
             def compose(self) -> ComposeResult:

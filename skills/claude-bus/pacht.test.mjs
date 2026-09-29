@@ -43,7 +43,7 @@ function auftragAblegen(db, { id, an, anSession = null, bindung = null, vor = 0 
   const ts = new Date(Date.now() - vor * 3600_000).toISOString();
   schreibe(db, {
     auftrag_id: id, ts, art: 'auftrag', host: 'TESTRECHNER', von_host: 'TESTRECHNER',
-    von: 'Sanctuary', von_session: '', an, an_session: anSession, bindung,
+    von: 'Chatterdome', von_session: '', an, an_session: anSession, bindung,
     zustand: 'submitted', topic: 'allgemein', text: 'gib mir das aktuelle Datum',
     quittung_erwartet: 1,
   });
@@ -81,7 +81,7 @@ describe('Pacht endet mit der Sitzung', () => {
 
     const q = db.prepare("SELECT * FROM ereignis WHERE art = 'quittung' AND auftrag_id = 'a3'").get();
     assert.equal(q.status, 410);
-    assert.equal(q.an, 'Sanctuary', 'die Quittung muss an den Absender gehen');
+    assert.equal(q.an, 'Chatterdome', 'die Quittung muss an den Absender gehen');
     assert.match(q.notiz, /Marga/);
   });
 });
@@ -119,7 +119,7 @@ describe('Verfall', () => {
     auftragAblegen(db, { id: 'haengt', an: 'Marga', vor: 96 });
     schreibe(db, {
       auftrag_id: 'haengt', art: 'quittung', host: 'TESTRECHNER',
-      von: 'Marga', an: 'Sanctuary', zustand: 'working', status: 202,
+      von: 'Marga', an: 'Chatterdome', zustand: 'working', status: 202,
     });
 
     // 'working' zaehlt zu den offenen Zustaenden - eine Instanz, die einen

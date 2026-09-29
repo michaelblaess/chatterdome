@@ -1,4 +1,4 @@
-# claude-sanctuary
+# chatterdome
 
 <p align="center">
   <img src="docs/flags/gb.svg" height="13" alt=""> <a href="README.md">English</a> ·
@@ -32,8 +32,8 @@ keine Telemetrie. Was über Rechnergrenzen geht, geht über SSH im eigenen Tailn
 ## Einrichten
 
 ```bash
-git clone https://github.com/michaelblaess/claude-sanctuary.git
-cd claude-sanctuary
+git clone https://github.com/michaelblaess/chatterdome.git
+cd chatterdome
 ./setup.sh                                        # Linux, macOS
 powershell -ExecutionPolicy Bypass -File setup.ps1  # Windows
 ```
@@ -41,24 +41,42 @@ powershell -ExecutionPolicy Bypass -File setup.ps1  # Windows
 Das Skript hängt `~/.claude/skills/operator` und `~/.claude/skills/claude-bus` auf dieses
 Repo. Für Claude Code ändert sich dadurch nichts - die Skills liegen weiterhin dort, wo sie
 erwartet werden. Ein vorhandenes echtes Verzeichnis wird **nie gelöscht**, sondern als
-`.vor-sanctuary` beiseitegelegt.
+`.vor-chatterdome` beiseitegelegt.
+
+### Umzug von claude-sanctuary
+
+Bis zum 29.09.2026 hieß das Projekt **claude-sanctuary**. Ein Rechner mit dem alten Klon zieht
+in zwei Schritten um. Erst alles schließen, was im Ordner läuft (Claude-Sitzungen, die alte
+Oberfläche, Terminals), dann im alten Ordner:
+
+```bash
+git pull
+bash scripts/umzug-chatterdome.sh                                   # Linux, macOS
+powershell -ExecutionPolicy Bypass -File scripts\umzug-chatterdome.ps1  # Windows
+```
+
+Das Skript benennt den Ordner in `chatterdome` um, stellt das Git-Remote um, baut die `.venv`
+neu und ruft Setup und Bootstrap auf. Einstellungen, Suchindex und Diskussionsarchiv werden
+beim ersten Start von `~/.claude-sanctuary` nach `~/.chatterdome` kopiert. Der alte Befehl
+`sanctuary` bleibt als Alias: andere Rechner rufen ihn über ssh auf, und deren Stand kann
+älter sein als dieser.
 
 ## Benutzen
 
-Das Setup legt den Kurzbefehl `sanctuary` in `~/.local/bin` an - beide Skills hängen darunter:
+Das Setup legt den Kurzbefehl `chatterdome` in `~/.local/bin` an - beide Skills hängen darunter:
 
 ```bash
-sanctuary status              # Tabelle aller Instanzen
-sanctuary status --mesh       # zusätzlich die anderen Rechner
-sanctuary status --json       # maschinenlesbar
-sanctuary watch 2 --json      # NDJSON-Strom für Werkzeuge
-sanctuary start [Name]        # neue Instanz mit Namen im Tab-Titel
-sanctuary stop <Name>         # Instanz beenden
+chatterdome status              # Tabelle aller Instanzen
+chatterdome status --mesh       # zusätzlich die anderen Rechner
+chatterdome status --json       # maschinenlesbar
+chatterdome watch 2 --json      # NDJSON-Strom für Werkzeuge
+chatterdome start [Name]        # neue Instanz mit Namen im Tab-Titel
+chatterdome stop <Name>         # Instanz beenden
 
-sanctuary send Klara "Bitte Tests laufen lassen" --erwartet-quittung
-sanctuary auftraege           # was liegt für mich an
-sanctuary ack <id> 200 "erledigt"
-sanctuary hilfe               # alle Befehle
+chatterdome send Klara "Bitte Tests laufen lassen" --erwartet-quittung
+chatterdome auftraege           # was liegt für mich an
+chatterdome ack <id> 200 "erledigt"
+chatterdome hilfe               # alle Befehle
 ```
 
 Die Skripte lassen sich weiterhin direkt aufrufen
@@ -107,7 +125,7 @@ Seitdem unterscheidet der Bus zwei Adressarten:
 Die Übersicht rechts nennt deshalb nicht nur offen, erledigt und gescheitert,
 sondern auch **wie viele offene Nachrichten überhaupt noch vererbbar sind**.
 Genau diese Zahl hätte den Vorfall vorhergesagt. Dazu die Verfallsfrist
-(Vorgabe 24 Stunden, über `sanctuary config` zu ändern) und der älteste noch
+(Vorgabe 24 Stunden, über `chatterdome config` zu ändern) und der älteste noch
 offene Auftrag mit seinem Alter.
 
 Auch dieser Tab ist rein lesend. Gesendet wird weiterhin im Agenten-Tab.
@@ -174,7 +192,7 @@ Ständen nicht vergleichbar.**
 ## Der Suchreiter
 
 Taste `f`. Volltextsuche über alle Transkripte - Claude Code und Codex CLI -
-mit SQLite und FTS5. Der Index liegt unter `~/.claude-sanctuary/suche.db` und
+mit SQLite und FTS5. Der Index liegt unter `~/.chatterdome/suche.db` und
 ist jederzeit wegwerfbar: er enthält nichts, was nicht auch in den
 Transkripten steht.
 
@@ -267,7 +285,7 @@ zu bleiben. Gesteuert über die Einstellung `zustellung`:
 | `stop-hook` | Immer der bisherige Weg. Auf Windows ohnehin der einzige. |
 
 ```bash
-sanctuary bus config zustellung socket
+chatterdome bus config zustellung socket
 ```
 
 **Voraussetzung:** In `~/.claude/settings.json` muss `"crossSessionInbound": "accept"` stehen.
@@ -284,12 +302,12 @@ laufen - beide Sitzungen sind echt und haben eigene IDs. Eindeutig sein muss nic
 sondern die Adresse:
 
 ```bash
-sanctuary send Petra@SENZA "..."
+chatterdome send Petra@SENZA "..."
 ```
 
 Ist der Name im Mesh eindeutig, bleibt `send Petra` wie bisher. Ist er doppelt, bricht der Bus
 ab und nennt beide Fassungen, statt still eine zu wählen. Die Tabelle zeigt solche Namen als
-`Petra@RAINBOW`, und `sanctuary bus doctor` listet sie auf.
+`Petra@RAINBOW`, und `chatterdome bus doctor` listet sie auf.
 
 ### Verwaiste Sitzungen
 
@@ -316,10 +334,10 @@ Ein Unterschied, der überrascht, wenn man ihn zum ersten Mal trifft:
 
 ```bash
 ssh senza                          # interaktive Login-Shell - alles wie gewohnt
-sanctuary status                   # funktioniert dort einfach
+chatterdome status                   # funktioniert dort einfach
 
-ssh senza "sanctuary status"       # NICHT gefunden
-ssh senza 'bash -lc "sanctuary status"'   # so schon
+ssh senza "chatterdome status"       # NICHT gefunden
+ssh senza 'bash -lc "chatterdome status"'   # so schon
 ```
 
 Der Grund: `ssh rechner "befehl"` startet **keine** Login-Shell. Ubuntu bricht in den ersten

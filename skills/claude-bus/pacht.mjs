@@ -1,6 +1,6 @@
 // Der Name ist eine Pacht, kein Gegenueber - und das Postfach gehoert dazu.
 //
-// ANLASS (07.08.2026, von Michael gemeldet): Sanctuary legte am 03.08. einen
+// ANLASS (07.08.2026, von Michael gemeldet): Chatterdome legte am 03.08. einen
 // Auftrag "gib mir das aktuelle Datum" an Marga ab. Diese Marga holte ihn nie
 // ab, ihre Sitzung endete, der Aufraeumschritt gab den Namen frei, und vier
 // Tage spaeter bekam eine voellig andere Sitzung denselben Namen aus dem Pool -

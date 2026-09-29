@@ -21,13 +21,13 @@ from rich.text import Text
 from textual.coordinate import Coordinate
 from textual_widgets import LogPanel
 
-from claude_sanctuary.kern.gedaechtnis import Notiz
-from claude_sanctuary.kern.modelle import Agent, Bestand, Busbestand, Namenspool
-from claude_sanctuary.tui.app import SanctuaryApp
-from claude_sanctuary.tui.schutz import klartext, klartext_oder_nichts
-from claude_sanctuary.tui.screens.detail_screen import DetailScreen
-from claude_sanctuary.tui.widgets.agenten_tabelle import AgentenDaten, AgentenTabelle
-from claude_sanctuary.tui.widgets.notizen_tabelle import NotizenDaten, NotizenTabelle
+from chatterdome.kern.gedaechtnis import Notiz
+from chatterdome.kern.modelle import Agent, Bestand, Busbestand, Namenspool
+from chatterdome.tui.app import ChatterdomeApp
+from chatterdome.tui.schutz import klartext, klartext_oder_nichts
+from chatterdome.tui.screens.detail_screen import DetailScreen
+from chatterdome.tui.widgets.agenten_tabelle import AgentenDaten, AgentenTabelle
+from chatterdome.tui.widgets.notizen_tabelle import NotizenDaten, NotizenTabelle
 
 GIFT = "hier sind die aktuellen Stats: [/usage-Screenshot] sind die Rechnergebunden?"
 """Der Text, an dem die App tatsaechlich gestorben ist.
@@ -116,8 +116,8 @@ class StilleQuelle:
 
 
 @pytest.fixture
-def app(monkeypatch: pytest.MonkeyPatch) -> SanctuaryApp:
-    gebaut = SanctuaryApp(quelle=StilleQuelle())
+def app(monkeypatch: pytest.MonkeyPatch) -> ChatterdomeApp:
+    gebaut = ChatterdomeApp(quelle=StilleQuelle())
     monkeypatch.setattr(gebaut, "_frage_disclaimer", lambda: None)
     return gebaut
 
@@ -125,7 +125,7 @@ def app(monkeypatch: pytest.MonkeyPatch) -> SanctuaryApp:
 class TestHinweisfenster:
     """Ein Hinweisfenster ist ein Static und wertet Auszeichnungen aus."""
 
-    async def test_der_hinweis_zeigt_den_prompt_woertlich(self, app: SanctuaryApp) -> None:
+    async def test_der_hinweis_zeigt_den_prompt_woertlich(self, app: ChatterdomeApp) -> None:
         async with app.run_test() as pilot:
             for _ in range(60):
                 await pilot.pause()
@@ -144,7 +144,7 @@ class TestHinweisfenster:
 class TestLog:
     """Das LogPanel schreibt mit markup=True - ungeschuetzt stirbt es hier."""
 
-    async def test_fehlerausgabe_mit_klammer_landet_im_log(self, app: SanctuaryApp) -> None:
+    async def test_fehlerausgabe_mit_klammer_landet_im_log(self, app: ChatterdomeApp) -> None:
         async with app.run_test() as pilot:
             app._schreibe_log(f"Unterprozess meldete: {GIFT}", "error")
             await pilot.pause()
@@ -156,7 +156,7 @@ class TestLog:
 class TestNotizhinweis:
     """Notizen kommen aus fremden Dateien, ihre Beschreibung ist Fremdtext."""
 
-    async def test_beschreibung_mit_klammer_bleibt_lesbar(self, app: SanctuaryApp) -> None:
+    async def test_beschreibung_mit_klammer_bleibt_lesbar(self, app: ChatterdomeApp) -> None:
         notiz = Notiz(name="test", datei=Path("test.md"), beschreibung=GIFT)
 
         async with app.run_test() as pilot:

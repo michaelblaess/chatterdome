@@ -333,7 +333,7 @@ const SSH_ZEIT = 20000;
  * Zwei Anlaeufe aus demselben Grund wie in operator.mjs: der blosse Aufruf
  * greift auf Windows, weil der sshd dort den Benutzer-PATH mitbringt. Auf
  * Linux liest eine nicht-interaktive Shell die .bashrc nicht - dort ist
- * "sanctuary" nicht im PATH (am 02.08.2026 auf senza geprueft), erst die
+ * "chatterdome" nicht im PATH (am 02.08.2026 auf senza geprueft), erst die
  * Login-Shell findet es.
  *
  * @param {string} host      Zielrechner, wie er in ~/.ssh/config steht.

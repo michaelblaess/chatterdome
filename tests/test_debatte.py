@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import threading
 
-from claude_sanctuary.kern.debatte import (
+from chatterdome.kern.debatte import (
     Diskussion,
     Teilnehmer,
     Verbrauch,
@@ -346,7 +346,7 @@ class TestZusammenfassung:
 
 class TestAngabenImKurzbefehl:
     def test_seite_mit_und_ohne_rolle(self) -> None:
-        from claude_sanctuary.debatte_cli import _haltung
+        from chatterdome.debatte_cli import _haltung
 
         assert _haltung("pro") == ("pro", "")
         assert _haltung("Contra:Architektin") == ("contra", "Architektin")

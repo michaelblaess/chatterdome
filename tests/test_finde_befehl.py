@@ -1,4 +1,4 @@
-"""Der Aufruf von sanctuary darf mehrzeilige Argumente nicht abschneiden (28.09.2026)."""
+"""Der Aufruf von chatterdome darf mehrzeilige Argumente nicht abschneiden (28.09.2026)."""
 
 from __future__ import annotations
 
@@ -8,26 +8,26 @@ import sys
 
 import pytest
 
-from claude_sanctuary.kern.lokale_quelle import finde_befehl
+from chatterdome.kern.lokale_quelle import finde_befehl
 
 
 def _which(gefunden: str):  # type: ignore[no-untyped-def]
     def which(name: str) -> str | None:
-        return gefunden if name == "sanctuary" else "node"
+        return gefunden if name == "chatterdome" else "node"
 
     return which
 
 
 def test_batch_wrapper_wird_umgangen(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(shutil, "which", _which(r"C:\x\sanctuary.CMD"))
+    monkeypatch.setattr(shutil, "which", _which(r"C:\x\chatterdome.CMD"))
     befehl = finde_befehl()
     assert befehl[0] == "node"
-    assert befehl[1].endswith("sanctuary.mjs")
+    assert befehl[1].endswith("chatterdome.mjs")
 
 
 def test_echter_kurzbefehl_bleibt(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(shutil, "which", _which("/home/x/.local/bin/sanctuary"))
-    assert finde_befehl() == ["/home/x/.local/bin/sanctuary"]
+    monkeypatch.setattr(shutil, "which", _which("/home/x/.local/bin/chatterdome"))
+    assert finde_befehl() == ["/home/x/.local/bin/chatterdome"]
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="cmd.exe gibt es nur unter Windows")

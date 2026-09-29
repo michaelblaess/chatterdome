@@ -10,7 +10,7 @@
 // CopyFromScreen scheitert mit "Das Handle ist ungueltig". Der Ausweg ist eine
 // geplante Aufgabe, die im angemeldeten Benutzerkontext laeuft und per
 // "schtasks /Run" ausgeloest wird - damit entstand das Bild (2,1 MB, geprueft).
-// Einzurichten mit: sanctuary shot --setup
+// Einzurichten mit: chatterdome shot --setup
 //
 // LINUX: import(1) aus ImageMagick, mit DISPLAY und XAUTHORITY des laufenden
 // Xorg. Beides ist in einer ssh-Sitzung nicht gesetzt und wird deshalb aus der
@@ -24,11 +24,11 @@ import { dirname, join } from 'node:path';
 
 const R = '\x1b[0m', GRAU = '\x1b[38;5;244m', GRUEN = '\x1b[38;5;77m', ROT = '\x1b[38;5;203m';
 const HIER = dirname(fileURLToPath(import.meta.url));
-const AUFGABE = 'ClaudeSanctuaryShot';
+const AUFGABE = 'ClaudeChatterdomeShot';
 
 /** Ablage der Bilder. Bewusst fluechtig - ein Bildschirmfoto ist kein Bestand. */
 export function shotOrdner() {
-  const p = join(tmpdir(), 'claude-sanctuary-shots');
+  const p = join(tmpdir(), 'chatterdome-shots');
   if (!existsSync(p)) mkdirSync(p, { recursive: true });
   return p;
 }
@@ -90,7 +90,7 @@ function ueberAufgabe(ziel) {
   if (!aufgabeVorhanden()) {
     throw new Error(
       'Kein Desktop in dieser Sitzung und keine Aufgabe eingerichtet. '
-      + 'Auf dem Zielrechner einmalig ausfuehren: sanctuary shot --setup',
+      + 'Auf dem Zielrechner einmalig ausfuehren: chatterdome shot --setup',
     );
   }
   if (existsSync(ziel)) unlinkSync(ziel);
@@ -285,7 +285,7 @@ function main(argv) {
   }
 }
 
-// Direkt aufgerufen? Der Vergleich geht auch dann auf, wenn sanctuary.mjs
+// Direkt aufgerufen? Der Vergleich geht auch dann auf, wenn chatterdome.mjs
 // argv[1] umgebogen hat - genau so macht es bus.mjs.
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
   main(process.argv.slice(2));

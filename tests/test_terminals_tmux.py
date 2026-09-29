@@ -11,8 +11,8 @@ from pathlib import Path
 
 import pytest
 
-from claude_sanctuary.kern import terminals
-from claude_sanctuary.tui import starter
+from chatterdome.kern import terminals
+from chatterdome.tui import starter
 
 
 def _linux(monkeypatch: pytest.MonkeyPatch, *, anzeige: bool, installiert: set[str]) -> None:

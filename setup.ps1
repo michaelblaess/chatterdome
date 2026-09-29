@@ -2,8 +2,8 @@
   setup.ps1 - Haengt ~/.claude/skills/<name> auf dieses Repo (Windows)
 
   Verwendung:
-    git clone https://github.com/michaelblaess/claude-sanctuary.git
-    cd claude-sanctuary
+    git clone https://github.com/michaelblaess/chatterdome.git
+    cd chatterdome
     powershell -ExecutionPolicy Bypass -File .\setup.ps1
 
   Es werden JUNCTIONS benutzt, keine SymbolicLinks: Junctions auf Verzeichnisse
@@ -44,8 +44,8 @@ function Set-SkillLink {
             Write-Host "[UM]   $Name - war: $altesZiel"
         } else {
             # Echtes Verzeichnis: niemals loeschen, nur beiseite legen.
-            Move-Item $link "$link.vor-sanctuary" -Force
-            Write-Host "[!]    $Name war ein echtes Verzeichnis - gesichert als $Name.vor-sanctuary"
+            Move-Item $link "$link.vor-chatterdome" -Force
+            Write-Host "[!]    $Name war ein echtes Verzeichnis - gesichert als $Name.vor-chatterdome"
         }
     }
 
@@ -57,7 +57,7 @@ function Set-SkillLink {
     }
 }
 
-Write-Host 'Claude Sanctuary - Setup'
+Write-Host 'Chatterdome - Setup'
 Write-Host '========================'
 Write-Host "Repo:   $repoDir"
 Write-Host "Skills: $skillDir"
@@ -66,7 +66,7 @@ Write-Host ''
 Set-SkillLink -Name 'operator'
 Set-SkillLink -Name 'claude-bus'
 
-# --- Kurzbefehl "sanctuary" ins PATH-Verzeichnis ---
+# --- Kurzbefehl "chatterdome" ins PATH-Verzeichnis ---
 #
 # Zwei Dateien, weil Michael beide Shells benutzt: die .cmd greift in
 # PowerShell und cmd, die endungslose Datei in Git Bash. Beide rufen dasselbe
@@ -74,17 +74,21 @@ Set-SkillLink -Name 'claude-bus'
 $binDir = Join-Path $env:USERPROFILE '.local\bin'
 New-Item -ItemType Directory -Force $binDir | Out-Null
 
-$cmdPfad = Join-Path $binDir 'sanctuary.cmd'
-$mjsPfad = Join-Path $repoDir 'bin\sanctuary.mjs'
-"@echo off`r`nnode `"$mjsPfad`" %*" | Out-File $cmdPfad -Encoding ascii
-Write-Host "[OK]   sanctuary.cmd -> $cmdPfad"
-
-$shPfad = Join-Path $binDir 'sanctuary'
+$mjsPfad = Join-Path $repoDir 'bin\chatterdome.mjs'
 $shMjs = $mjsPfad -replace '\\', '/'
-# LF-Zeilenenden, sonst stolpert bash ueber das Wagenruecklauf-Zeichen im Shebang.
-$shInhalt = "#!/usr/bin/env bash`nexec node `"$shMjs`" `"`$@`"`n"
-[System.IO.File]::WriteAllText($shPfad, $shInhalt, [System.Text.UTF8Encoding]::new($false))
-Write-Host "[OK]   sanctuary (Git Bash) -> $shPfad"
+# "sanctuary" ist der alte Name und bleibt als Alias: andere Rechner rufen ihn
+# ueber ssh auf, und deren Stand kann aelter sein als dieser.
+foreach ($kurz in @('chatterdome', 'sanctuary')) {
+    $cmdPfad = Join-Path $binDir "$kurz.cmd"
+    "@echo off`r`nnode `"$mjsPfad`" %*" | Out-File $cmdPfad -Encoding ascii
+    Write-Host "[OK]   $kurz.cmd -> $cmdPfad"
+
+    $shPfad = Join-Path $binDir $kurz
+    # LF-Zeilenenden, sonst stolpert bash ueber das Wagenruecklauf-Zeichen im Shebang.
+    $shInhalt = "#!/usr/bin/env bash`nexec node `"$shMjs`" `"`$@`"`n"
+    [System.IO.File]::WriteAllText($shPfad, $shInhalt, [System.Text.UTF8Encoding]::new($false))
+    Write-Host "[OK]   $kurz (Git Bash) -> $shPfad"
+}
 
 # --- ~/.local/bin in den Benutzer-PATH, falls es fehlt ---
 #
@@ -108,5 +112,5 @@ if ($pfadJetzt -notlike "*$binDir*") {
 
 Write-Host ''
 Write-Host 'Fertig. Probe:'
-Write-Host '  sanctuary status'
-Write-Host '  sanctuary doctor'
+Write-Host '  chatterdome status'
+Write-Host '  chatterdome doctor'

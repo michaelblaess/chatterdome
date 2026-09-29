@@ -15,11 +15,11 @@ import pytest
 from textual.app import App, ComposeResult
 from textual_widgets.keymap import KeymapStyle, find_collisions, function_key_number
 
-from claude_sanctuary.tui import keymap
-from claude_sanctuary.tui.screens.hilfe_screen import _ist_grossschreibung, tastenzeilen
-from claude_sanctuary.tui.widgets.agenten_tabelle import AgentenDaten
+from chatterdome.tui import keymap
+from chatterdome.tui.screens.hilfe_screen import _ist_grossschreibung, tastenzeilen
+from chatterdome.tui.widgets.agenten_tabelle import AgentenDaten
 
-SPRACHEN = Path(__file__).resolve().parents[1] / "src" / "claude_sanctuary" / "locale"
+SPRACHEN = Path(__file__).resolve().parents[1] / "src" / "chatterdome" / "locale"
 
 ALTE_BELEGUNG: dict[str, tuple[str, ...]] = {
     "quit": ("q", "Q"),
@@ -74,10 +74,10 @@ def test_jede_beschriftung_ist_uebersetzt() -> None:
 
 
 def test_jede_aktion_gibt_es_in_der_app() -> None:
-    from claude_sanctuary.tui.app import SanctuaryApp
+    from chatterdome.tui.app import ChatterdomeApp
 
     # Eine Taste ohne action_-Methode tut schlicht nichts - ohne Fehler.
-    ohne = [a for a in keymap.CLASSIC if not hasattr(SanctuaryApp, f"action_{a}")]
+    ohne = [a for a in keymap.CLASSIC if not hasattr(ChatterdomeApp, f"action_{a}")]
     assert ohne == []
 
 
@@ -189,7 +189,7 @@ def test_eigene_belegung_auf_unbekannte_aktion_wird_gemeldet() -> None:
 
 
 def test_vorgaben_kennen_die_neuen_schluessel() -> None:
-    from claude_sanctuary.kern.einstellungen import VORGABEN
+    from chatterdome.kern.einstellungen import VORGABEN
 
     assert VORGABEN["keymap_style"] == ""
     assert VORGABEN["keymap_vim"] is False

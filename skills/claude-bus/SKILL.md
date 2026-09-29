@@ -62,7 +62,7 @@ erst, wenn er quittiert wurde.
 
 ## Der Name ist eine Pacht - an wen ein Auftrag wirklich geht
 
-**Der Vorfall vom 07.08.2026.** Sanctuary legte am 03.08. um 12:10 einen Auftrag "gib mir das
+**Der Vorfall vom 07.08.2026.** Chatterdome legte am 03.08. um 12:10 einen Auftrag "gib mir das
 aktuelle Datum" an Marga ab. Diese Marga holte ihn nie ab, ihre Sitzung endete, der
 Aufräumschritt gab den Namen frei - und vier Tage später bekam eine völlig andere Sitzung
 denselben Namen aus dem Pool und arbeitete den Auftrag ab. In der Datenbank nachgesehen: der
@@ -251,10 +251,10 @@ niemals an. Und weil der Auftrag danach auf `completed` steht, sieht er auch noc
 aus.
 
 ```bash
-sanctuary ack fd0e734003 200 "14.08.2026"                 # richtig
-sanctuary ack fd0e734003 200 "Datum geliefert"            # sagt dem Absender nichts
-sanctuary ack a1b2 200 "21 GiB von 30 GiB frei"           # richtig
-sanctuary ack a1b2 200 "Speicherwerte geliefert"          # dito nichts
+chatterdome ack fd0e734003 200 "14.08.2026"                 # richtig
+chatterdome ack fd0e734003 200 "Datum geliefert"            # sagt dem Absender nichts
+chatterdome ack a1b2 200 "21 GiB von 30 GiB frei"           # richtig
+chatterdome ack a1b2 200 "Speicherwerte geliefert"          # dito nichts
 ```
 
 Belegt am 14.08.2026, zweimal hintereinander auf demselben Bus: "gib mir mal das aktuelle
@@ -331,11 +331,11 @@ sondern eine Kostenschranke: der Block läuft bei jeder Zustellung mit.
 ### Was die Oberflaeche waehrend des Wartens zeigt
 
 Ein Auftrag kann zwanzig bis dreissig Sekunden brauchen, bis eine Antwort kommt. Die
-Verlaufsblase in `claude-sanctuary` haengt deshalb an offene Auftraege eine Wartezeile:
+Verlaufsblase in `chatterdome` haengt deshalb an offene Auftraege eine Wartezeile:
 
 ```
-Sanctuary@RAINBOW -> Patsy@RAINBOW  02:59   abgelegt ..   0:07
-Sanctuary@RAINBOW -> Patsy@RAINBOW  02:53   abgelegt   keine Reaktion seit 5:01
+Chatterdome@RAINBOW -> Patsy@RAINBOW  02:59   abgelegt ..   0:07
+Chatterdome@RAINBOW -> Patsy@RAINBOW  02:53   abgelegt   keine Reaktion seit 5:01
 ```
 
 **Die Punkte haengen am Zustand, nicht an einer Uhr.** Eine Animation, die einfach laeuft,
@@ -378,7 +378,7 @@ Gegenüber einen älteren Bus haben kann.
 **Gezählt wird in der Datenbank, nicht im Speicher.** `bus.mjs` ist ein kurzlebiges Kommando -
 ein Zähler im Prozess wäre bei jedem Aufruf leer. `auftraegeVonAn()` in `speicher.mjs` fragt
 über die Sitzung des Absenders, und wo es keine gibt über den Namen: die Oberfläche sendet als
-"Sanctuary" ohne eigene Claude-Sitzung und kann Rundrufe in Serie auslösen - ohne den
+"Chatterdome" ohne eigene Claude-Sitzung und kann Rundrufe in Serie auslösen - ohne den
 Rückfall bliebe der häufigste Serientäter ungebremst.
 
 Die Fehlermeldung beim Grössenverstoss sagt dem Modell, **was zu tun ist** ("Schicke eine
@@ -519,9 +519,9 @@ mit 2.1.272 auf RAINBOW.
 | `stop-hook` | Immer der bisherige Weg. |
 
 ```bash
-sanctuary bus config zustellung socket
+chatterdome bus config zustellung socket
 # oder pro Rechner ohne Datei:
-CLAUDE_BUS_ZUSTELLUNG=stop-hook sanctuary send Marga "..."
+CLAUDE_BUS_ZUSTELLUNG=stop-hook chatterdome send Marga "..."
 ```
 
 Ein unbekannter Wert fällt still auf `auto` zurück. Sonst trüge ein Tippfehler bis in den
@@ -558,7 +558,7 @@ Start einzelner Agenten:
 }
 ```
 
-Am 09.08.2026 stand er zuerst nur in `starte.mjs`, also nur für Sitzungen, die Sanctuary
+Am 09.08.2026 stand er zuerst nur in `starte.mjs`, also nur für Sitzungen, die Chatterdome
 selbst startet. Ein selbst geöffnetes Fenster bekam den Auftrag weiterhin als Rückfrage -
 belegt an einer Sitzung namens Berit auf senza. Ein Wert an einer Stelle deckt beide Fälle,
 zwei Mechanismen laufen auseinander.
@@ -617,7 +617,7 @@ Damals brauchte es drei Dinge, und keines davon war offensichtlich:
 | Zutat | Warum |
 |---|---|
 | `CLAUDE_CODE_HARBOR_KITE=1` | Die Gate-Funktion gab damit **vor** der Windows-Prüfung `true` zurück. Steht in den Benutzer-Einstellungen unter `env`. **Seit 2.1.239 nicht mehr nötig**, siehe unten. |
-| Der richtige Pipe-Name | Der Kanal hieß `\\.\pipe\cc-msg-<32 hex>`, **nicht** `cc-socks/<pid>.sock`. In 2.1.272 heißt er `\\.\pipe\LOCAL\cc-msg-<hex>`. Sanctuary übernimmt den Pfad aus `CLAUDE_CODE_MESSAGING_SOCKET` und hängt an keinem festen Namen, `sockets.json` trägt die neue Form. |
+| Der richtige Pipe-Name | Der Kanal hieß `\\.\pipe\cc-msg-<32 hex>`, **nicht** `cc-socks/<pid>.sock`. In 2.1.272 heißt er `\\.\pipe\LOCAL\cc-msg-<hex>`. Chatterdome übernimmt den Pfad aus `CLAUDE_CODE_MESSAGING_SOCKET` und hängt an keinem festen Namen, `sockets.json` trägt die neue Form. |
 | Der Auth-Frame | `{"type":"auth","token":"..."}` als erste Zeile, Token aus `CLAUDE_CODE_MESSAGING_TOKEN`. Weiterhin Pflicht, siehe unten. |
 
 **Stand 15.09.2026, 2.1.272 auf RAINBOW:** 7 von 440 Pipes heißen `LOCAL\cc-msg-...`, die
@@ -717,7 +717,7 @@ Name ist eine Pacht **pro Rechner**, die Sitzungen haben eigene IDs, und jedes E
 Mehrdeutig war nur die **Adresse** `send Petra`. Sie nahm still den ersten Treffer.
 
 ```bash
-sanctuary send Petra@SENZA "..."     # gleichwertig zu --host SENZA, nur kürzer
+chatterdome send Petra@SENZA "..."     # gleichwertig zu --host SENZA, nur kürzer
 ```
 
 Drei Regeln:
@@ -751,7 +751,7 @@ nicht tot, nur neu.
 
 ### Namen: zwei Systeme, die sich beissen
 
-Sanctuary vergibt seine Namen über den SessionStart-Hook (Fritzi, Sherin), Claude Code
+Chatterdome vergibt seine Namen über den SessionStart-Hook (Fritzi, Sherin), Claude Code
 adressiert seine Peers über `--name`. `/list-agents` und Claude Codes eigenes `SendMessage`
 kennen nur letzteren. Beim Versuch am 09.08.2026 schrieb die Empfängerin selbst zurück: *"Sie
 hat mich als beta angesprochen, diese Session heisst aber Fritzi."*
@@ -816,7 +816,7 @@ eines anderen einsammeln.
 nie. Das gilt nicht mehr - der Bus stellt seit dem 02.08.2026 gezielt über ssh zu. Die
 Trennung ist damit keine Mauer mehr, sondern eine gerichtete Zustellung: Es geht nur, was
 ausdrücklich an einen benannten Agenten adressiert ist, nur an Rechner aus `mesh.json`, und
-nur über das Tailnet. Der Kundenrechner hat `claude-sanctuary` bewusst noch gar nicht
+nur über das Tailnet. Der Kundenrechner hat `chatterdome` bewusst noch gar nicht
 installiert, ist also weiterhin vollständig aussen vor. Was unverändert gilt: die Ablage
 bleibt lokal und wird nie committet.
 
@@ -861,7 +861,7 @@ seinen Adressaten. Den Rückweg der Quittung hält `von_host` fest.
   auf den Linux-Läufern der CI 56. Genau darin ist mir am 14.08.2026 eine zweite
   Wortlaut-Kopplung durchgerutscht (`socket.test.mjs` prüfte `/laeuft nicht mehr/`) - lokal
   grün, CI rot. **Wer `socket.mjs` anfasst, lässt die Tests auf einem Linux-Rechner laufen**,
-  etwa `ssh senza 'cd ~/repos/claude-sanctuary && node --test "skills/**/*.test.mjs"'`. Das
+  etwa `ssh senza 'cd ~/repos/chatterdome && node --test "skills/**/*.test.mjs"'`. Das
   ist schneller als eine CI-Runde und zeigt dieselben 56 Tests.
 - **`send all` bleibt auf dem eigenen Rechner.** Der Rundruf setzt `zielHost = rechner()`
   (`bus.mjs`, "Der Rundruf bleibt bewusst lokal") - eine stille Ausweitung auf alle Rechner

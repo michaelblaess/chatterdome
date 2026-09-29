@@ -8,7 +8,7 @@ Eigenschaft. Die spezifischere Regel ersetzte damit den ganzen Wert samt dem
 unteren Abstand. Gemessen kam ``bottom=0`` heraus.
 
 GEPRUEFT WIRD IN EINER MINIMALEN APP, nicht in der echten. Der erste Anlauf
-fuhr ``SanctuaryApp`` hoch und rief ``zeigen()`` von aussen auf - unter Windows
+fuhr ``ChatterdomeApp`` hoch und rief ``zeigen()`` von aussen auf - unter Windows
 gruen, auf den Linux-Laeufern der CI kamen null Blasen heraus. Ursache ist kein
 Timing, sondern ein Rennen: die App verwaltet dasselbe Panel selbst und leert
 es beim naechsten Durchlauf wieder. Auch eine Warteschleife half deshalb nicht.
@@ -25,9 +25,9 @@ from typing import Any
 import pytest
 from textual.app import App, ComposeResult
 
-import claude_sanctuary.tui as tui_paket
-from claude_sanctuary.kern.modelle import Auftrag, Ereignis
-from claude_sanctuary.tui.widgets.verlauf_panel import VerlaufPanel
+import chatterdome.tui as tui_paket
+from chatterdome.kern.modelle import Auftrag, Ereignis
+from chatterdome.tui.widgets.verlauf_panel import VerlaufPanel
 
 TCSS = Path(tui_paket.__file__).parent / "app.tcss"
 
@@ -51,7 +51,7 @@ def _auftrag() -> Auftrag:
             Ereignis(
                 art="auftrag",
                 ts="2026-08-09T04:50:00",
-                von="Sanctuary",
+                von="Chatterdome",
                 host="RAINBOW",
                 an="Petra",
                 an_host="SENZA",
@@ -62,7 +62,7 @@ def _auftrag() -> Auftrag:
                 ts="2026-08-09T04:51:00",
                 von="Petra",
                 host="SENZA",
-                an="Sanctuary",
+                an="Chatterdome",
                 an_host="RAINBOW",
                 status=200,
                 notiz="Senza: 21 GiB frei von 30 GiB",
@@ -127,7 +127,7 @@ def _zweiter_auftrag() -> Auftrag:
             Ereignis(
                 art="auftrag",
                 ts="2026-08-09T05:10:00",
-                von="Sanctuary",
+                von="Chatterdome",
                 host="RAINBOW",
                 text="und wie voll ist die Platte?",
             ),
@@ -261,7 +261,7 @@ class TestKopfzeile:
             panel.zeigen("Petra@SENZA", [_auftrag()])
             blasen = await _blasen(panel, pilot)
 
-            assert "Sanctuary@RAINBOW -> Petra@SENZA" in blasen[0].klartext
+            assert "Chatterdome@RAINBOW -> Petra@SENZA" in blasen[0].klartext
 
     async def test_quittung_zeigt_den_rueckweg(self) -> None:
         """Sie laeuft zurueck an den Rechner, von dem der Auftrag kam."""
@@ -271,7 +271,7 @@ class TestKopfzeile:
             panel.zeigen("Petra@SENZA", [_auftrag()])
             blasen = await _blasen(panel, pilot)
 
-            assert "Petra@SENZA -> Sanctuary@RAINBOW" in blasen[1].klartext
+            assert "Petra@SENZA -> Chatterdome@RAINBOW" in blasen[1].klartext
 
 
 class MitMenue(NurVerlauf):
@@ -333,7 +333,7 @@ def _offener_auftrag(zustand: str = "submitted", vor_sekunden: int = 8) -> Auftr
             Ereignis(
                 art="auftrag",
                 ts=stempel,
-                von="Sanctuary",
+                von="Chatterdome",
                 host="RAINBOW",
                 an="Patsy",
                 an_host="RAINBOW",

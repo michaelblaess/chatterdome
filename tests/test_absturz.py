@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from claude_sanctuary.kern import absturz
+from chatterdome.kern import absturz
 
 
 @pytest.fixture(autouse=True)

@@ -314,7 +314,7 @@ export function offeneAelterAls(db, isoZeit) {
  * der Auftrag an eine Person oder an eine Rolle ging, aendert daran nichts.
  *
  * Ueber die Sitzung, wo es eine gibt, sonst ueber den Namen: die Oberflaeche
- * sendet als "Sanctuary" ohne eigene Claude-Sitzung, und gerade sie kann
+ * sendet als "Chatterdome" ohne eigene Claude-Sitzung, und gerade sie kann
  * Rundrufe in Serie ausloesen. Ohne den Rueckfall bliebe der haeufigste
  * Serientaeter ungebremst.
  *

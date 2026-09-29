@@ -15,11 +15,11 @@ from pathlib import Path
 import pytest
 from textual.widgets import DataTable, Static
 
-from claude_sanctuary.kern.gedaechtnis import Recallbericht, lade_gedaechtnis
-from claude_sanctuary.kern.modelle import Bestand, Namenspool
-from claude_sanctuary.tui import app as app_modul
-from claude_sanctuary.tui.app import SanctuaryApp
-from claude_sanctuary.tui.widgets.notizen_tabelle import NotizenTabelle, zustand
+from chatterdome.kern.gedaechtnis import Recallbericht, lade_gedaechtnis
+from chatterdome.kern.modelle import Bestand, Namenspool
+from chatterdome.tui import app as app_modul
+from chatterdome.tui.app import ChatterdomeApp
+from chatterdome.tui.widgets.notizen_tabelle import NotizenTabelle, zustand
 
 
 class StilleQuelle:
@@ -61,7 +61,7 @@ def gedaechtnis(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
-def app(gedaechtnis: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SanctuaryApp:
+def app(gedaechtnis: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ChatterdomeApp:
     (tmp_path / "settings.json").write_text(
         json.dumps({"gedaechtnis_pfad": str(gedaechtnis)}),
         encoding="utf-8",
@@ -73,13 +73,13 @@ def app(gedaechtnis: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> S
     monkeypatch.setattr(
         app_modul, "zaehle_recalls", lambda projekte, namen: Recallbericht(dateien=0)
     )
-    gebaut = SanctuaryApp(quelle=StilleQuelle())
+    gebaut = ChatterdomeApp(quelle=StilleQuelle())
     monkeypatch.setattr(gebaut, "_frage_disclaimer", lambda: None)
     return gebaut
 
 
 class TestTab:
-    async def test_taste_m_oeffnet_den_tab_und_laedt(self, app: SanctuaryApp) -> None:
+    async def test_taste_m_oeffnet_den_tab_und_laedt(self, app: ChatterdomeApp) -> None:
         async with app.run_test() as pilot:
             await pilot.press("m")
             for _ in range(200):
@@ -91,7 +91,7 @@ class TestTab:
             assert app._gedaechtnis is not None
             assert app._gedaechtnis.anzahl == 3
 
-    async def test_notizen_stehen_in_der_tabelle(self, app: SanctuaryApp) -> None:
+    async def test_notizen_stehen_in_der_tabelle(self, app: ChatterdomeApp) -> None:
         async with app.run_test() as pilot:
             await pilot.press("m")
             for _ in range(200):
@@ -104,7 +104,7 @@ class TestTab:
             tabelle = app.query_one("#notizen-daten", DataTable)
             assert tabelle.row_count == 3
 
-    async def test_uebersicht_nennt_beide_kosten(self, app: SanctuaryApp) -> None:
+    async def test_uebersicht_nennt_beide_kosten(self, app: ChatterdomeApp) -> None:
         async with app.run_test() as pilot:
             await pilot.press("m")
             for _ in range(200):
@@ -121,7 +121,7 @@ class TestTab:
             assert "Token" in text
 
     async def test_auswahl_zeigt_die_notiz_und_esc_fuehrt_zurueck(
-        self, app: SanctuaryApp
+        self, app: ChatterdomeApp
     ) -> None:
         async with app.run_test() as pilot:
             await pilot.press("m")
@@ -153,7 +153,7 @@ class TestTab:
             assert "MEMORY.md" in zurueck
 
     async def test_fehlendes_verzeichnis_meldet_den_pfad(
-        self, app: SanctuaryApp, tmp_path: Path
+        self, app: ChatterdomeApp, tmp_path: Path
     ) -> None:
         (tmp_path / "settings.json").write_text(
             json.dumps({"gedaechtnis_pfad": str(tmp_path / "gibt-es-nicht")}),
@@ -177,7 +177,7 @@ class TestTab:
 
 class TestTabelle:
     async def test_filter_engt_ein_und_meldet_leere_treffer(
-        self, app: SanctuaryApp
+        self, app: ChatterdomeApp
     ) -> None:
         async with app.run_test() as pilot:
             await pilot.press("m")
@@ -204,7 +204,7 @@ class TestTabelle:
             )
 
     async def test_sortierung_nach_zeilen_setzt_die_groesste_nach_oben(
-        self, app: SanctuaryApp
+        self, app: ChatterdomeApp
     ) -> None:
         async with app.run_test() as pilot:
             await pilot.press("m")

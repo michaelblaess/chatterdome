@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from claude_sanctuary.kern import fenster
+from chatterdome.kern import fenster
 
 # Die echte Kette von senza, 16.09.2026: Snorre (743316) haengt unter der Pane
 # 743298, das ist die Sitzung agent-112803.

@@ -491,7 +491,7 @@ async function stoppe(suchName, { ohneRueckfrage = false } = {}) {
   if (!traeger.includes('claude')) {
     const was = traeger ? `"${traeger}"` : 'nicht ermittelbar';
     console.log(`\n  ${ROT}PID ${z.pid} gehört nicht mehr zu Claude (${was}).${R}`);
-    console.log(`  ${GRAU}Nichts beendet. Liste mit "sanctuary status" neu holen.${R}\n`);
+    console.log(`  ${GRAU}Nichts beendet. Liste mit "chatterdome status" neu holen.${R}\n`);
     process.exitCode = 1;
     return;
   }
@@ -628,7 +628,7 @@ function werdeOperator() {
 async function holeVonFerne(host) {
   // Zwei Anlaeufe, weil es keinen Aufruf gibt, der auf beiden Systemen traegt
   // (alles am 01.08.2026 gemessen):
-  //   1. "sanctuary status --json" - greift auf Windows, weil der sshd dort
+  //   1. "chatterdome status --json" - greift auf Windows, weil der sshd dort
   //      den Benutzer-PATH samt ~/.local/bin mitbringt. Auf Linux scheitert es
   //      mit "Befehl nicht gefunden", denn eine nicht-interaktive Shell liest
   //      die .bashrc nicht (Ubuntu bricht dort oben per "case $- in *i*" ab).
