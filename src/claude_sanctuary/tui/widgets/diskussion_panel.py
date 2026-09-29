@@ -573,13 +573,14 @@ class DiskussionsPanel(Vertical):
         with Vertical(id="disk-chat-raum"):
             yield Static("", id="disk-kopf")
             with Horizontal(id="disk-steuerung"):
+                # Zur Uebersicht ganz links: der Weg zurueck steht, wo man ihn sucht.
+                yield Button(t("discussion.new"), variant="primary", id="disk-neue")
                 yield Button(t("discussion.stop"), variant="error", id="disk-anhalten")
                 yield Button(t("discussion.continue"), variant="success", id="disk-fortsetzen")
                 yield Input("3", type="integer", id="disk-weiter", compact=True)
                 yield Static(t("discussion.more_rounds"), id="disk-weiter-einheit")
                 yield Select(_modell_auswahl(), value=VORGABE_MODELL, allow_blank=False,
                              id="disk-weiter-modell", compact=True)
-                yield Button(t("discussion.new"), variant="primary", id="disk-neue")
             with Vertical(id="disk-weiter-raum"):
                 yield Static(t("discussion.more_info"), classes="disk-leise")
                 yield TextArea(id="disk-weiter-info", compact=True, soft_wrap=True,

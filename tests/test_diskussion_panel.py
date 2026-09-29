@@ -541,3 +541,14 @@ class TestHistorie:
             assert len(app._archiv.liste()) == 1, "noch nichts geloescht"
             app._archiv_loeschen_bestaetigt(True)
             assert app._archiv.liste() == []
+
+    async def test_zur_uebersicht_steht_links_vom_fortsetzen(self) -> None:
+        app = _app()
+        async with app.run_test(size=(160, 50)) as pilot:
+            d = _gespeichert(app, "Agatha", "Maria")
+            panel = await _reiter(app, pilot)
+            panel.zeigen(d, "")
+            await pilot.pause()
+            links = panel.query_one("#disk-neue", Button).region
+            rechts = panel.query_one("#disk-fortsetzen", Button).region
+            assert links.width > 0 and links.right <= rechts.x
