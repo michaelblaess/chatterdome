@@ -603,5 +603,7 @@
   "demo.unknown_agent": "No agent named {name}.",
   "demo.discussion_task": "Discussion participant",
   "demo.marker": "Demo",
-  "log.demo_started": "Demo mode: all agents, messages and statistics are made up."
+  "log.demo_started": "Demo mode: all agents, messages and statistics are made up.",
+  "discussion.position_yes": "Yes",
+  "discussion.position_no": "No"
 }

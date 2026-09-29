@@ -642,3 +642,21 @@ class TestReinrufen:
             kennzahlen = panel.kennzahlen()
             assert kennzahlen is not None
             assert ("Spricht", "A") in [(p.label, p.value) for p in kennzahlen[0]]
+
+
+def test_positionen_folgen_der_sprache_der_oberflaeche() -> None:
+    """In der englischen Oberflaeche stand "PRO (Ja)" - gesehen im Demo-Screenshot 29.09.2026."""
+    from chatterdome.i18n import load_locale
+    from chatterdome.kern.debatte import CONTRA, PRO, Diskussion
+    from chatterdome.tui.widgets.diskussion_panel import _position
+
+    d = Diskussion("Tabs or spaces?", [])
+    try:
+        load_locale("en")
+        assert (_position(d, PRO), _position(d, CONTRA)) == ("Yes", "No")
+        # Die Anweisung an die Agenten bleibt deutsch.
+        assert d.position(PRO) == "Ja"
+        d.positionen = ("Unity", "Godot")
+        assert _position(d, PRO) == "Unity"
+    finally:
+        load_locale("de")

@@ -171,6 +171,19 @@ AUTO = "auto"
 """Wert der Seitenauswahl, wenn der Moderator verteilen soll."""
 
 
+def _position(diskussion: Diskussion, seite: str) -> str:
+    """Die Position einer Seite fuer die Anzeige.
+
+    ``Diskussion.position`` faellt auf "Ja" und "Nein" zurueck - richtig fuer die
+    deutschen Anweisungen an die Agenten, in der englischen Oberflaeche aber falsch.
+    """
+    pro, contra = diskussion.positionen
+    eigen = (pro if seite == PRO else contra if seite == CONTRA else "").strip()
+    if eigen:
+        return eigen
+    return t("discussion.position_yes") if seite == PRO else t("discussion.position_no")
+
+
 @dataclass
 class DiskussionsAuftrag:
     """Was das Formular an die App gibt."""
@@ -797,7 +810,7 @@ class DiskussionsPanel(Vertical):
             return t("discussion.head_team", namen=", ".join(x.name for x in teilnehmer))
         return t(
             "discussion.head_sides",
-            pro_pos=diskussion.position(PRO), contra_pos=diskussion.position(CONTRA),
+            pro_pos=_position(diskussion, PRO), contra_pos=_position(diskussion, CONTRA),
             pro=", ".join(x.name for x in teilnehmer if x.seite == PRO),
             contra=", ".join(x.name for x in teilnehmer if x.seite == CONTRA),
         )
@@ -1141,7 +1154,7 @@ class DiskussionsPanel(Vertical):
         if beitrag.art in ("fehler", "ausgelassen"):
             return Static(Text(f"{beitrag.name}: {beitrag.text}"), classes="disk-meldung")
         mit_seiten = d is not None and d.format == "diskussion" and beitrag.seite
-        position = d.position(beitrag.seite) if (d is not None and mit_seiten) else ""
+        position = _position(d, beitrag.seite) if (d is not None and mit_seiten) else ""
         kopf = t("discussion.bubble_head", name=beitrag.name, runde=beitrag.runde)
         if position:
             kopf = f"{kopf} · {position}"

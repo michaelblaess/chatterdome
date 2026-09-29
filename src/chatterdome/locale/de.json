@@ -603,5 +603,7 @@
   "demo.unknown_agent": "Kein Agent namens {name}.",
   "demo.discussion_task": "Teilnehmer einer Diskussion",
   "demo.marker": "Demo",
-  "log.demo_started": "Demo-Modus: alle Agenten, Nachrichten und Auswertungen sind erfunden."
+  "log.demo_started": "Demo-Modus: alle Agenten, Nachrichten und Auswertungen sind erfunden.",
+  "discussion.position_yes": "Ja",
+  "discussion.position_no": "Nein"
 }

@@ -14,39 +14,112 @@
   (<code>trainedAlgorithmicMedia</code>).</sub>
 </p>
 
-A control room for several Claude Code sessions running side by side. It shows who is
-working, how full each context window is and what every session is busy with - and it lets
-those sessions hand each other tasks.
+A control room for Claude Code. It shows every session running on your machines, gives each one
+a name, lets them hand each other tasks, and tells you what they cost, what they remember and
+how full their context is. And it lets several agents debate a question until there is a
+decision.
 
-Everything stays **on your own machine**. No service, no open port, no cloud account, no
+Everything stays **on your own machines**. No service, no open port, no cloud account, no
 telemetry. What crosses machine boundaries goes over SSH inside your own Tailnet.
 
-## Parts
+> **A playground.** Chatterdome is an experiment to get to know Claude Code better: what it
+> writes into its transcripts, how its memory works, what a session really costs, and how
+> sessions can talk to each other. Some of it is polished, some of it is a first attempt. Expect
+> rough edges, and read [Limits](#limits) before relying on it.
 
-| Part | What it does |
-|---|---|
-| `skills/operator` | Overview of running sessions: name, status, folder, model, uptime, context. Detail view, live view, stop, cross-machine view |
-| `skills/claude-bus` | Tasks between sessions, with state and receipts. SQLite, append-only events |
-| `kern/gedaechtnis.py` | Memory analysis: index versus collection, links, checks, actual recalls from the transcripts |
-| `kern/busansicht.py` | Selection and figures for the bus tab: period, state, address kind, free-text search |
-| `kern/transkripte.py` | Where the transcripts live and how to read them: Claude Code including subagents, Codex CLI. One source for statistics and search |
-| `kern/suche.py` | Full-text index across all transcripts, SQLite with FTS5, incremental via file time |
-| `kern/statistik.py` | Analysis of transcripts and bus: fleet, spend by kind, session duration, early warning |
-| `kern/` | UI-free Python core, kept apart from the interface |
-| `tui/` | Textual interface for the terminal |
+<p align="center">
+  <img src="docs/screenshots/agents.png" alt="The agents tab: seven named sessions on three machines, context and tokens per session, the conversation with the selected agent on the right" width="100%">
+  <br>
+  <sub>All screenshots come from the built-in <a href="#demo-mode">demo mode</a> with made-up data.</sub>
+</p>
 
-## Setup
+## Features
+
+- **Every agent gets a name.** Sessions are addressed as `Vega` or `Vega@LAPTOP` instead of a
+  process id. The name shows up in the terminal tab, in the table and in every message.
+- **Name pools you can extend.** Four themes are shipped: saints, actors, stars and singers.
+  Your own themes go into a local file that git ignores, see [Agent names](#agent-names).
+- **Across machines with Tailscale.** One table for the sessions on all your machines. Send
+  tasks to an agent on another machine, restart a session there (the conversation stays),
+  update Claude Code remotely and take a screenshot of a remote screen. All of it runs over SSH
+  inside your Tailnet.
+- **Visual warnings.** A context above 600k tokens turns yellow, above 800k it blinks red. A
+  session that has done nothing for 24 hours gets a blinking ⚠ in the activity column.
+- **Memory analysis.** How full `MEMORY.md` is against its hard limits, what the index costs in
+  every session, broken links, notes missing from the index, and how often each note was
+  actually recalled.
+- **Context and token analysis.** Context and tokens per session, what was processed per day and
+  per folder, and how much of it came from the cache.
+- **Statistics and cost control.** How many sessions ran at the same time, spend by day, folder
+  and session length, and an early warning for the message bus. Discussions count their tokens
+  live, and the model (Haiku, Sonnet, Opus) is chosen per discussion.
+- **Discussions and debates.** Several agents argue PRO and CONTRA or work as a team towards a
+  decision, optionally after a research round on the web. You can chime in while it runs,
+  continue it later with new information or another model, and every discussion lands in an
+  archive. The name of this app was found this way.
+- **Full-text search** across all transcripts of Claude Code and the Codex CLI.
+- **A message bus** between sessions, with state, receipts and expiry.
+- **Theming.** 62 themes, `t` cycles through them.
+- **SQLite as storage.** The message bus, the search index and the discussion archive are local
+  SQLite files. No database server.
+- **macOS, Linux and Windows.** Tested on Linux and Windows in CI, release builds for all three.
+- **Demo mode** with made-up data for screenshots and presentations.
+
+## Screenshots
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/discussion.png" alt="A running discussion: two agents argue about tabs or spaces, the next one is typing"><br><sub>A discussion in progress</sub></td>
+    <td width="50%"><img src="docs/screenshots/statistics.png" alt="Statistics: sessions at the same time, tokens per day, spend by session length, tokens per folder"><br><sub>Statistics</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/memory.png" alt="Memory analysis: notes with recalls, fill level of the index, what the index costs"><br><sub>Memory analysis</sub></td>
+    <td><img src="docs/screenshots/bus.png" alt="The message bus: tasks between agents with state and receipts"><br><sub>Message bus</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/search.png" alt="Full-text search across all transcripts"><br><sub>Full-text search</sub></td>
+    <td><img src="docs/screenshots/theme.png" alt="The agents tab in the Catppuccin Mocha theme"><br><sub>One of 62 themes</sub></td>
+  </tr>
+</table>
+
+## Installation
+
+You need:
+
+- [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
+- Python 3.12 or newer and [uv](https://docs.astral.sh/uv/)
+- Node.js 22 or newer (the message bus uses the built-in `node:sqlite`)
+- git
+- For the mesh: [Tailscale](https://tailscale.com/) and SSH access between your machines
 
 ```bash
 git clone https://github.com/michaelblaess/chatterdome.git
 cd chatterdome
-./setup.sh                                          # Linux, macOS
-powershell -ExecutionPolicy Bypass -File setup.ps1  # Windows
+
+./setup.sh          # links the skills, installs the chatterdome command
+./bootstrap.sh      # creates .venv and installs the Python part
+./run.sh            # starts the interface
+./run.sh --demo     # the same with made-up data
 ```
 
-The script points `~/.claude/skills/operator` and `~/.claude/skills/claude-bus` at this repo.
-Nothing changes for Claude Code - the skills stay exactly where it expects them. An existing
-real directory is **never deleted**, it is moved aside as `.vor-chatterdome`.
+On Windows the same scripts exist as PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File setup.ps1
+powershell -ExecutionPolicy Bypass -File bootstrap.ps1
+.\run.ps1
+```
+
+`setup` points `~/.claude/skills/operator` and `~/.claude/skills/claude-bus` at this repo and
+puts the `chatterdome` command into `~/.local/bin`. Nothing changes for Claude Code, the skills
+stay exactly where it expects them. An existing real directory is **never deleted**, it is moved
+aside as `.vor-chatterdome`. On first start the interface asks you to accept a notice: agents,
+discussions and research run on your Claude account and cost tokens.
+
+**Across machines:** copy `skills/operator/mesh.example.json` to `mesh.json` and list your
+other machines. The names have to be reachable via `ssh <name>`, typically through
+`~/.ssh/config` inside your Tailnet. Without `mesh.json` everything stays on the local machine,
+which is not an error. `chatterdome status --mesh` shows whether the other machines answer.
 
 ### Moving from claude-sanctuary
 
@@ -65,7 +138,45 @@ runs setup and bootstrap. Settings, search index and discussion archive are copi
 `~/.claude-sanctuary` to `~/.chatterdome` on first start. The old `sanctuary` command stays
 as an alias: other machines call it over ssh, and their state may be older than this one.
 
-## Usage
+## Limits
+
+- **It is a playground.** Chatterdome reads files that Claude Code writes for itself. When
+  their format changes, parts of it can break until they are adjusted.
+- **The chat is not a terminal.** A message from the agents tab reaches the session as a task
+  on the message bus. Slash commands such as `/compact` cannot be sent that way, they have to
+  be typed in the session's own window.
+- **Starting and stopping only work on the local machine.** Across the mesh you can send
+  tasks, restart a session, update Claude Code and take screenshots, but not start or stop an
+  agent.
+- **On Windows a task waits for the next reply.** macOS and Linux deliver it right away through
+  a socket, see [Instant delivery](#instant-delivery).
+- **The statistics are a lower bound.** They only know the transcripts that still exist.
+
+## A web version is on its way
+
+A browser interface is in the works and not public yet. Its goal is to do everything the
+terminal version cannot, starting with a real terminal for every agent in the browser, so that
+`/compact` and every other command work from there as well.
+
+---
+
+The sections below go into detail.
+
+## Parts
+
+| Part | What it does |
+|---|---|
+| `skills/operator` | Overview of running sessions: name, status, folder, model, uptime, context. Detail view, live view, stop, cross-machine view |
+| `skills/claude-bus` | Tasks between sessions, with state and receipts. SQLite, append-only events |
+| `kern/gedaechtnis.py` | Memory analysis: index versus collection, links, checks, actual recalls from the transcripts |
+| `kern/busansicht.py` | Selection and figures for the bus tab: period, state, address kind, free-text search |
+| `kern/transkripte.py` | Where the transcripts live and how to read them: Claude Code including subagents, Codex CLI. One source for statistics and search |
+| `kern/suche.py` | Full-text index across all transcripts, SQLite with FTS5, incremental via file time |
+| `kern/statistik.py` | Analysis of transcripts and bus: fleet, spend by kind, session duration, early warning |
+| `kern/` | UI-free Python core, kept apart from the interface |
+| `tui/` | Textual interface for the terminal |
+
+## Command line
 
 Setup installs a `chatterdome` shortcut into `~/.local/bin` covering both skills:
 
@@ -205,7 +316,7 @@ using SQLite with FTS5. The index lives at `~/.chatterdome/suche.db` and
 is disposable at any time: it holds nothing that is not also in the
 transcripts.
 
-Measured on 24.08.2026 on RAINBOW: 98 transcripts with 7,600 passages, initial
+Measured on 24.08.2026: 98 transcripts with 7,600 passages, initial
 build **1.8 s**, index 22.9 MB. Every later run only compares modification
 time and size per file and finishes in **0.01 s**. A query takes 1 to 2 ms,
 which is why the tab searches as you type instead of asking for Enter.
@@ -262,11 +373,11 @@ The tab is strictly read-only. It changes and deletes nothing.
 A difference that catches everyone once:
 
 ```bash
-ssh senza                          # interactive login shell - everything as usual
+ssh server                         # interactive login shell - everything as usual
 chatterdome status                   # simply works there
 
-ssh senza "chatterdome status"       # NOT found
-ssh senza 'bash -lc "chatterdome status"'   # this works
+ssh server "chatterdome status"      # NOT found
+ssh server 'bash -lc "chatterdome status"'  # this works
 ```
 
 Reason: `ssh host "command"` does **not** start a login shell. Ubuntu bails out in the first
@@ -274,7 +385,7 @@ lines of `.bashrc` when the shell is not interactive, so `~/.local/bin` never re
 On **Windows** it is the other way round: sshd hands over the PATH from the registry, so the
 direct call works - but `bash -lc` lands in **WSL** instead of Git Bash, where there is no node.
 
-**Daily work is unaffected** - grabbing a console with `ssh senza` never notices any of this.
+**Daily work is unaffected** - grabbing a console with `ssh server` never notices any of this.
 Only scripts issuing commands over SSH are, which is why `--mesh` tries both ways.
 
 ## New skills
@@ -311,8 +422,6 @@ The split into two classes remains useful regardless:
 - **Task agents** are started on demand (`claude -p`, headless), do one job and are gone.
   Those are remote controllable, that is their whole point.
 
-Details in [`docs/architektur-http.md`](docs/architektur-http.md) (German).
-
 ## Instant delivery
 
 A task lands in the waiting session directly instead of sitting there until its next reply.
@@ -338,17 +447,17 @@ know it.
 
 ### The same name on two machines
 
-A name is a lease **per machine**. `Petra` can run on RAINBOW and SENZA at the same time - both
+A name is a lease **per machine**. `Petra` can run on WORKSTATION and SERVER at the same time - both
 sessions are real and have their own IDs. What has to be unambiguous is not the name but the
 address:
 
 ```bash
-chatterdome send Petra@SENZA "..."
+chatterdome send Petra@SERVER "..."
 ```
 
 While the name is unique across the mesh, plain `send Petra` keeps working. Once it is not, the
 bus stops and names both variants instead of silently picking one. The table renders such names
-as `Petra@RAINBOW`, and `chatterdome bus doctor` lists them.
+as `Petra@WORKSTATION`, and `chatterdome bus doctor` lists them.
 
 ### Stale sessions
 

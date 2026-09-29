@@ -14,40 +14,118 @@
   (<code>trainedAlgorithmicMedia</code>).</sub>
 </p>
 
-Eine Zentrale für mehrere gleichzeitig laufende Claude-Code-Instanzen. Sie zeigt, wer gerade
-arbeitet, wie voll die Kontextfenster sind und woran jede Sitzung sitzt - und sie erlaubt es
-den Instanzen, einander Aufträge zu geben.
+Eine Zentrale für Claude Code. Sie zeigt jede Sitzung auf Deinen Rechnern, gibt jeder einen
+Namen, lässt sie einander Aufträge geben und sagt Dir, was sie kosten, woran sie sich erinnern
+und wie voll ihr Kontext ist. Und sie lässt mehrere Agenten über eine Frage diskutieren, bis
+eine Entscheidung steht.
 
-Alles bleibt **auf dem eigenen Rechner**. Kein Dienst, kein Port nach außen, kein Cloud-Konto,
+Alles bleibt **auf den eigenen Rechnern**. Kein Dienst, kein Port nach außen, kein Cloud-Konto,
 keine Telemetrie. Was über Rechnergrenzen geht, geht über SSH im eigenen Tailnet.
 
-## Bestandteile
+> **Ein Playground.** Chatterdome ist ein Experimentierfeld, um Claude Code besser
+> kennenzulernen: was es in seine Transkripte schreibt, wie sein Gedächtnis funktioniert, was
+> eine Sitzung wirklich kostet und wie Sitzungen miteinander reden können. Manches ist
+> ausgereift, manches ein erster Versuch. Rechne mit Ecken und Kanten und lies die
+> [Grenzen](#grenzen), bevor Du Dich darauf verlässt.
 
-| Teil | Was es tut |
-|---|---|
-| `skills/operator` | Übersicht aller laufenden Instanzen: Name, Status, Ordner, Modell, Laufzeit, Kontext. Detailansicht, Live-Ansicht, Beenden, rechnerübergreifende Sicht |
-| `skills/claude-bus` | Aufträge zwischen Instanzen, mit Zustand und Quittungen. SQLite, append-only Ereignisse |
-| `kern/gedaechtnis.py` | Analyse der Gedächtnisnotizen: Index gegen Bestand, Verweise, Prüfungen, tatsächliche Abrufe aus den Transkripten |
-| `kern/busansicht.py` | Auswahl und Kennzahlen für den Bus-Tab: Zeitraum, Status, Adressart, Freitextsuche |
-| `kern/transkripte.py` | Wo die Transkripte liegen und wie sie zu lesen sind: Claude Code samt Subagenten, Codex CLI. Eine Quelle für Statistik und Suche |
-| `kern/suche.py` | Volltextindex über alle Transkripte, SQLite mit FTS5, inkrementell über die Dateizeit |
-| `kern/statistik.py` | Auswertung der Transkripte und des Bus: Flotte, Verbrauch nach Art, Sitzungsdauer, Frühwarnung |
-| `kern/` | UI-freier Python-Kern, getrennt von der Oberfläche |
-| `tui/` | Textual-Oberfläche fürs Terminal |
+<p align="center">
+  <img src="docs/screenshots/agents.png" alt="Der Agenten-Reiter: sieben benannte Sitzungen auf drei Rechnern, Kontext und Tokens je Sitzung, rechts das Gespräch mit dem gewählten Agenten" width="100%">
+  <br>
+  <sub>Alle Screenshots stammen aus dem eingebauten <a href="#demo-modus">Demo-Modus</a> mit erfundenen Daten.</sub>
+</p>
 
-## Einrichten
+## Features
+
+- **Jeder Agent bekommt einen Namen.** Sitzungen heißen `Vega` oder `Vega@LAPTOP` statt einer
+  Prozessnummer. Der Name steht im Terminal-Tab, in der Tabelle und in jeder Nachricht.
+- **Erweiterbare Namenspools.** Vier Motive sind dabei: Heilige, Schauspieler, Sterne und
+  Sängerinnen und Sänger. Eigene Motive kommen in eine lokale Datei, die Git ignoriert, siehe
+  [Agentennamen](#agentennamen).
+- **Über Rechnergrenzen mit Tailscale.** Eine Tabelle für die Sitzungen auf allen Deinen
+  Rechnern. Aufträge an einen Agenten auf einem anderen Rechner schicken, eine Sitzung dort neu
+  starten (das Gespräch bleibt), Claude Code aus der Ferne aktualisieren und einen Screenshot
+  vom entfernten Bildschirm holen. Alles läuft über SSH im eigenen Tailnet.
+- **Visuelle Warnungen.** Ein Kontext über 600k Tokens wird gelb, über 800k blinkt er rot. Eine
+  Sitzung, die seit 24 Stunden nichts getan hat, bekommt ein blinkendes ⚠ in der Spalte Aktiv.
+- **Memory-Analyse.** Wie voll `MEMORY.md` gemessen an seinen harten Grenzen ist, was der Index
+  in jeder Sitzung kostet, tote Verweise, Notizen ohne Indexeintrag und wie oft jede Notiz
+  tatsächlich abgerufen wurde.
+- **Kontext- und Token-Analyse.** Kontext und Tokens je Sitzung, was pro Tag und pro Ordner
+  verarbeitet wurde und wie viel davon aus dem Cache kam.
+- **Statistik und Kostenkontrolle.** Wie viele Sitzungen gleichzeitig liefen, Verbrauch nach
+  Tag, Ordner und Sitzungsdauer und eine Frühwarnung für den Message-Bus. Diskussionen zählen
+  ihre Tokens live mit, und das Modell (Haiku, Sonnet, Opus) wird je Diskussion gewählt.
+- **Diskussionen und Debatten.** Mehrere Agenten streiten PRO und CONTRA oder arbeiten als Team
+  auf eine Entscheidung hin, auf Wunsch nach einer Recherche-Runde im Web. Du kannst während des
+  Laufs reinrufen, später mit neuen Informationen oder einem anderen Modell fortsetzen, und
+  jede Diskussion landet in einem Archiv. Der Name dieser App ist so entstanden.
+- **Volltextsuche** über alle Transkripte von Claude Code und der Codex CLI.
+- **Ein Message-Bus** zwischen den Sitzungen, mit Zustand, Quittungen und Verfall.
+- **Theming.** 62 Themes, `t` schaltet durch.
+- **SQLite als Speicher.** Message-Bus, Suchindex und Diskussionsarchiv sind lokale
+  SQLite-Dateien. Kein Datenbankserver.
+- **macOS, Linux und Windows.** Unter Linux und Windows in der CI getestet, Release-Builds für
+  alle drei.
+- **Demo-Modus** mit erfundenen Daten für Screenshots und Vorführungen.
+
+## Screenshots
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/discussion.png" alt="Eine laufende Diskussion: zwei Agenten streiten über Tabs oder Leerzeichen, der nächste schreibt gerade"><br><sub>Eine laufende Diskussion</sub></td>
+    <td width="50%"><img src="docs/screenshots/statistics.png" alt="Statistik: gleichzeitige Sitzungen, Tokens pro Tag, Verbrauch nach Sitzungsdauer, Tokens pro Ordner"><br><sub>Statistik</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/memory.png" alt="Memory-Analyse: Notizen mit Abrufen, Füllstand des Index, was der Index kostet"><br><sub>Memory-Analyse</sub></td>
+    <td><img src="docs/screenshots/bus.png" alt="Der Message-Bus: Aufträge zwischen Agenten mit Zustand und Quittungen"><br><sub>Message-Bus</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/search.png" alt="Volltextsuche über alle Transkripte"><br><sub>Volltextsuche</sub></td>
+    <td><img src="docs/screenshots/theme.png" alt="Der Agenten-Reiter im Theme Catppuccin Mocha"><br><sub>Eines von 62 Themes</sub></td>
+  </tr>
+</table>
+
+Die Screenshots zeigen die englische Oberfläche. Mit `--lang de` läuft alles auf Deutsch.
+
+## Installation
+
+Du brauchst:
+
+- [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
+- Python 3.12 oder neuer und [uv](https://docs.astral.sh/uv/)
+- Node.js 22 oder neuer (der Message-Bus nutzt das eingebaute `node:sqlite`)
+- git
+- Für Rechner im Verbund: [Tailscale](https://tailscale.com/) und SSH-Zugang zwischen den Rechnern
 
 ```bash
 git clone https://github.com/michaelblaess/chatterdome.git
 cd chatterdome
-./setup.sh                                        # Linux, macOS
-powershell -ExecutionPolicy Bypass -File setup.ps1  # Windows
+
+./setup.sh          # verlinkt die Skills, legt den Befehl chatterdome an
+./bootstrap.sh      # legt .venv an und installiert den Python-Teil
+./run.sh            # startet die Oberfläche
+./run.sh --demo     # dasselbe mit erfundenen Daten
 ```
 
-Das Skript hängt `~/.claude/skills/operator` und `~/.claude/skills/claude-bus` auf dieses
-Repo. Für Claude Code ändert sich dadurch nichts - die Skills liegen weiterhin dort, wo sie
-erwartet werden. Ein vorhandenes echtes Verzeichnis wird **nie gelöscht**, sondern als
-`.vor-chatterdome` beiseitegelegt.
+Unter Windows gibt es dieselben Skripte für PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File setup.ps1
+powershell -ExecutionPolicy Bypass -File bootstrap.ps1
+.\run.ps1
+```
+
+`setup` hängt `~/.claude/skills/operator` und `~/.claude/skills/claude-bus` auf dieses Repo und
+legt den Befehl `chatterdome` in `~/.local/bin` ab. Für Claude Code ändert sich nichts, die
+Skills liegen weiter dort, wo es sie erwartet. Ein vorhandenes echtes Verzeichnis wird **nie
+gelöscht**, sondern als `.vor-chatterdome` beiseitegelegt. Beim ersten Start fragt die
+Oberfläche nach Deiner Zustimmung zu einem Hinweis: Agenten, Diskussionen und Recherche laufen
+über Dein Claude-Konto und kosten Tokens.
+
+**Über Rechnergrenzen:** `skills/operator/mesh.example.json` nach `mesh.json` kopieren und die
+anderen Rechner eintragen. Die Namen müssen per `ssh <name>` erreichbar sein, üblicherweise über
+`~/.ssh/config` im eigenen Tailnet. Ohne `mesh.json` bleibt alles auf dem eigenen Rechner, das
+ist kein Fehler. `chatterdome status --mesh` zeigt, ob die anderen Rechner antworten.
 
 ### Umzug von claude-sanctuary
 
@@ -67,7 +145,45 @@ beim ersten Start von `~/.claude-sanctuary` nach `~/.chatterdome` kopiert. Der a
 `sanctuary` bleibt als Alias: andere Rechner rufen ihn über ssh auf, und deren Stand kann
 älter sein als dieser.
 
-## Benutzen
+## Grenzen
+
+- **Es ist ein Playground.** Chatterdome liest Dateien, die Claude Code für sich selbst
+  schreibt. Ändert sich deren Format, können Teile ausfallen, bis sie nachgezogen sind.
+- **Der Chat ist kein Terminal.** Eine Nachricht aus dem Agenten-Reiter erreicht die Sitzung als
+  Auftrag über den Message-Bus. Slash-Befehle wie `/compact` lassen sich so nicht schicken, die
+  müssen im Fenster der Sitzung selbst eingegeben werden.
+- **Starten und Stoppen gehen nur auf dem eigenen Rechner.** Über Rechnergrenzen kannst Du
+  Aufträge schicken, eine Sitzung neu starten, Claude Code aktualisieren und Screenshots holen,
+  aber keinen Agenten starten oder beenden.
+- **Unter Windows wartet ein Auftrag auf die nächste Antwort.** macOS und Linux stellen ihn
+  sofort über einen Socket zu, siehe [Sofortzustellung](#sofortzustellung).
+- **Die Statistik ist eine Untergrenze.** Sie kennt nur die Transkripte, die noch da sind.
+
+## Eine Webversion ist in Arbeit
+
+Eine Oberfläche im Browser entsteht gerade und ist noch nicht öffentlich. Ihr Ziel ist, alles
+zu können, was die Terminalfassung nicht kann, angefangen mit einem echten Terminal für jeden
+Agenten im Browser. Dann funktionieren auch `/compact` und jeder andere Befehl von dort aus.
+
+---
+
+Die folgenden Abschnitte gehen ins Detail.
+
+## Bestandteile
+
+| Teil | Was es tut |
+|---|---|
+| `skills/operator` | Übersicht aller laufenden Instanzen: Name, Status, Ordner, Modell, Laufzeit, Kontext. Detailansicht, Live-Ansicht, Beenden, rechnerübergreifende Sicht |
+| `skills/claude-bus` | Aufträge zwischen Instanzen, mit Zustand und Quittungen. SQLite, append-only Ereignisse |
+| `kern/gedaechtnis.py` | Analyse der Gedächtnisnotizen: Index gegen Bestand, Verweise, Prüfungen, tatsächliche Abrufe aus den Transkripten |
+| `kern/busansicht.py` | Auswahl und Kennzahlen für den Bus-Tab: Zeitraum, Status, Adressart, Freitextsuche |
+| `kern/transkripte.py` | Wo die Transkripte liegen und wie sie zu lesen sind: Claude Code samt Subagenten, Codex CLI. Eine Quelle für Statistik und Suche |
+| `kern/suche.py` | Volltextindex über alle Transkripte, SQLite mit FTS5, inkrementell über die Dateizeit |
+| `kern/statistik.py` | Auswertung der Transkripte und des Bus: Flotte, Verbrauch nach Art, Sitzungsdauer, Frühwarnung |
+| `kern/` | UI-freier Python-Kern, getrennt von der Oberfläche |
+| `tui/` | Textual-Oberfläche fürs Terminal |
+
+## Kommandozeile
 
 Das Setup legt den Kurzbefehl `chatterdome` in `~/.local/bin` an - beide Skills hängen darunter:
 
@@ -214,7 +330,7 @@ mit SQLite und FTS5. Der Index liegt unter `~/.chatterdome/suche.db` und
 ist jederzeit wegwerfbar: er enthält nichts, was nicht auch in den
 Transkripten steht.
 
-Gemessen am 24.08.2026 auf RAINBOW: 98 Transkripte mit 7.600 Textstellen,
+Gemessen am 24.08.2026: 98 Transkripte mit 7.600 Textstellen,
 Erstaufbau **1,8 s**, Index 22,9 MB. Jeder weitere Lauf vergleicht nur
 Änderungszeit und Grösse je Datei und ist nach **0,01 s** durch. Eine Abfrage
 dauert 1 bis 2 ms, deshalb sucht der Reiter schon beim Tippen und verlangt
@@ -289,8 +405,6 @@ Die Trennung in zwei Klassen bleibt trotzdem sinnvoll:
 - **Auftrags-Agenten** werden bei Bedarf gestartet (`claude -p`, headless), erledigen eine
   Sache und sind wieder weg. Sie sind fernsteuerbar, das ist ihr Zweck.
 
-Details in [`docs/architektur-http.md`](docs/architektur-http.md).
-
 ## Sofortzustellung
 
 Ein Auftrag landet direkt in der wartenden Sitzung, statt bis zu ihrer nächsten Antwort liegen
@@ -315,17 +429,17 @@ Zielrechner wird sofort - dort kennt der Bus den Socket, der Absender kann ihn n
 
 ### Derselbe Name auf zwei Rechnern
 
-Der Name ist eine Pacht **pro Rechner**. `Petra` kann gleichzeitig auf RAINBOW und SENZA
+Der Name ist eine Pacht **pro Rechner**. `Petra` kann gleichzeitig auf WORKSTATION und SERVER
 laufen - beide Sitzungen sind echt und haben eigene IDs. Eindeutig sein muss nicht der Name,
 sondern die Adresse:
 
 ```bash
-chatterdome send Petra@SENZA "..."
+chatterdome send Petra@SERVER "..."
 ```
 
 Ist der Name im Mesh eindeutig, bleibt `send Petra` wie bisher. Ist er doppelt, bricht der Bus
 ab und nennt beide Fassungen, statt still eine zu wählen. Die Tabelle zeigt solche Namen als
-`Petra@RAINBOW`, und `chatterdome bus doctor` listet sie auf.
+`Petra@WORKSTATION`, und `chatterdome bus doctor` listet sie auf.
 
 ### Verwaiste Sitzungen
 
@@ -351,11 +465,11 @@ Ende August 2026 vorgesehen.
 Ein Unterschied, der überrascht, wenn man ihn zum ersten Mal trifft:
 
 ```bash
-ssh senza                          # interaktive Login-Shell - alles wie gewohnt
+ssh server                         # interaktive Login-Shell - alles wie gewohnt
 chatterdome status                   # funktioniert dort einfach
 
-ssh senza "chatterdome status"       # NICHT gefunden
-ssh senza 'bash -lc "chatterdome status"'   # so schon
+ssh server "chatterdome status"      # NICHT gefunden
+ssh server 'bash -lc "chatterdome status"'  # so schon
 ```
 
 Der Grund: `ssh rechner "befehl"` startet **keine** Login-Shell. Ubuntu bricht in den ersten
@@ -364,7 +478,7 @@ im PATH. Auf **Windows** ist es genau umgekehrt: der sshd übergibt den PATH aus
 also funktioniert der direkte Aufruf, dafür führt `bash -lc` dort in die **WSL** statt in die
 Git Bash, wo es kein node gibt.
 
-**Für die tägliche Arbeit ändert sich nichts** - wer sich mit `ssh senza` eine Konsole holt,
+**Für die tägliche Arbeit ändert sich nichts** - wer sich mit `ssh server` eine Konsole holt,
 merkt davon gar nichts. Betroffen sind nur Skripte, die Befehle über SSH absetzen. `--mesh`
 probiert deshalb beide Wege.
 

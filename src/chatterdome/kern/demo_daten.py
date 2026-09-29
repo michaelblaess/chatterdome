@@ -128,9 +128,13 @@ class _Transkript:
 
 
 def _gespraech(t: _Transkript, projekt: str, lang: str, bis: datetime, anfragen: int,
-               zufall: random.Random) -> None:
-    """Fuellt ein Transkript mit Wortwechseln und Werkzeugzuegen, endend bei ``bis``."""
-    paare = GESPRAECHE[projekt][lang]
+               zufall: random.Random, *, mit_text: bool = True) -> None:
+    """Fuellt ein Transkript mit Wortwechseln und Werkzeugzuegen, endend bei ``bis``.
+
+    :param mit_text: False fuer reine Werkzeugzuege. Sonst stuende derselbe Satz in
+        jeder frueheren Sitzung des Projekts, und die Suche zeigte ihn dutzendfach.
+    """
+    paare = GESPRAECHE[projekt][lang] if mit_text else []
     schritte = len(paare) + anfragen
     wann = bis - timedelta(minutes=2 * schritte)
     for frage, antwort in paare:
@@ -170,7 +174,8 @@ def _transkripte(zuhause: Path, lang: str, jetzt: datetime, zufall: random.Rando
             bis = jetzt - timedelta(days=tag, hours=zufall.randint(0, 10))
             if abrufe:
                 t.abruf(bis - timedelta(hours=3), abrufe.pop(), tag)
-            _gespraech(t, projekt, lang, bis, zufall.randint(10, 45), zufall)
+            _gespraech(t, projekt, lang, bis, zufall.randint(10, 45), zufall,
+                       mit_text=nummer % 5 == 0)
             t.schreiben()
 
 
