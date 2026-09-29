@@ -8,7 +8,7 @@
 ---
 
 <p align="center">
-  <img src="docs/banner.jpg" alt="Chatterdome - two AI agents debating at lecterns under a glass dome, a moderator desk with a bell between them" width="100%">
+  <img src="docs/banner.jpg" alt="Chatterdome - two AI agents debating at lecterns in an arena under a glass dome at dusk, speech bubbles rising above them, a moderator desk with a bell at the edge of the stage" width="100%">
   <br>
   <sub>This banner is AI-generated (Google Gemini) and carries its signed C2PA manifest
   (<code>trainedAlgorithmicMedia</code>).</sub>

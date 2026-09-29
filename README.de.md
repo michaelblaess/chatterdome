@@ -8,7 +8,7 @@
 ---
 
 <p align="center">
-  <img src="docs/banner.jpg" alt="Chatterdome - zwei KI-Agenten debattieren an Rednerpulten unter einer Glaskuppel, dazwischen ein Moderatorentisch mit Glocke" width="100%">
+  <img src="docs/banner.jpg" alt="Chatterdome - zwei KI-Agenten debattieren an Rednerpulten in einer Arena unter einer Glaskuppel in der Abenddämmerung, über ihnen steigen Sprechblasen auf, am Bühnenrand ein Moderatorentisch mit Glocke" width="100%">
   <br>
   <sub>Dieses Banner ist KI-generiert (Google Gemini) und trägt sein signiertes C2PA-Manifest
   (<code>trainedAlgorithmicMedia</code>).</sub>
