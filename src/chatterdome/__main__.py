@@ -7,7 +7,7 @@ import sys
 
 from chatterdome import __version__
 from chatterdome.i18n import DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES, load_locale
-from chatterdome.kern import absturz
+from chatterdome.kern import absturz, umgebung
 from chatterdome.kern.einstellungen import Einstellungen, alten_ordner_uebernehmen
 
 
@@ -38,7 +38,13 @@ def soll_grafik_wecken(bild_modus: str, protokoll: str | None) -> bool:
 
 def main() -> None:
     """Startet die Zentrale."""
-    alten_ordner_uebernehmen()
+    # Der Demo-Modus MUSS vor jedem Lesen von Einstellungen stehen - sonst
+    # stammen Sprache und Thema schon aus dem echten Zuhause. Deshalb der
+    # Blick in sys.argv, bevor argparse ueberhaupt gebaut ist.
+    demo = "--demo" in sys.argv[1:]
+    zuhause = umgebung.demo_aktivieren() if demo else None
+    if not demo:
+        alten_ordner_uebernehmen()
     einstellungen = Einstellungen()
     werte = einstellungen.laden()
     gespeicherte_sprache = str(werte.get("language", DEFAULT_LANGUAGE))
@@ -49,6 +55,11 @@ def main() -> None:
     )
     parser.add_argument("--lang", default=gespeicherte_sprache, choices=SUPPORTED_LANGUAGES)
     parser.add_argument("--version", action="version", version=f"chatterdome {__version__}")
+    parser.add_argument(
+        "--demo",
+        action="store_true",
+        help="Erfundene Agenten und Daten statt der echten, etwa fuer Screenshots",
+    )
     args = parser.parse_args()
 
     # Sprache VOR dem Import der App laden - sonst sind die Beschriftungen
@@ -64,7 +75,16 @@ def main() -> None:
         vorab_initialisieren,
     )
 
+    from chatterdome.kern.protokolle import Quelle
     from chatterdome.tui.app import ChatterdomeApp
+
+    quelle: Quelle | None = None
+    if zuhause is not None:
+        from chatterdome.kern.demo_daten import erzeugen
+        from chatterdome.kern.demo_quelle import DemoQuelle
+
+        erzeugen(zuhause, args.lang)
+        quelle = DemoQuelle(args.lang)
 
     # MUSS vor App.run() stehen: textual-image fragt beim ersten Import die
     # Zellgroesse am Terminal ab. Passiert das erst waehrend der App, landet
@@ -76,14 +96,14 @@ def main() -> None:
     if soll_grafik_wecken(str(werte.get("bild_modus", "auto")), erkenne_protokoll()):
         vorab_initialisieren()
 
-    set_terminal_title(f"chatterdome v{__version__}")
+    set_terminal_title(f"chatterdome v{__version__}{' (Demo)' if demo else ''}")
     # Die Klammer MUSS hier stehen und nicht in der App: nur so umschliesst
     # sie auch das Aufraeumen unten. Bleibt die Endzeile im Protokoll aus,
     # ist genau dieses finally nicht mehr gelaufen - dann war es kein
     # Python-Fehler, sondern ein harter Abbruch von aussen.
     absturz.beobachte(__version__)
     try:
-        ChatterdomeApp().run()
+        ChatterdomeApp(quelle=quelle).run()
     finally:
         reset_terminal_title()
         _maus_tracking_aus()

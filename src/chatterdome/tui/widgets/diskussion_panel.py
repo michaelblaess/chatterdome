@@ -881,6 +881,13 @@ class DiskussionsPanel(Vertical):
         """Nach "Fortsetzen" im Kontextmenue: das Hinweisfeld bekommt den Fokus."""
         self.query_one("#disk-weiter-info", TextArea).focus()
 
+    def thema_vorschlagen(self, thema: str) -> None:
+        """Legt ein Thema ins leere Formular, ohne den Fokus zu nehmen (Demo-Modus)."""
+        feld = self.query_one("#disk-thema", TextArea)
+        if not feld.text.strip():
+            feld.text = thema
+            self._pruefen()
+
     def vorlage(self, diskussion: Diskussion) -> None:
         """Uebernimmt Thema und Einstellungen einer alten Diskussion ins Formular."""
         self.remove_class("fertig")

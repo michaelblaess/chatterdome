@@ -598,5 +598,10 @@
   "keymap.style_classic": "Classic",
   "keymap.style_function_keys": "With function keys",
   "keymap.vim_on": "Vim navigation is on",
-  "keymap.vim_off": "Vim navigation is off"
+  "keymap.vim_off": "Vim navigation is off",
+  "demo.not_available": "Not available in demo mode.",
+  "demo.unknown_agent": "No agent named {name}.",
+  "demo.discussion_task": "Discussion participant",
+  "demo.marker": "Demo",
+  "log.demo_started": "Demo mode: all agents, messages and statistics are made up."
 }

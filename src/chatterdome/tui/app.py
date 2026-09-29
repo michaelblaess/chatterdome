@@ -30,7 +30,7 @@ from textual_widgets import (
 
 from chatterdome import __author__, __version__, __year__, haftung
 from chatterdome.i18n import current_language, t
-from chatterdome.kern import absturz
+from chatterdome.kern import absturz, umgebung
 from chatterdome.kern.debatte import Diskussion, hinweis_anhaengen
 from chatterdome.kern.diskussionsarchiv import Diskussionsarchiv
 from chatterdome.kern.einstellungen import Einstellungen
@@ -55,6 +55,7 @@ from chatterdome.kern.protokolle import Quelle
 from chatterdome.kern.statistik import Statistik, lade_statistik
 from chatterdome.kern.suche import Bilanz, Suchindex
 from chatterdome.kern.terminals import finde
+from chatterdome.kern.umgebung import rechnername
 from chatterdome.tui import keymap
 from chatterdome.tui.schutz import klartext
 from chatterdome.tui.starter import oeffne_ordner
@@ -98,9 +99,7 @@ einer Absage. Ausloesen kann /compact nur ein Mensch im Zielfenster.
 
 def _bus_datei() -> Path:
     """Pfad der Bus-Datenbank dieses Rechners."""
-    import platform
-
-    rechner = platform.node().upper() or "UNBEKANNT"
+    rechner = rechnername().upper() or "UNBEKANNT"
     return Path.home() / ".claude" / "bus" / rechner / "bus.db"
 
 
@@ -244,6 +243,9 @@ class ChatterdomeApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # 
     def on_mount(self) -> None:
         self._binding_texte()
         self._schreibe_log(t("log.started", version=__version__))
+        if umgebung.demo():
+            self._schreibe_log(t("log.demo_started"), "warning")
+            self._demo_thema_vorschlagen()
         # Erst hier gemeldet: beim Binden gab es das Log noch nicht.
         for problem in self._keymap_ergebnis.problems:
             self._schreibe_log(f"[!] {problem.message}")
@@ -888,6 +890,8 @@ class ChatterdomeApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # 
                 severity="warning",
             )
             return
+        if self._demo_gesperrt():
+            return
         # Nicht ueber den Link-Mixin: der kennt nur bereits registrierte
         # Ziele. Hier ist der Pfad direkt bekannt.
         with contextlib.suppress(Exception):
@@ -1180,8 +1184,10 @@ class ChatterdomeApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # 
         Ueber das Modul und nicht per Namensimport, damit ein Test den Ablauf
         ersetzen kann, ohne echte Fenster zu oeffnen.
         """
-        from chatterdome import debatte_ablauf
+        from chatterdome import debatte_ablauf, demo_ablauf
 
+        # Im Demo-Modus dieselbe Anzeige, aber ein Ablauf ohne Sitzungen und Modell.
+        ablauf: Any = demo_ablauf if umgebung.demo() else debatte_ablauf
         panel = self.query_one("#diskussion", DiskussionsPanel)
 
         def melden(text: str) -> None:
@@ -1190,7 +1196,7 @@ class ChatterdomeApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # 
             self.call_from_thread(panel.meldung, text)
 
         try:
-            ergebnis = debatte_ablauf.ausfuehren(
+            ergebnis = ablauf.ausfuehren(
                 auftrag.diskussion, auftrag.neu,
                 ohne_eigenen_kontext=auftrag.ohne_kontext,
                 wiederbeleben=auftrag.wiederbeleben,
@@ -1201,7 +1207,8 @@ class ChatterdomeApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # 
                 beim_verbrauch=lambda v: self.call_from_thread(panel.verbrauch, v),
                 beim_vorbereiten=lambda ts: self.call_from_thread(panel.vorbereitung_beginnt, ts),
                 stopp=stopp,
-                quelle=self._quelle if isinstance(self._quelle, LokaleQuelle) else None,
+                quelle=(self._quelle if isinstance(self._quelle, LokaleQuelle) or umgebung.demo()
+                        else None),
                 archiv=self._archiv,
                 protokoll=Path(auftrag.protokoll) if auftrag.protokoll else None,
             )
@@ -1251,6 +1258,8 @@ class ChatterdomeApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # 
         """
         from chatterdome.tui.screens.bestaetigung_screen import BestaetigungScreen
 
+        if self._demo_gesperrt():
+            return
         agent = self._gewaehlt
         if agent is None:
             self.notify(t("notify.select_agent"), severity="warning")
@@ -1532,8 +1541,31 @@ class ChatterdomeApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # 
         self.aktualisieren()
         self.namen_laden()
 
+    def _demo_gesperrt(self) -> bool:
+        """Im Demo-Modus sagen, dass es hier nichts zu starten oder zu oeffnen gibt."""
+        if not umgebung.demo():
+            return False
+        self.notify(t("demo.not_available"), severity="warning")
+        return True
+
+    def _demo_thema_vorschlagen(self) -> None:
+        """Legt das Thema der simulierten Diskussion schon ins Formular."""
+        from chatterdome.kern.demo_texte import SKRIPT, sprache
+
+        panel = self.query_one("#diskussion", DiskussionsPanel)
+        panel.thema_vorschlagen(SKRIPT[sprache(current_language())].thema)
+
+    def action_open_link(self, link_id: str) -> None:
+        """Im Demo-Modus gesperrt: die Ziele waeren Dateien im Demo-Zuhause oder im Netz."""
+        if self._demo_gesperrt():
+            return
+        super().action_open_link(link_id)
+
     def action_start_agent(self) -> None:
         from chatterdome.tui.starter import starte_lokal
+
+        if self._demo_gesperrt():
+            return
 
         # Die Einstellungen mitgeben: dort steht, welches Terminal genommen
         # wird und was darin vor Claude laufen soll.

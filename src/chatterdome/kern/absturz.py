@@ -23,12 +23,12 @@ from __future__ import annotations
 import atexit
 import contextlib
 import os
-import platform
 import signal
 import traceback
 from datetime import datetime
 from types import FrameType
 
+from chatterdome.kern import umgebung
 from chatterdome.kern.einstellungen import VERZEICHNIS
 
 PROTOKOLL = VERZEICHNIS / "fault.log"
@@ -57,7 +57,7 @@ def notiere(anlass: str, text: str = "") -> None:
         PROTOKOLL.parent.mkdir(parents=True, exist_ok=True)
         _kuerzen()
         stempel = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
-        kopf = f"[{stempel}] {anlass} (PID {os.getpid()}, {platform.node()})\n"
+        kopf = f"[{stempel}] {anlass} (PID {os.getpid()}, {umgebung.rechnername()})\n"
         # newline="\n" hier und in _kuerzen, sonst schreibt Windows CRLF und
         # die Datei bekommt beim Kuerzen gemischte Zeilenenden.
         with PROTOKOLL.open("a", encoding="utf-8", newline="\n") as datei:

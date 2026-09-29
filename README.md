@@ -86,6 +86,18 @@ chatterdome hilfe               # all commands
 The scripts can still be called directly
 (`node ~/.claude/skills/operator/operator.mjs status`), but that is only needed for debugging.
 
+### Demo mode
+
+`chatterdome-tui --demo` starts the interface with made-up data only: seven agents on three
+machines (WORKSTATION, LAPTOP, SERVER), a filled message bus, two weeks of statistics, memory
+notes, an archive of discussions and a discussion that plays itself out when you start one. It
+reads nothing from your real `~/.claude` and starts no sessions, which makes it the right tool
+for screenshots and presentations. The header says `(Demo)` the whole time.
+
+The demo lives in `C:\chatterdome-demo` (Windows) or `/tmp/chatterdome-demo` and is recreated
+on every start, `CHATTERDOME_DEMO_DIR` points it elsewhere. `--lang en` or `--lang de` picks the
+language of the content as well.
+
 ## Agent names
 
 Every session gets a name from a pool, so you can address it instead of a process id.

@@ -15,8 +15,7 @@ from textual_widgets import BaseSettingsScreen
 from textual_widgets.keymap import KeymapStyle
 
 from chatterdome.i18n import t
-from chatterdome.kern.absturz import PROTOKOLL
-from chatterdome.kern.einstellungen import DATEI, ZUSTIMMUNG
+from chatterdome.kern import absturz, einstellungen, umgebung
 from chatterdome.kern.terminals import AUTOMATISCH, auswahl
 
 VERFAHREN = ("claude", "npm", "winget", "choco", "brew")
@@ -30,7 +29,9 @@ update.mjs lehnt einen unbekannten Schluessel ausdruecklich ab.
 
 
 def _namenspool_datei() -> Path:
-    """Der Namenspool gehoert dem Operator-Skill."""
+    """Der Namenspool gehoert dem Operator-Skill. Im Demo-Modus eine Kopie im Demo-Zuhause."""
+    if umgebung.demo():
+        return umgebung.demo_pool_datei()
     return Path(__file__).resolve().parents[4] / "skills" / "operator" / "namenspool.json"
 
 
@@ -59,9 +60,7 @@ def _schreibe_json(datei: Path, roh: dict[str, Any]) -> None:
 
 
 def _bus_datei() -> Path:
-    import platform
-
-    return Path.home() / ".claude" / "bus" / (platform.node().upper() or "?") / "bus.db"
+    return Path.home() / ".claude" / "bus" / (umgebung.rechnername().upper() or "?") / "bus.db"
 
 
 class EinstellungenScreen(BaseSettingsScreen):  # type: ignore[misc]
@@ -348,8 +347,8 @@ class EinstellungenScreen(BaseSettingsScreen):  # type: ignore[misc]
 
     def storage_paths(self) -> list[tuple[str, Path]]:
         return [
-            (t("settings.storage.config"), DATEI),
+            (t("settings.storage.config"), einstellungen.DATEI),
             (t("settings.storage.bus"), _bus_datei()),
-            (t("settings.storage.disclaimer"), ZUSTIMMUNG),
-            (t("settings.storage.fault"), PROTOKOLL),
+            (t("settings.storage.disclaimer"), einstellungen.ZUSTIMMUNG),
+            (t("settings.storage.fault"), absturz.PROTOKOLL),
         ]

@@ -598,5 +598,10 @@
   "keymap.style_classic": "Klassisch",
   "keymap.style_function_keys": "Mit F-Tasten",
   "keymap.vim_on": "Vim-Navigation ist eingeschaltet",
-  "keymap.vim_off": "Vim-Navigation ist ausgeschaltet"
+  "keymap.vim_off": "Vim-Navigation ist ausgeschaltet",
+  "demo.not_available": "Im Demo-Modus nicht verfügbar.",
+  "demo.unknown_agent": "Kein Agent namens {name}.",
+  "demo.discussion_task": "Teilnehmer einer Diskussion",
+  "demo.marker": "Demo",
+  "log.demo_started": "Demo-Modus: alle Agenten, Nachrichten und Auswertungen sind erfunden."
 }

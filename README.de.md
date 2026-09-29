@@ -88,6 +88,19 @@ chatterdome hilfe               # alle Befehle
 Die Skripte lassen sich weiterhin direkt aufrufen
 (`node ~/.claude/skills/operator/operator.mjs status`), das braucht man aber nur zum Debuggen.
 
+### Demo-Modus
+
+`chatterdome-tui --demo` startet die Oberfläche nur mit erfundenen Daten: sieben Agenten auf
+drei Rechnern (WORKSTATION, LAPTOP, SERVER), ein gefüllter Message-Bus, zwei Wochen Statistik,
+Memory-Notizen, ein Archiv mit Diskussionen und eine Diskussion, die sich beim Starten selbst
+abspielt. Aus Deinem echten `~/.claude` liest sie nichts, und sie startet keine Sitzung. Damit
+ist sie das richtige Werkzeug für Screenshots und Vorführungen. Die Kopfzeile zeigt die ganze
+Zeit `(Demo)`.
+
+Die Demo liegt in `C:\chatterdome-demo` (Windows) beziehungsweise `/tmp/chatterdome-demo` und
+wird bei jedem Start neu angelegt, `CHATTERDOME_DEMO_DIR` legt sie woanders hin. `--lang de`
+oder `--lang en` wählt auch die Sprache der Inhalte.
+
 ## Agentennamen
 
 Jede Sitzung bekommt einen Namen aus einem Pool, damit Du sie ansprechen kannst statt über

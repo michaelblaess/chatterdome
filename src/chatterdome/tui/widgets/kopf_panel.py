@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import platform
 import sqlite3
 import sys
 from collections import Counter
@@ -13,7 +12,9 @@ from typing import Any
 from textual_widgets import InfoHeader, InfoItem
 
 from chatterdome.i18n import format_datetime, t
+from chatterdome.kern import umgebung
 from chatterdome.kern.modelle import Bestand
+from chatterdome.kern.umgebung import rechnername
 
 
 def _tokens(wert: int) -> str:
@@ -43,6 +44,12 @@ def _groesse(pfad: Path) -> str:
     return f"{bytes_ / 1024 / 1024:.1f} MB"
 
 
+def _rechner_anzeige() -> str:
+    """Der Rechnername, im Demo-Modus mit sichtbarem Kennzeichen."""
+    name = rechnername()
+    return f"{name} ({t('demo.marker')})" if umgebung.demo() else name
+
+
 class KopfPanel(InfoHeader):  # type: ignore[misc]
     """Vier Spalten: Betrieb, Technik, Netz, Namen."""
 
@@ -60,7 +67,7 @@ class KopfPanel(InfoHeader):  # type: ignore[misc]
             InfoItem("node", t("head.node"), "-"),
             InfoItem("sqlite", t("head.sqlite"), sqlite3.sqlite_version),
             # Spalte 3 - Netz
-            InfoItem("host", t("head.host"), platform.node()),
+            InfoItem("host", t("head.host"), _rechner_anzeige()),
             InfoItem("mesh", t("head.mesh"), "-"),
             InfoItem("reachable", t("head.reachable"), "-"),
             InfoItem("updated", t("head.updated"), "-"),
