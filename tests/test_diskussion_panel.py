@@ -569,3 +569,76 @@ class TestPositionen:
             await pilot.pause()
             assert not zeile.display
             assert not panel.query_one("#disk-positionen-hinweis").display
+
+
+class TestFarbenJePerson:
+    async def test_team_abwechselnd_und_jeder_in_seiner_farbe(self) -> None:
+        app = _app()
+        async with app.run_test(size=(160, 50)) as pilot:
+            panel = await _reiter(app, pilot)
+            d = Diskussion("x", [Teilnehmer("Agatha"), Teilnehmer("Maria")], format="team")
+            panel.beginnen(d, [])
+            panel.beitrag(_beitrag("Agatha", "", "Danke, Maria."))
+            panel.beitrag(_beitrag("Maria", "", "Einig, Agatha."))
+            await pilot.pause()
+            agatha, maria = list(panel.query(".disk-blase"))
+            # Im Team gibt es keine Seite - trotzdem eingerueckt, abwechselnd.
+            assert agatha.region.x < maria.region.x
+            links = agatha.styles.border_left[1]
+            rechts = maria.styles.border_right[1]
+            assert links != rechts, "jeder Sprecher hat seinen eigenen Balken"
+            # Die Erwaehnung hat die Farbe des Erwaehnten, nicht das Grau von vorher.
+            assert panel._farbe("Maria") == app.theme_variables["accent"]
+            assert panel._farbe("Maria") != app.theme_variables.get("secondary")
+
+    async def test_mehr_als_zwei_bekommen_verschiedene_farben(self) -> None:
+        app = _app()
+        async with app.run_test(size=(160, 50)) as pilot:
+            panel = await _reiter(app, pilot)
+            namen = ["A", "B", "C", "D"]
+            panel.beginnen(Diskussion("x", [Teilnehmer(n) for n in namen], format="team"), [])
+            assert len({panel._farbe(n) for n in namen}) == 4
+
+
+class TestReinrufen:
+    async def test_nachricht_geht_in_den_verlauf_und_die_tipp_anzeige_bleibt(self) -> None:
+        from claude_sanctuary.tui.widgets.diskussion_panel import _Laeuft
+
+        app = _app()
+        async with app.run_test(size=(160, 50)) as pilot:
+            panel = await _reiter(app, pilot)
+            d = Diskussion("x", [Teilnehmer("A", seite="pro"), Teilnehmer("B", seite="contra")])
+            app._laufende_diskussion = d
+            panel.beginnen(d, [])
+            panel.redner("B", 1)
+            await pilot.pause()
+            assert panel.query_one("#disk-zuruf-raum").display
+            panel.query_one("#disk-zuruf", TextArea).text = "Bitte zum Schluss kommen."
+            await pilot.click("#disk-reinrufen")
+            await pilot.pause()
+            assert [(b.art, b.text) for b in d.beitraege] == [
+                ("moderator", "Bitte zum Schluss kommen.")]
+            assert panel.query_one("#disk-zuruf", TextArea).text == ""
+            kinder = list(panel.query_one("#disk-chat").children)
+            moderator = panel.query_one(".disk-moderator")
+            tippt = panel.query_one(".disk-tippt", _Laeuft)
+            assert kinder.index(moderator) < kinder.index(tippt)
+
+    async def test_nach_dem_ende_kein_reinrufen(self) -> None:
+        app = _app()
+        async with app.run_test(size=(160, 50)) as pilot:
+            await _reiter(app, pilot)
+            app.post_message(DiskussionsPanel.Reinrufen("zu spaet"))
+            await pilot.pause()
+            assert app._laufende_diskussion is None
+
+    async def test_statuszeile_sagt_spricht(self) -> None:
+        app = _app()
+        async with app.run_test(size=(160, 50)) as pilot:
+            panel = await _reiter(app, pilot)
+            d = Diskussion("x", [Teilnehmer("A", seite="pro"), Teilnehmer("B", seite="contra")])
+            panel.beginnen(d, [])
+            panel.redner("A", 1)
+            kennzahlen = panel.kennzahlen()
+            assert kennzahlen is not None
+            assert ("Spricht", "A") in [(p.label, p.value) for p in kennzahlen[0]]

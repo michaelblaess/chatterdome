@@ -609,15 +609,24 @@ def moderieren(
     return diskussion
 
 
-def hinweis_anhaengen(diskussion: Diskussion, text: str) -> None:
+def hinweis_anhaengen(diskussion: Diskussion, text: str) -> Beitrag | None:
     """Haengt einen Hinweis des Anwenders an, etwa neue Fakten beim Fortsetzen.
 
     Er steht hinter der letzten gespielten Runde und geht mit dem Verlauf an
     jeden folgenden Redner. Leerer Text haengt nichts an.
+
+    Auch waehrend einer laufenden Diskussion ("Reinrufen"): der Moderator
+    liest ``beitraege`` fuer jede neue Anweisung, der Hinweis erreicht also den
+    naechsten Redner. ``list.append`` ist unter CPython atomar, der Faden des
+    Moderators sieht die Liste davor oder danach, nie halb.
+
+    :returns: der angehaengte Eintrag, None bei leerem Text.
     """
-    if text.strip():
-        diskussion.beitraege.append(Beitrag(diskussion.gespielte_runden, MODERATOR,
-                                            text.strip(), _jetzt(), "moderator"))
+    if not text.strip():
+        return None
+    beitrag = Beitrag(diskussion.gespielte_runden, MODERATOR, text.strip(), _jetzt(), "moderator")
+    diskussion.beitraege.append(beitrag)
+    return beitrag
 
 
 def zusammenfassung_auftrag(diskussion: Diskussion) -> str:

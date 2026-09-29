@@ -33,7 +33,7 @@ from textual_widgets import (
 from claude_sanctuary import __author__, __version__, __year__
 from claude_sanctuary.i18n import current_language, t
 from claude_sanctuary.kern import absturz
-from claude_sanctuary.kern.debatte import hinweis_anhaengen
+from claude_sanctuary.kern.debatte import Diskussion, hinweis_anhaengen
 from claude_sanctuary.kern.diskussionsarchiv import Diskussionsarchiv
 from claude_sanctuary.kern.einstellungen import ZUSTIMMUNG, Einstellungen
 from claude_sanctuary.kern.gedaechtnis import (
@@ -163,9 +163,11 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         self._diskussion_stopp: threading.Event | None = None
         """Gesetzt, solange eine Diskussion laeuft. Der Knopf haelt sie dann an."""
         self._archiv = Diskussionsarchiv()
+        """Gespeicherte Diskussionen. Der Pfad folgt dem Einstellungsordner."""
         self._archiv_ziel = 0
         """Die Diskussion, deren Kontextmenue gerade offen ist."""
-        """Gespeicherte Diskussionen. Der Pfad folgt dem Einstellungsordner."""
+        self._laufende_diskussion: Diskussion | None = None
+        """Die Diskussion, die gerade laeuft - fuer das Reinrufen."""
 
         self._gedaechtnis: Gedaechtnis | None = None
         """Der Notizbestand. None, solange der Tab nie geoeffnet wurde."""
@@ -1046,6 +1048,7 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
         if self._diskussion_stopp is not None:
             return  # laeuft schon, der Knopf ist dann ohnehin verdeckt
         self._diskussion_stopp = threading.Event()
+        self._laufende_diskussion = auftrag.diskussion
         self.query_one("#diskussion", DiskussionsPanel).beginnen(auftrag.diskussion, auftrag.neu)
         self._schreibe_log(t("log.discussion_note", text=auftrag.diskussion.thema))
         self._diskussion_ausfuehren(auftrag, self._diskussion_stopp)
@@ -1215,6 +1218,19 @@ class SanctuaryApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # ty
 
     def _diskussion_vorbei(self) -> None:
         self._diskussion_stopp = None
+        self._laufende_diskussion = None
+
+    def on_diskussions_panel_reinrufen(self, ereignis: DiskussionsPanel.Reinrufen) -> None:
+        """Eine Nachricht in die laufende Diskussion - der naechste Redner bekommt sie."""
+        diskussion = self._laufende_diskussion
+        if diskussion is None:
+            self.notify(t("discussion.shout_too_late"), severity="warning")
+            return
+        beitrag = hinweis_anhaengen(diskussion, ereignis.text)
+        if beitrag is None:
+            return
+        self.query_one("#diskussion", DiskussionsPanel).beitrag(beitrag)
+        self._schreibe_log(t("log.discussion_shout", text=beitrag.text[:80]))
 
     def _diskussion_fertig(self, ergebnis: Any) -> None:
         panel = self.query_one("#diskussion", DiskussionsPanel)

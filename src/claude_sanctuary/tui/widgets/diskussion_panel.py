@@ -17,7 +17,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Literal
 
 from rich.style import Style
 from rich.text import Text
@@ -88,9 +88,11 @@ class _Laeuft(Static):
 
     TAKT = 0.12
 
-    def __init__(self, text: str, *, schreibt: bool = False, classes: str = "") -> None:
+    def __init__(self, text: str, *, schreibt: bool = False, classes: str = "",
+                 farbe: str = "") -> None:
         super().__init__("", classes=f"disk-laeuft {classes}".strip())
         self.text = text
+        self._farbe = farbe
         self._schreibt = schreibt
         self._schritt = 0
         self._beginn = time.monotonic()
@@ -112,7 +114,7 @@ class _Laeuft(Static):
 
     def zeile(self) -> Text:
         """Der aktuelle Stand der Anzeige."""
-        farbe = self.app.theme_variables.get("accent", "magenta")
+        farbe = self._farbe or self.app.theme_variables.get("accent", "magenta")
         zeile = Text()
         if self._schreibt:
             zeile.append(self.text, style="italic")
@@ -151,6 +153,16 @@ class _ArchivTabelle(DataTable[Any]):
         self.move_cursor(row=zeile)
         self.post_message(self.Rechtsklick(zeile, (event.screen_x, event.screen_y)))
 
+
+FARBEN = (("primary", "blue"), ("accent", "magenta"), ("success", "green"),
+          ("warning", "yellow"), ("error", "red"))
+"""Theme-Farben der Teilnehmer in ihrer Reihenfolge, mit Ersatz ohne Theme.
+
+Kein ``secondary``: das ist in mehreren Themes ein Grau, und genau das war
+auf dem grauen Grund der Blase nicht lesbar."""
+
+ZUSATZFARBEN = ("#c678dd", "#56b6c2", "#e5c07b", "#98c379", "#e06c75", "#61afef")
+"""Feste Toene fuer den Fall, dass ein Theme Farben doppelt belegt."""
 
 MAX_NEU = 6
 """Mehr frische Fenster auf einmal braucht keine Diskussion, und jedes kostet."""
@@ -344,17 +356,14 @@ class DiskussionsPanel(Vertical):
         background: $panel;
         margin: 0 16 1 0;
     }
-    DiskussionsPanel .disk-blase.disk-pro {
-        border-left: thick $primary;
+    /* Links oder rechts steht in der Klasse, die FARBE des Balkens setzt
+       _platz je Person - mit zwei Teilnehmern sind das Primaer- und
+       Akzentfarbe wie bisher, mit mehr bekommt jeder seine eigene. */
+    DiskussionsPanel .disk-blase.disk-links {
         margin: 0 16 1 0;
     }
-    DiskussionsPanel .disk-blase.disk-contra {
-        border-right: thick $accent;
+    DiskussionsPanel .disk-blase.disk-rechts {
         margin: 0 0 1 16;
-    }
-    DiskussionsPanel .disk-blase.disk-team {
-        border-left: thick $secondary;
-        margin: 0 8 1 0;
     }
     /* Laufende Anzeigen: Spinner, Laufbalken, Tipp-Punkte (siehe _Laeuft). */
     DiskussionsPanel .disk-laeuft {
@@ -365,18 +374,12 @@ class DiskussionsPanel(Vertical):
     DiskussionsPanel .disk-tippt {
         background: $panel;
     }
-    DiskussionsPanel .disk-tippt.disk-pro {
-        border-left: thick $primary;
+    DiskussionsPanel .disk-tippt.disk-links {
         margin: 0 16 1 0;
     }
-    DiskussionsPanel .disk-tippt.disk-contra {
-        border-right: thick $accent;
+    DiskussionsPanel .disk-tippt.disk-rechts {
         margin: 0 0 1 16;
         text-align: right;
-    }
-    DiskussionsPanel .disk-tippt.disk-team {
-        border-left: thick $secondary;
-        margin: 0 8 1 0;
     }
     DiskussionsPanel .disk-meldung {
         height: auto;
@@ -400,6 +403,17 @@ class DiskussionsPanel(Vertical):
         width: 8;
         margin: 1 1 0 0;
     }
+    DiskussionsPanel #disk-zuruf-raum {
+        display: none;
+        height: 5;
+        padding: 1 2 0 2;
+        border-top: solid $surface-lighten-2;
+    }
+    DiskussionsPanel #disk-zuruf {
+        width: 1fr;
+        height: 3;
+        margin-right: 2;
+    }
     DiskussionsPanel #disk-weiter-raum {
         height: auto;
         padding: 0 2 1 2;
@@ -412,7 +426,8 @@ class DiskussionsPanel(Vertical):
         height: auto;
         padding: 0 1;
         margin: 0 8 1 8;
-        border: round $warning;
+        /* Neutral: $warning ist in textual-dark die Farbe des zweiten Sprechers. */
+        border: round $foreground 40%;
         background: $panel;
     }
     DiskussionsPanel #disk-weiter-modell {
@@ -501,6 +516,13 @@ class DiskussionsPanel(Vertical):
             self.hinweis = hinweis
             """Neue Informationen fuer die Teilnehmer, leer fuer keine."""
             self.mit_kontext = mit_kontext
+
+    class Reinrufen(Message):
+        """Eine Nachricht an die laufende Diskussion, ueber den Moderator."""
+
+        def __init__(self, text: str) -> None:
+            super().__init__()
+            self.text = text
 
     class ArchivMenue(Message):
         """Rechtsklick auf eine gespeicherte Diskussion."""
@@ -616,6 +638,11 @@ class DiskussionsPanel(Vertical):
                 yield Checkbox(t("discussion.with_context"), value=False,
                                id="disk-weiter-kontext", compact=True)
             yield VerticalScroll(id="disk-chat")
+            with Horizontal(id="disk-zuruf-raum"):
+                yield TextArea(id="disk-zuruf", compact=True, soft_wrap=True,
+                               show_line_numbers=False, tab_behavior="focus",
+                               placeholder=t("discussion.shout_placeholder"))
+                yield Button(t("discussion.shout"), variant="warning", id="disk-reinrufen")
             with VerticalScroll(id="disk-zusammenfassung-raum"):
                 yield Static("", id="disk-zusammenfassung")
 
@@ -841,6 +868,15 @@ class DiskussionsPanel(Vertical):
                                           hinweis, mit_kontext))
         self.query_one("#disk-weiter-info", TextArea).text = ""
 
+    @on(Button.Pressed, "#disk-reinrufen")
+    def _knopf_reinrufen(self) -> None:
+        feld = self.query_one("#disk-zuruf", TextArea)
+        if not feld.text.strip():
+            self.notify(t("discussion.shout_empty"), severity="warning")
+            return
+        self.post_message(self.Reinrufen(feld.text))
+        feld.text = ""
+
     def fortsetzen_vorbereiten(self) -> None:
         """Nach "Fortsetzen" im Kontextmenue: das Hinweisfeld bekommt den Fokus."""
         self.query_one("#disk-weiter-info", TextArea).focus()
@@ -869,6 +905,7 @@ class DiskussionsPanel(Vertical):
                           "#disk-weiter-modell", "#disk-weiter-raum"):
             self.query_one(widget_id).display = fortsetzbar
         self.query_one("#disk-neue", Button).display = not laeuft
+        self.query_one("#disk-zuruf-raum").display = laeuft
 
     # -- Statuszeile ----------------------------------------------------
 
@@ -999,8 +1036,10 @@ class DiskussionsPanel(Vertical):
         if self._diskussion.format != "diskussion":
             seite = ""
         klasse = {PRO: "disk-pro", CONTRA: "disk-contra"}.get(seite, "disk-team")
-        self._laeufer_an("tippt", _Laeuft(t("discussion.anim_typing", name=name), schreibt=True,
-                                          classes=f"disk-tippt {klasse}"))
+        tippt = _Laeuft(t("discussion.anim_typing", name=name), schreibt=True,
+                        classes=f"disk-tippt {klasse}", farbe=self._farbe(name))
+        self._platzieren(tippt, name, seite)
+        self._laeufer_an("tippt", tippt)
         self.post_message(self.Kennzahlen())
 
     def beitrag(self, beitrag: Beitrag) -> None:
@@ -1016,29 +1055,65 @@ class DiskussionsPanel(Vertical):
             self._zustand = t("discussion.state_research",
                               fertig=self._recherche_gesamt - offen, gesamt=self._recherche_gesamt)
             self._kopf_zeichnen()
+        elif beitrag.art == "moderator" and "tippt" in self._laeufer:
+            # Reingerufen, waehrend jemand schreibt: davor einreihen, die
+            # Tipp-Anzeige bleibt - der Redner schreibt ja weiter.
+            chat.mount(self._blase(beitrag), before=self._laeufer["tippt"])
+            chat.scroll_end(animate=False)
         else:
             self._laeufer_weg("tippt")
             chat.mount(self._blase(beitrag))
             chat.scroll_end(animate=False)
         self.post_message(self.Kennzahlen())
 
-    def _farben(self) -> dict[str, str]:
-        """Die Farben der Seiten, wie die Raender der Blasen."""
+    def _farbe(self, name: str) -> str:
+        """Die Farbe eines Teilnehmers: Balken, Name im Kopf, Erwaehnungen, Tipp-Anzeige.
+
+        Je Person statt je Seite. Vorher war sie im Team fuer alle dasselbe
+        Grau ($secondary) - auf dem grauen Grund der Blase kaum lesbar, und
+        wer gerade spricht, war nicht auf einen Blick zu sehen (Michael,
+        29.09.2026). Reihenfolge wie die Teilnehmerliste, deshalb bleiben es
+        mit zwei Teilnehmern die bisherigen Farben der beiden Seiten.
+        """
         variablen = self.app.theme_variables
-        return {PRO: variablen.get("primary", "blue"), CONTRA: variablen.get("accent", "magenta"),
-                "": variablen.get("secondary", "cyan")}
+        palette: list[str] = []
+        # Doppelte raus: in textual-dark sind accent und warning dieselbe Farbe,
+        # und zwei Sprecher saehen gleich aus. Aufgefuellt wird mit festen Toenen.
+        for kandidat in [variablen.get(k, ersatz) for k, ersatz in FARBEN] + list(ZUSATZFARBEN):
+            if kandidat.lower() not in (p.lower() for p in palette):
+                palette.append(kandidat)
+        namen = [x.name.lower() for x in self._diskussion.teilnehmer] if self._diskussion else []
+        nummer = namen.index(name.lower()) if name.lower() in namen else len(namen)
+        return palette[nummer % len(palette)]
+
+    def _lage(self, name: str, seite: str) -> str:
+        """``links`` oder ``rechts``: nach Seite, im Team abwechselnd nach Reihenfolge."""
+        d = self._diskussion
+        if d is not None and d.format == "diskussion" and seite in (PRO, CONTRA):
+            return "links" if seite == PRO else "rechts"
+        namen = [x.name.lower() for x in d.teilnehmer] if d is not None else []
+        nummer = namen.index(name.lower()) if name.lower() in namen else 0
+        return "links" if nummer % 2 == 0 else "rechts"
+
+    def _platzieren(self, widget: Static, name: str, seite: str) -> None:
+        """Setzt Lage (Klasse) und Farbe des Balkens auf der Seite, an der er steht."""
+        lage = self._lage(name, seite)
+        widget.add_class(f"disk-{lage}")
+        balken: tuple[Literal["thick"], str] = ("thick", self._farbe(name))
+        if lage == "links":
+            widget.styles.border_left = balken
+        else:
+            widget.styles.border_right = balken
 
     def _erwaehnungen(self, text: Text, sprecher: str) -> None:
-        """Faerbt die Namen der ANDEREN Teilnehmer in der Farbe ihrer Seite."""
+        """Faerbt die Namen der ANDEREN Teilnehmer in deren Farbe."""
         d = self._diskussion
         if d is None:
             return
-        farben = self._farben()
         for teilnehmer in d.teilnehmer:
             if teilnehmer.name.lower() == sprecher.lower() or not teilnehmer.name:
                 continue
-            seite = teilnehmer.seite if d.format == "diskussion" else ""
-            stil = Style(bold=True, color=farben.get(seite, farben[""]))
+            stil = Style(bold=True, color=self._farbe(teilnehmer.name))
             text.highlight_regex(rf"\b{re.escape(teilnehmer.name)}\b", stil)
 
     def _blase(self, beitrag: Beitrag, dauer: str = "") -> Static:
@@ -1067,6 +1142,8 @@ class DiskussionsPanel(Vertical):
             kopf = f"{beitrag.name} · {t('discussion.head_closing')}"
         inhalt = Text()
         inhalt.append(kopf, style="bold")
+        # Der Name im Kopf in der Farbe des Sprechers.
+        inhalt.stylize(Style(color=self._farbe(beitrag.name)), 0, len(beitrag.name))
         if beitrag.ungeprueft:
             inhalt.append(f"  {t('discussion.unverified')}", style="italic dim")
         inhalt.append("\n")
@@ -1077,9 +1154,11 @@ class DiskussionsPanel(Vertical):
         inhalt.append_text(rumpf)
         if beitrag.hinweis:
             inhalt.append(f"\n{beitrag.hinweis}", style="dim italic")
-        seite = beitrag.seite if mit_seiten else "team"
+        seite = beitrag.seite if mit_seiten else ""
         klasse = {PRO: "disk-pro", CONTRA: "disk-contra"}.get(seite, "disk-team")
-        return Static(inhalt, classes=f"disk-blase {klasse}")
+        blase = Static(inhalt, classes=f"disk-blase {klasse}")
+        self._platzieren(blase, beitrag.name, seite)
+        return blase
 
     def meldung(self, text: str) -> None:
         """Eine Zeile des Ablaufs (Start, Namen, Zusammenfassung wird erstellt)."""
