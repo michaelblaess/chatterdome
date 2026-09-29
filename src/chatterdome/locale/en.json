@@ -130,6 +130,7 @@
   "disclaimer.duty_authorisation": "You are authorised to control the machines and sessions involved.",
   "disclaimer.duty_actions": "You are responsible for what the commissioned agents do - the program does not review tasks for content.",
   "disclaimer.duty_data": "You will not pass data over the message bus that has no business being on the target machine.",
+  "disclaimer.duty_costs": "You bear the costs: every agent, discussion, research step and summary consumes tokens from your Claude subscription or API credit. Newly started sessions keep running until they are stopped.",
   "head.claude": "Claude",
   "head.system": "System",
   "head.account": "Account",

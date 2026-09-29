@@ -17,7 +17,6 @@ from textual.css.query import NoMatches
 from textual.widgets import Button, Footer, Header, Input, TabbedContent, TabPane
 from textual_themes import THEME_DISPLAY_NAMES, register_all
 from textual_widgets import (
-    DISCLAIMER_VERSION,
     AboutScreen,
     ClearableInput,
     ClickableLinksMixin,
@@ -139,7 +138,6 @@ class ChatterdomeApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # 
         # Composition Root: hier wird verdrahtet. Der Parameter erlaubt es,
         # im Test eine Quelle ohne laufenden Bus einzusetzen.
         self._quelle: Quelle = quelle if quelle is not None else LokaleQuelle()
-        self._disclaimer = haftung.zustimmung()
         self._bestand = Bestand(rechner="", zeit="")
         self._gewaehlt: Agent | None = None
         self._stop_kandidat = ""
@@ -296,7 +294,7 @@ class ChatterdomeApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # 
         return keymap.key_hint(self._keymap_ergebnis.bindings, action)
 
     def _frage_disclaimer(self) -> None:
-        if self._disclaimer.accepted_version == DISCLAIMER_VERSION:
+        if haftung.zugestimmt():
             return
         self.push_screen(
             DisclaimerScreen(
@@ -315,7 +313,7 @@ class ChatterdomeApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # 
         if not angenommen:
             self.exit()
             return
-        self._disclaimer.record()
+        haftung.festhalten()
 
     # -- Abfrage --------------------------------------------------------
 

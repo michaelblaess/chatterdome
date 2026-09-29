@@ -25,7 +25,9 @@ import argparse
 import sys
 import threading
 from pathlib import Path
+from typing import TextIO
 
+from chatterdome import haftung
 from chatterdome.debatte_ablauf import ausfuehren, laufende
 from chatterdome.kern.debatte import (
     FORMATE,
@@ -107,6 +109,9 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{e.kennung:>4}  {e.beginn}  {e.runden:>2} Runden  {e.modell or "-":<7}  "
                   f"{', '.join(e.teilnehmer)}  {e.thema}")
         return 0
+    # Ab hier kostet es Tokens - ohne Zustimmung zum Hinweis keine Diskussion.
+    if not _zustimmung_einholen():
+        return 3
     if args.fortsetzen:
         return _fortsetzen(archiv, args.fortsetzen, args.runden, args.modell)
     if not args.thema:
@@ -143,6 +148,31 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     return _laufen(diskussion, neu, [], args.ohne_kontext, quelle, archiv, None)
+
+
+def _zustimmung_einholen(eingabe: TextIO | None = None, ausgabe: TextIO | None = None) -> bool:
+    """Zeigt den Haftungshinweis und fragt nach, solange noch nicht zugestimmt ist.
+
+    Dieselbe Zustimmung wie in TUI und Weboberflaeche. Ohne Terminal (Skript,
+    Pipe) wird nicht gefragt, sondern abgebrochen - eine Zustimmung muss ein
+    Mensch geben.
+    """
+    if haftung.zugestimmt():
+        return True
+    eingabe = eingabe or sys.stdin
+    ausgabe = ausgabe or sys.stdout
+    if not eingabe.isatty():
+        print("Dem Haftungshinweis wurde noch nicht zugestimmt. Einmal chatterdome-tui "
+              "starten oder diesen Befehl in einem Terminal aufrufen.", file=sys.stderr)
+        return False
+    print(haftung.text(), file=ausgabe)
+    print("", file=ausgabe)
+    print("Zustimmen? [j/N] ", end="", file=ausgabe, flush=True)
+    if eingabe.readline().strip().lower() in ("j", "ja", "y", "yes"):
+        haftung.festhalten()
+        return True
+    print("Ohne Zustimmung keine Diskussion.", file=sys.stderr)
+    return False
 
 
 def _fortsetzen(archiv: Diskussionsarchiv, kennung: int, runden: int,

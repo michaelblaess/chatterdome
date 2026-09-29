@@ -130,6 +130,7 @@
   "disclaimer.duty_authorisation": "Sie sind berechtigt, die beteiligten Rechner und Sitzungen zu steuern.",
   "disclaimer.duty_actions": "Sie verantworten, was die beauftragten Agenten ausführen - das Programm prüft Aufträge inhaltlich nicht.",
   "disclaimer.duty_data": "Sie geben über den Message-Bus keine Daten weiter, die auf dem Zielrechner nichts zu suchen haben.",
+  "disclaimer.duty_costs": "Sie tragen die Kosten: Jeder Agent, jede Diskussion, jede Recherche und jede Zusammenfassung verbraucht Tokens Ihres Claude-Abonnements oder API-Guthabens. Neu gestartete Sitzungen laufen weiter, bis sie beendet werden.",
   "head.claude": "Claude",
   "head.system": "System",
   "head.account": "Konto",

@@ -15,6 +15,15 @@ from chatterdome import __author__
 from chatterdome.i18n import current_language, t
 from chatterdome.kern import einstellungen
 
+VERSION = f"{DISCLAIMER_VERSION}+chatterdome-2026-09-29"
+"""Fassung des Hinweises, der zugestimmt wird.
+
+Eigene Version statt der von textual-widgets: am 29.09.2026 kam die
+Zusicherung zu den Kosten dazu (Michael: "das Teil verballert Tokens, das
+muss schon jeder abnicken"). Mit der alten Version galt eine Zustimmung
+von vorher einfach weiter. Aendert sich der Wortlaut, steigt diese Version.
+"""
+
 
 def titel() -> str:
     return t("disclaimer.title")
@@ -29,6 +38,7 @@ def zusicherungen() -> tuple[str, ...]:
         t("disclaimer.duty_authorisation"),
         t("disclaimer.duty_actions"),
         t("disclaimer.duty_data"),
+        t("disclaimer.duty_costs"),
     )
 
 
@@ -46,4 +56,14 @@ def zustimmung() -> DisclaimerStore:
 
 def zugestimmt() -> bool:
     """Wahr, wenn der aktuellen Fassung des Hinweises zugestimmt wurde."""
-    return bool(zustimmung().accepted_version == DISCLAIMER_VERSION)
+    return bool(zustimmung().accepted_version == VERSION)
+
+
+def festhalten() -> None:
+    """Haelt die Zustimmung zur aktuellen Fassung fest."""
+    zustimmung().record(VERSION)
+
+
+def text() -> str:
+    """Der ganze Hinweis als Fliesstext, fuer die Kommandozeile."""
+    return "\n\n".join("\n".join(zeilen) for zeilen in absaetze())
