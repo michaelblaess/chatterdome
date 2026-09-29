@@ -515,7 +515,7 @@ function zeigeNamen(argv = []) {
       rechner: rechner(),
       motiv,
       reserviert,
-      // Reservierte Namen zaehlen nicht zum Motiv - sonst haette "Comicmotiv"
+      // Reservierte Namen zaehlen nicht zum Motiv - sonst haette das Motiv
       // ploetzlich 20 statt 19 Namen.
       namen: pool.filter((n) => !reserviert.includes(n)),
       frei: pool.filter((n) => !vergeben.includes(n)),
@@ -539,7 +539,7 @@ function zeigeNamen(argv = []) {
   }
   const frei = pool.filter((n) => !Object.values(namen).includes(n)).length;
   // Reservierte Namen gehoeren keinem Motiv an und werden deshalb getrennt
-  // ausgewiesen, sonst haette "Comicmotiv" ploetzlich 20 statt 19 Namen.
+  // ausgewiesen, sonst haette das Motiv ploetzlich 20 statt 19 Namen.
   const zusatz = reserviert.length ? `, reserviert: ${reserviert.join(', ')}` : '';
   console.log(`\n  ${GRAU}Motiv "${motiv}": ${pool.length - reserviert.length} Namen, ${frei} frei${zusatz}${R}\n`);
 }

@@ -96,15 +96,12 @@ Shipped are two public-domain themes, `heilige` (catholic saints) and `schauspie
 
 Themes made of characters from a copyrighted work are deliberately **not** shipped. A plain
 list of names looks harmless, but naming the work in `motiv` establishes the reference, and
-rights holders do act on it: the Comicmotiv rights holders hold EU trademarks in class 9
-(software) and had two GitHub repositories taken down in full in 2016.
+rights holders do act on it: well-known comic characters are covered by EU trademarks in
+class 9 (software), and in 2016 rights holders had two GitHub repositories taken down in full.
 
-That said, a themed pool is half the fun, so here are ideas to set up locally. Check the
-rights situation yourself before making one public:
-
-- **Comicmotiv** - Snorre, Charlene, Lino, Luzie, Marga, Franko, Schmid, Piet
-- **Beispielteam** - Bauernfeind, Tamino, Amalia, Olsen, Kerstin, Engelhardt
-- Anything that is nobody's property: constellations, birds, trees, rivers, minerals
+A themed pool is still half the fun, just keep it local: your own themes go into
+`skills/operator/namenspool.local.json`, which git ignores. For a theme in the repository,
+use anything that is nobody's property: constellations, birds, trees, rivers, minerals.
 
 ## The message bus tab
 

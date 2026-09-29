@@ -109,9 +109,9 @@ node $OP/operator.mjs motiv schauspieler  # umschalten
 
 **Mitgeliefert werden nur gemeinfreie Motive.** Ein Motiv aus Figuren eines geschützten
 Werks gehört nicht ins Repo, auch nicht als blosse Namensliste: Sobald `motiv` das Werk
-benennt, ist der Bezug hergestellt. Zu Comicmotiv etwa halten die Rechteinhaber EU-Marken in
-Klasse 9, also für Software, und haben 2016 zweimal GitHub-Repos vollständig abschalten
-lassen. Wer so ein Motiv möchte, legt es sich lokal an - die README nennt Anregungen.
+benennt, ist der Bezug hergestellt. Zu bekannten Comicfiguren etwa halten die Rechteinhaber
+EU-Marken in Klasse 9, also für Software, und haben 2016 zweimal GitHub-Repos vollständig
+abschalten lassen. Wer so ein Motiv möchte, legt es lokal in `namenspool.local.json` an.
 
 Ein weiteres Motiv ist ein zusätzlicher Eintrag unter `pools` in `namenspool.json`, mehr
 nicht. Namen dürfen nur Buchstaben, Ziffern und Bindestrich enthalten - `Piet` geht,

@@ -3,7 +3,7 @@
 // Vorgeschichte: die Vergabe lag doppelt vor. whoami.mjs kannte das Aufraeumen
 // beendeter Sitzungen und das Ausweichen auf ein anderes Motiv, starte.mjs
 // hatte nur "erster freier Name, sonst durchnummerieren". Am 10.08.2026 stand
-// deshalb ein Fenster als "Operator-22" da, obwohl von 19 Comicmotiv-Namen nur
+// deshalb ein Fenster als "Operator-22" da, obwohl von 19 Namen des Motivs nur
 // sechs an laufenden Instanzen hingen - die restlichen Eintraege in namen.json
 // waren Karteileichen beendeter Sitzungen.
 //

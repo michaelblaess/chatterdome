@@ -98,15 +98,13 @@ Heilige) und `schauspieler`. Ein eigenes Motiv ist ein zusätzlicher Eintrag unt
 
 Motive aus Figuren eines geschützten Werks werden bewusst **nicht** mitgeliefert. Eine blosse
 Namensliste sieht harmlos aus, aber sobald `motiv` das Werk benennt, ist der Bezug
-hergestellt, und die Rechteinhaber handeln durchaus: Zu Comicmotiv bestehen EU-Marken in Klasse
-9, also für Software, und 2016 wurden zwei GitHub-Repositories vollständig abgeschaltet.
+hergestellt, und die Rechteinhaber handeln durchaus: Zu bekannten Comicfiguren bestehen EU-Marken
+in Klasse 9, also für Software, und 2016 ließen Rechteinhaber zwei GitHub-Repositories
+vollständig abschalten.
 
-Der Spass an einem Motiv bleibt trotzdem, nur eben lokal. Anregungen, deren Rechtslage Du vor
-einer Veröffentlichung selbst prüfen solltest:
-
-- **Comicmotiv** - Snorre, Charlene, Lino, Luzie, Marga, Franko, Schmid, Piet
-- **Beispielteam** - Bauernfeind, Tamino, Amalia, Olsen, Kerstin, Engelhardt
-- Alles, was niemandem gehört: Sternbilder, Vögel, Bäume, Flüsse, Minerale
+Der Spass an einem Motiv bleibt trotzdem, nur eben lokal: Eigene Motive gehören in
+`skills/operator/namenspool.local.json`, die Datei ignoriert Git. Für ein Motiv im Repo taugt
+alles, was niemandem gehört: Sternbilder, Vögel, Bäume, Flüsse, Minerale.
 
 ## Der Message-Bus-Tab
 

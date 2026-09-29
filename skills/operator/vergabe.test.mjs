@@ -1,6 +1,6 @@
 // Prueft die Namensvergabe an dem Zustand, in dem sie versagt hat.
 //
-// Am 10.08.2026 hiess ein Fenster "Operator-22", obwohl von 19 Comicmotiv-Namen
+// Am 10.08.2026 hiess ein Fenster "Operator-22", obwohl von 19 Namen des Motivs
 // nur sechs an laufenden Instanzen hingen. Der Test baut genau das nach: eine
 // namen.json voller Karteileichen, daneben eine kurze Liste laufender
 // Instanzen. Er kann scheitern - vor dem Fix liefert er die Nummer zurueck.
