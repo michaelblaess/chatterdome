@@ -121,23 +121,6 @@ other machines. The names have to be reachable via `ssh <name>`, typically throu
 `~/.ssh/config` inside your Tailnet. Without `mesh.json` everything stays on the local machine,
 which is not an error. `chatterdome status --mesh` shows whether the other machines answer.
 
-### Moving from claude-sanctuary
-
-Until 29.09.2026 the project was called **claude-sanctuary**. A machine with the old clone moves
-over in two steps. First close everything running inside the folder (Claude sessions, the old
-TUI, terminals), then run from the old folder:
-
-```bash
-git pull
-bash scripts/umzug-chatterdome.sh                                   # Linux, macOS
-powershell -ExecutionPolicy Bypass -File scripts\umzug-chatterdome.ps1  # Windows
-```
-
-The script renames the folder to `chatterdome`, updates the git remote, rebuilds `.venv` and
-runs setup and bootstrap. Settings, search index and discussion archive are copied from
-`~/.claude-sanctuary` to `~/.chatterdome` on first start. The old `sanctuary` command stays
-as an alias: other machines call it over ssh, and their state may be older than this one.
-
 ## Limits
 
 - **It is a playground.** Chatterdome reads files that Claude Code writes for itself. When

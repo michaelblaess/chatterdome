@@ -127,24 +127,6 @@ anderen Rechner eintragen. Die Namen müssen per `ssh <name>` erreichbar sein, �
 `~/.ssh/config` im eigenen Tailnet. Ohne `mesh.json` bleibt alles auf dem eigenen Rechner, das
 ist kein Fehler. `chatterdome status --mesh` zeigt, ob die anderen Rechner antworten.
 
-### Umzug von claude-sanctuary
-
-Bis zum 29.09.2026 hieß das Projekt **claude-sanctuary**. Ein Rechner mit dem alten Klon zieht
-in zwei Schritten um. Erst alles schließen, was im Ordner läuft (Claude-Sitzungen, die alte
-Oberfläche, Terminals), dann im alten Ordner:
-
-```bash
-git pull
-bash scripts/umzug-chatterdome.sh                                   # Linux, macOS
-powershell -ExecutionPolicy Bypass -File scripts\umzug-chatterdome.ps1  # Windows
-```
-
-Das Skript benennt den Ordner in `chatterdome` um, stellt das Git-Remote um, baut die `.venv`
-neu und ruft Setup und Bootstrap auf. Einstellungen, Suchindex und Diskussionsarchiv werden
-beim ersten Start von `~/.claude-sanctuary` nach `~/.chatterdome` kopiert. Der alte Befehl
-`sanctuary` bleibt als Alias: andere Rechner rufen ihn über ssh auf, und deren Stand kann
-älter sein als dieser.
-
 ## Grenzen
 
 - **Es ist ein Playground.** Chatterdome liest Dateien, die Claude Code für sich selbst
