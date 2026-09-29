@@ -61,6 +61,67 @@
         "Romy",
         "Sophia"
       ]
+    },
+    "sterne": {
+      "motiv": "Sterne",
+      "namen": [
+        "Sirius",
+        "Vega",
+        "Rigel",
+        "Deneb",
+        "Altair",
+        "Spica",
+        "Capella",
+        "Castor",
+        "Pollux",
+        "Aldebaran",
+        "Antares",
+        "Regulus",
+        "Arcturus",
+        "Canopus",
+        "Procyon",
+        "Mira",
+        "Mizar",
+        "Alcor",
+        "Algol",
+        "Fomalhaut",
+        "Achernar",
+        "Betelgeuse",
+        "Hadar",
+        "Shaula",
+        "Alnilam",
+        "Mintaka"
+      ]
+    },
+    "saenger": {
+      "motiv": "Sängerinnen und Sänger",
+      "namen": [
+        "Freddie",
+        "Aretha",
+        "Iggy",
+        "David",
+        "Elton",
+        "Lana",
+        "Tina",
+        "Jimi",
+        "Janis",
+        "Whitney",
+        "Ella",
+        "Nina",
+        "Billie",
+        "Etta",
+        "Otis",
+        "Stevie",
+        "Dolly",
+        "Cher",
+        "Adele",
+        "Amy",
+        "Elvis",
+        "Joni",
+        "Bruce",
+        "Annie",
+        "Marvin"
+      ]
     }
   }
 }

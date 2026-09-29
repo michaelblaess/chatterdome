@@ -90,8 +90,9 @@ The scripts can still be called directly
 
 Every session gets a name from a pool, so you can address it instead of a process id.
 `skills/operator/namenspool.json` holds several themes and remembers which one is active.
-Shipped are two public-domain themes, `heilige` (catholic saints) and `schauspieler`
-(actors). Adding your own theme is one more entry under `pools`.
+Shipped are four themes: `heilige` (catholic saints), `schauspieler` (actors),
+`sterne` (stars) and `saenger` (singers). The people themes use plain first names only.
+Adding your own theme is one more entry under `pools`.
 
 Themes made of characters from a copyrighted work are deliberately **not** shipped. A plain
 list of names looks harmless, but naming the work in `motiv` establishes the reference, and

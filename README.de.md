@@ -92,8 +92,9 @@ Die Skripte lassen sich weiterhin direkt aufrufen
 
 Jede Sitzung bekommt einen Namen aus einem Pool, damit Du sie ansprechen kannst statt über
 eine Prozessnummer. `skills/operator/namenspool.json` hält mehrere Motive und merkt sich,
-welches aktiv ist. Mitgeliefert werden zwei gemeinfreie Motive, `heilige` (katholische
-Heilige) und `schauspieler`. Ein eigenes Motiv ist ein zusätzlicher Eintrag unter `pools`.
+welches aktiv ist. Mitgeliefert werden vier Motive: `heilige` (katholische
+Heilige), `schauspieler`, `sterne` und `saenger` (Sängerinnen und Sänger). Die Motive mit
+Personen nutzen nur Vornamen. Ein eigenes Motiv ist ein zusätzlicher Eintrag unter `pools`.
 
 Motive aus Figuren eines geschützten Werks werden bewusst **nicht** mitgeliefert. Eine blosse
 Namensliste sieht harmlos aus, aber sobald `motiv` das Werk benennt, ist der Bezug
