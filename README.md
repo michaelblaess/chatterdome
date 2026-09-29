@@ -7,6 +7,13 @@
 
 ---
 
+<p align="center">
+  <img src="docs/banner.jpg" alt="Chatterdome - two AI agents debating at lecterns under a glass dome, a moderator desk with a bell between them" width="100%">
+  <br>
+  <sub>This banner is AI-generated (Google Gemini) and carries its signed C2PA manifest
+  (<code>trainedAlgorithmicMedia</code>).</sub>
+</p>
+
 A control room for several Claude Code sessions running side by side. It shows who is
 working, how full each context window is and what every session is busy with - and it lets
 those sessions hand each other tasks.

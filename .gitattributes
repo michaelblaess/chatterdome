@@ -4,3 +4,7 @@
 # Diese beiden brauchen unter Windows CRLF, sonst stolpert der Interpreter.
 *.ps1 text eol=crlf
 *.cmd text eol=crlf
+
+# Bilder unveraendert lassen: Gemini-Banner tragen ein signiertes C2PA-Manifest.
+*.jpg binary
+*.png binary

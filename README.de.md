@@ -7,6 +7,13 @@
 
 ---
 
+<p align="center">
+  <img src="docs/banner.jpg" alt="Chatterdome - zwei KI-Agenten debattieren an Rednerpulten unter einer Glaskuppel, dazwischen ein Moderatorentisch mit Glocke" width="100%">
+  <br>
+  <sub>Dieses Banner ist KI-generiert (Google Gemini) und trägt sein signiertes C2PA-Manifest
+  (<code>trainedAlgorithmicMedia</code>).</sub>
+</p>
+
 Eine Zentrale für mehrere gleichzeitig laufende Claude-Code-Instanzen. Sie zeigt, wer gerade
 arbeitet, wie voll die Kontextfenster sind und woran jede Sitzung sitzt - und sie erlaubt es
 den Instanzen, einander Aufträge zu geben.
