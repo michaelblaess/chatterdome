@@ -245,6 +245,26 @@ class DiskussionsPanel(Vertical):
         width: 1fr;
         margin-right: 2;
     }
+    DiskussionsPanel .disk-seite {
+        width: auto;
+        padding: 0 1 0 0;
+        text-style: bold;
+    }
+    DiskussionsPanel .disk-seite-pro {
+        color: $primary;
+    }
+    DiskussionsPanel .disk-seite-contra {
+        color: $accent;
+    }
+    /* Die Erklaerung sitzt unter den Feldern und nimmt den Abstand der
+       Zeile ein - das Formular wird dadurch nicht hoeher. */
+    DiskussionsPanel #disk-positionen {
+        margin-bottom: 0;
+    }
+    DiskussionsPanel #disk-positionen-hinweis {
+        height: auto;
+        margin: 0 0 1 18;
+    }
     DiskussionsPanel #disk-format, DiskussionsPanel #disk-modell {
         width: 32;
     }
@@ -525,12 +545,19 @@ class DiskussionsPanel(Vertical):
                     yield TextArea(placeholder=t("discussion.topic_placeholder"), id="disk-thema",
                                    compact=True, soft_wrap=True, show_line_numbers=False,
                                    tab_behavior="focus")
-                with Horizontal(classes="disk-zeile"):
+                # Jedes Feld mit eigener Seitenbeschriftung und darunter die
+                # Erklaerung - "PRO, z.B. Unity (leer = Ja)" als Platzhalter allein
+                # war Michael am 29.09.2026 nicht verstaendlich.
+                with Horizontal(classes="disk-zeile", id="disk-positionen"):
                     yield Label(t("discussion.positions"))
+                    yield Static("PRO", classes="disk-seite disk-seite-pro")
                     yield Input(placeholder=t("discussion.position_pro_placeholder"),
                                 id="disk-position-pro", classes="disk-position", compact=True)
+                    yield Static("CONTRA", classes="disk-seite disk-seite-contra")
                     yield Input(placeholder=t("discussion.position_contra_placeholder"),
                                 id="disk-position-contra", classes="disk-position", compact=True)
+                yield Static(t("discussion.positions_hint"), id="disk-positionen-hinweis",
+                             classes="disk-leise")
                 with Horizontal(classes="disk-zeile"):
                     yield Label(t("discussion.format"))
                     yield Select(
@@ -758,6 +785,10 @@ class DiskussionsPanel(Vertical):
         self.query_one("#disk-vorschau", Static).update(Text(vorschau))
         self.query_one("#disk-grund", Static).update(Text(grund))
         self.query_one("#disk-starten", Button).disabled = auftrag is None
+        # Eine Team-Diskussion kennt keine Seiten, also auch keine Positionen.
+        mit_seiten = self.query_one("#disk-format", Select).value == "diskussion"
+        self.query_one("#disk-positionen").display = mit_seiten
+        self.query_one("#disk-positionen-hinweis").display = mit_seiten
 
     @on(Input.Changed)
     @on(TextArea.Changed)

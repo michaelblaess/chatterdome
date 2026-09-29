@@ -552,3 +552,19 @@ class TestHistorie:
             links = panel.query_one("#disk-neue", Button).region
             rechts = panel.query_one("#disk-fortsetzen", Button).region
             assert links.width > 0 and links.right <= rechts.x
+
+
+class TestPositionen:
+    async def test_beschriftet_erklaert_und_im_team_ausgeblendet(self) -> None:
+        app = _app()
+        async with app.run_test(size=(160, 50)) as pilot:
+            panel = await _reiter(app, pilot)
+            zeile = panel.query_one("#disk-positionen")
+            seiten = [str(w.render()) for w in zeile.query(".disk-seite")]
+            assert seiten == ["PRO", "CONTRA"]
+            assert "Entweder-oder" in str(panel.query_one("#disk-positionen-hinweis").render())
+            assert panel.query_one("#disk-positionen-hinweis").region.height == 1, "passt in eine Zeile"
+            panel.query_one("#disk-format", Select).value = "team"
+            await pilot.pause()
+            assert not zeile.display
+            assert not panel.query_one("#disk-positionen-hinweis").display
