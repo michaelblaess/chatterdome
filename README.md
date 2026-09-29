@@ -32,9 +32,8 @@ telemetry. What crosses machine boundaries goes over SSH inside your own Tailnet
 | `kern/transkripte.py` | Where the transcripts live and how to read them: Claude Code including subagents, Codex CLI. One source for statistics and search |
 | `kern/suche.py` | Full-text index across all transcripts, SQLite with FTS5, incremental via file time |
 | `kern/statistik.py` | Analysis of transcripts and bus: fleet, spend by kind, session duration, early warning |
-| `kern/` | UI-free Python core - one source for both frontends |
+| `kern/` | UI-free Python core, kept apart from the interface |
 | `tui/` | Textual interface for the terminal |
-| `web/` | FastHTML interface, meant for the always-on machine in the Tailnet |
 
 ## Setup
 
@@ -364,5 +363,4 @@ always touched several skills at once.
 
 ## License
 
-Apache-2.0, see [LICENSE](LICENSE). The web interface ships xterm.js and Tabler (both MIT),
-see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Apache-2.0, see [LICENSE](LICENSE).

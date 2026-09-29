@@ -80,13 +80,8 @@ def _platzhalter(vorlage: str) -> set[str]:
 
 
 def _quelldateien() -> list[Path]:
-    """Alle Dateien, in denen ein Sprachschluessel stehen kann.
-
-    Seit der Weboberflaeche sind das nicht mehr nur Python-Dateien: die
-    Jinja-Vorlagen rufen ``t(...)`` genauso auf. Ohne sie meldet der Test jeden
-    Web-Schluessel als tot, obwohl er im Browser angezeigt wird.
-    """
-    return [*QUELLE.rglob("*.py"), *QUELLE.rglob("*.html")]
+    """Alle Dateien, in denen ein Sprachschluessel stehen kann."""
+    return list(QUELLE.rglob("*.py"))
 
 
 def _verwendete_schluessel() -> set[str]:

@@ -32,9 +32,8 @@ keine Telemetrie. Was über Rechnergrenzen geht, geht über SSH im eigenen Tailn
 | `kern/transkripte.py` | Wo die Transkripte liegen und wie sie zu lesen sind: Claude Code samt Subagenten, Codex CLI. Eine Quelle für Statistik und Suche |
 | `kern/suche.py` | Volltextindex über alle Transkripte, SQLite mit FTS5, inkrementell über die Dateizeit |
 | `kern/statistik.py` | Auswertung der Transkripte und des Bus: Flotte, Verbrauch nach Art, Sitzungsdauer, Frühwarnung |
-| `kern/` | UI-freier Python-Kern - eine Quelle für beide Oberflächen |
+| `kern/` | UI-freier Python-Kern, getrennt von der Oberfläche |
 | `tui/` | Textual-Oberfläche fürs Terminal |
-| `web/` | FastHTML-Oberfläche, gedacht für den Dauerläufer im Tailnet |
 
 ## Einrichten
 
@@ -379,5 +378,4 @@ weil die alten Commits fast immer mehrere Skills gleichzeitig betrafen.
 
 ## Lizenz
 
-Apache-2.0, siehe [LICENSE](LICENSE). Die Weboberfläche bringt xterm.js und Tabler mit (beide
-MIT), siehe [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Apache-2.0, siehe [LICENSE](LICENSE).

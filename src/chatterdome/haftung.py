@@ -1,9 +1,8 @@
-"""Der Haftungshinweis, gemeinsam fuer Terminal- und Weboberflaeche.
+"""Der Haftungshinweis fuer TUI und Diskussions-Kurzbefehl.
 
-Beide zeigen denselben Wortlaut und lesen dieselbe Zustimmung
-(``einstellungen.ZUSTIMMUNG``): wer in der TUI zugestimmt hat, muss es im
-Browser nicht noch einmal tun. Den festen Teil (Gewaehrleistung, Haftung)
-liefert ``textual_widgets``, hier stehen nur die programmeigenen Absaetze.
+Beide lesen dieselbe Zustimmung (``einstellungen.ZUSTIMMUNG``). Den festen
+Teil (Gewaehrleistung, Haftung) liefert ``textual_widgets``, hier stehen nur
+die programmeigenen Absaetze.
 """
 
 from __future__ import annotations
