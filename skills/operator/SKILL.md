@@ -42,7 +42,7 @@ node $OP/starte.mjs -- --resume         # alles nach -- geht an claude durch
   Charlene     idle   ~                       Opus 5     1h 35m        8k
   Jeanne      idle   …\retro-text-effects.js Opus 5        28m+       6k
   Lino       idle   ~                       -             34m         -
-  Therese     idle   ~\Repos\webshop             Opus 5        27m+     641k
+  Therese     idle   ~\Repos\webshop         Opus 5        27m+     641k
 
   5 Instanzen, davon 1 beschäftigt   * = diese Sitzung   + = fortgesetzte Sitzung
   1 Sitzung(en) mit großem Kontext: Therese - dort lohnt /compact

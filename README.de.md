@@ -374,4 +374,5 @@ weil die alten Commits fast immer mehrere Skills gleichzeitig betrafen.
 
 ## Lizenz
 
-Apache-2.0, siehe [LICENSE](LICENSE).
+Apache-2.0, siehe [LICENSE](LICENSE). Die Weboberfläche bringt xterm.js und Tabler mit (beide
+MIT), siehe [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

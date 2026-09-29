@@ -23,19 +23,18 @@ from textual_widgets import (
     ClickableLinksMixin,
     CrashGuard,
     DisclaimerScreen,
-    DisclaimerStore,
     HorizontalSplitter,
     LogPanel,
     LogRouter,
     VerticalSplitter,
 )
 
-from chatterdome import __author__, __version__, __year__
+from chatterdome import __author__, __version__, __year__, haftung
 from chatterdome.i18n import current_language, t
 from chatterdome.kern import absturz
 from chatterdome.kern.debatte import Diskussion, hinweis_anhaengen
 from chatterdome.kern.diskussionsarchiv import Diskussionsarchiv
-from chatterdome.kern.einstellungen import ZUSTIMMUNG, Einstellungen
+from chatterdome.kern.einstellungen import Einstellungen
 from chatterdome.kern.gedaechtnis import (
     Gedaechtnis,
     Notiz,
@@ -140,7 +139,7 @@ class ChatterdomeApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # 
         # Composition Root: hier wird verdrahtet. Der Parameter erlaubt es,
         # im Test eine Quelle ohne laufenden Bus einzusetzen.
         self._quelle: Quelle = quelle if quelle is not None else LokaleQuelle()
-        self._disclaimer = DisclaimerStore(ZUSTIMMUNG)
+        self._disclaimer = haftung.zustimmung()
         self._bestand = Bestand(rechner="", zeit="")
         self._gewaehlt: Agent | None = None
         self._stop_kandidat = ""
@@ -304,13 +303,9 @@ class ChatterdomeApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # 
                 app_name=f"chatterdome {__version__}",
                 lang=current_language(),
                 author=__author__,
-                title=t("disclaimer.title"),
-                intro=t("disclaimer.intro"),
-                duties=(
-                    t("disclaimer.duty_authorisation"),
-                    t("disclaimer.duty_actions"),
-                    t("disclaimer.duty_data"),
-                ),
+                title=haftung.titel(),
+                intro=haftung.einleitung(),
+                duties=haftung.zusicherungen(),
                 footer=f"© {__year__} {__author__} · github.com/michaelblaess/chatterdome",
             ),
             callback=self._disclaimer_beantwortet,

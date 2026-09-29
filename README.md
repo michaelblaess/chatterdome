@@ -360,4 +360,5 @@ always touched several skills at once.
 
 ## License
 
-Apache-2.0, see [LICENSE](LICENSE).
+Apache-2.0, see [LICENSE](LICENSE). The web interface ships xterm.js and Tabler (both MIT),
+see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
