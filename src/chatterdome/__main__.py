@@ -51,14 +51,21 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(
         prog="chatterdome-tui",
-        description="Zentrale fuer mehrere gleichzeitig laufende Claude-Code-Instanzen",
+        # Englisch, weil die Hilfe vor dem Laden der Sprache entsteht und der
+        # Einzeiler aus dem README als Erstes hierher fuehrt.
+        description="A control room for several Claude Code sessions running at the same time",
     )
-    parser.add_argument("--lang", default=gespeicherte_sprache, choices=SUPPORTED_LANGUAGES)
+    parser.add_argument(
+        "--lang",
+        default=gespeicherte_sprache,
+        choices=SUPPORTED_LANGUAGES,
+        help="Language of the interface",
+    )
     parser.add_argument("--version", action="version", version=f"chatterdome {__version__}")
     parser.add_argument(
         "--demo",
         action="store_true",
-        help="Erfundene Agenten und Daten statt der echten, etwa fuer Screenshots",
+        help="Made-up agents and data instead of the real ones, e.g. for screenshots",
     )
     args = parser.parse_args()
 

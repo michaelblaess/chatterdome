@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "chatterdome"
 version = "0.2.0"
-description = "Zentrale fuer mehrere gleichzeitig laufende Claude-Code-Instanzen"
+description = "A control room for several Claude Code sessions running at the same time"
 requires-python = ">=3.12"
 license = { text = "Apache-2.0" }
 authors = [{ name = "Michael Blaess" }]

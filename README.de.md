@@ -87,6 +87,19 @@ keine Telemetrie. Was über Rechnergrenzen geht, geht über SSH im eigenen Tailn
 
 Die Screenshots zeigen die englische Oberfläche. Mit `--lang de` läuft alles auf Deutsch.
 
+## In einer Zeile ausprobieren
+
+Ohne Klonen, ohne Einrichtung. Ist [uv](https://docs.astral.sh/uv/) installiert, startet das die
+Oberfläche im [Demo-Modus](#demo-modus) mit erfundenen Daten:
+
+```bash
+uvx --from git+https://github.com/michaelblaess/chatterdome chatterdome-tui --demo --lang de
+```
+
+Dabei wird nichts aus Deinem echten `~/.claude` gelesen und keine Sitzung gestartet. Für Deine
+eigenen Sitzungen brauchst Du die vollständige Installation unten, denn die Skills und der
+Message-Bus liegen im Repository.
+
 ## Installation
 
 Du brauchst:

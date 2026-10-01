@@ -82,6 +82,18 @@ telemetry. What crosses machine boundaries goes over SSH inside your own Tailnet
   </tr>
 </table>
 
+## Try it in one line
+
+No clone, no setup. With [uv](https://docs.astral.sh/uv/) installed, this starts the interface in
+[demo mode](#demo-mode) with made-up data:
+
+```bash
+uvx --from git+https://github.com/michaelblaess/chatterdome chatterdome-tui --demo
+```
+
+It reads nothing from your real `~/.claude` and starts no sessions. For your own sessions you
+need the full installation below, because the skills and the message bus live in the repository.
+
 ## Installation
 
 You need:
