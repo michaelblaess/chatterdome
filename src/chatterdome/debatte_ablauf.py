@@ -31,6 +31,7 @@ from chatterdome.kern.debatte import (
     Teilnehmer,
     Verbrauch,
     als_markdown,
+    endegrund,
     moderieren,
     zusammenfassen,
 )
@@ -379,7 +380,7 @@ def ausfuehren(
                 ))
             # Kurz warten, damit Hook und Inbox-Socket stehen - aber abbrechbar.
             if stopp.wait(ANLAUF):
-                diskussion.ende = "von Hand gestoppt"
+                diskussion.ende = endegrund("discussion.end_stopped", "von Hand gestoppt")
                 return Ergebnis(diskussion, fehler="Vor dem Start gestoppt.")
             zugeordnet = namen_zuordnen(wunsch, gestartet)
             for teilnehmer, name in zip(wiederbeleben, zugeordnet, strict=False):

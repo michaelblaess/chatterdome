@@ -26,6 +26,7 @@ from chatterdome.kern.debatte import (
     Teilnehmer,
     Verbrauch,
     als_markdown,
+    endegrund,
     moderieren,
     vorbereitung,
     zusammenfassen,
@@ -154,7 +155,7 @@ def ausfuehren(
         if anzahl:
             melden(f"{anzahl} Sitzung(en) gestartet, warte auf die Namen ...")
             if stopp.wait(1.5):
-                diskussion.ende = "von Hand gestoppt"
+                diskussion.ende = endegrund("discussion.end_stopped", "von Hand gestoppt")
                 return Ergebnis(diskussion, fehler="Vor dem Start gestoppt.")
             freie = demo.freie_namen() if demo is not None else []
             for teilnehmer in wiederbeleben or []:

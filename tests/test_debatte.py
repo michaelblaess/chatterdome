@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import threading
 
+import pytest
+
 from chatterdome.kern.debatte import (
     Diskussion,
     Teilnehmer,
@@ -469,3 +471,32 @@ class TestHinweisDesModerators:
         weiter = Attrappe()
         _lauf(d, weiter)
         assert "Moderator" not in weiter.gesendet[0][1].split("Bisheriger Verlauf:")[1]
+
+
+class TestEndegrundInDerSprache:
+    """Der Grund steht im Kopf der Diskussion, also in der Sprache der Oberflaeche.
+
+    Bis zum 02.10.2026 kam er fest auf Deutsch aus dem Kern, in der englischen
+    Oberflaeche stand "Finished: 2 Runden gespielt".
+    """
+
+    def test_englische_oberflaeche_bekommt_englischen_grund(self) -> None:
+        from chatterdome import i18n
+
+        i18n.load_locale("en")
+        try:
+            d = _lauf(_diskussion(runden=2), Attrappe())
+            einzeln = _lauf(_diskussion(runden=1), Attrappe())
+        finally:
+            i18n.load_locale("de")
+        assert d.ende == "2 rounds played"
+        assert einzeln.ende == "1 round played"
+
+    def test_ohne_geladene_sprache_gilt_die_deutsche_vorgabe(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from chatterdome import i18n
+
+        monkeypatch.setattr(i18n, "_strings", {})
+        d = _lauf(_diskussion(runden=3), Attrappe())
+        assert d.ende == "3 Runden gespielt"

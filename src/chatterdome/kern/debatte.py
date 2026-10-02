@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Protocol
 
+from chatterdome import i18n
 from chatterdome.kern.lokale_quelle import LokaleQuelle
 
 ABSENDER = "Chatterdome"
@@ -455,6 +456,21 @@ def _jetzt() -> str:
     return datetime.now().strftime("%H:%M:%S")
 
 
+def endegrund(schluessel: str, vorgabe: str, **werte: object) -> str:
+    """Der Grund, aus dem eine Diskussion endete, in der Sprache der Oberflaeche.
+
+    Ohne geladene Sprache (etwa im Kommandozeilenwerkzeug) liefert ``i18n.t`` den
+    Schluessel zurueck, dann gilt die deutsche Vorgabe.
+
+    :param schluessel: Sprachschluessel des Grunds.
+    :param vorgabe: deutscher Text mit denselben Platzhaltern.
+    :param werte: Werte fuer die Platzhalter.
+    :returns: der uebersetzte Grund.
+    """
+    text = i18n.t(schluessel, **werte)
+    return vorgabe.format(**werte) if text == schluessel else text
+
+
 def moderieren(
     diskussion: Diskussion,
     kanal: Kanal,
@@ -581,19 +597,23 @@ def moderieren(
     if diskussion.recherche and erste_runde == 1:
         vorbereiten()
 
-    ende = "1 Runde gespielt" if diskussion.runden == 1 else f"{diskussion.runden} Runden gespielt"
+    ende = (endegrund("discussion.end_round", "1 Runde gespielt") if diskussion.runden == 1
+            else endegrund("discussion.end_rounds", "{runden} Runden gespielt",
+                           runden=diskussion.runden))
     for runde in range(erste_runde, diskussion.runden + 1):
         for redner in list(aktiv):
             if stopp.is_set():
-                ende = "von Hand gestoppt"
+                ende = endegrund("discussion.end_stopped", "von Hand gestoppt")
                 break
             if grenze is not None and uhr() >= grenze:
-                ende = f"Zeit abgelaufen nach {diskussion.dauer_minuten:g} Minuten"
+                ende = endegrund("discussion.end_time", "Zeit abgelaufen nach {minuten} Minuten",
+                                 minuten=f"{diskussion.dauer_minuten:g}")
                 break
             if redner in aktiv:
                 wort_geben(redner, runde, schluss=False)
             if len(aktiv) < 2:
-                ende = "weniger als zwei Teilnehmer erreichbar"
+                ende = endegrund("discussion.end_too_few",
+                                 "weniger als zwei Teilnehmer erreichbar")
                 break
         else:
             continue
