@@ -107,6 +107,16 @@ Zugriff kann ein Auftrag eintreffen, den man sonst überspringt. Ein vorhandener
 angefasst - `claude --resume` behält die Session-ID, und die Sitzung soll ihre ungelesenen
 Nachrichten behalten.
 
+**Nach `/clear` geht die Pacht über, sie endet nicht - seit dem 02.10.2026.** `/clear` behält
+den Prozess, vergibt aber eine neue Session-ID. Erkennt `whoami.mjs` über `fenster.json`
+dasselbe Fenster wieder, ruft es `pachtGehtUeber(db, alt, neu)` statt `pachtBeginnt()`: Der
+Lesezeiger der alten Sitzung wird übernommen, und offene personengebundene Aufträge wechseln
+auf die neue Session-ID, im Auftrag **und** in seinem Auftragsereignis
+(`sitzungUmhaengen()` in `speicher.mjs`). Beides ist nötig, weil die Zustellung die Ereignisse
+liest und `open` die Aufträge. Abgeschlossene Aufträge bleiben bei der alten Sitzung. Hatte
+die alte Sitzung keinen Zeiger, startet die neue am Ende des Protokolls wie bei jedem Beginn.
+Die Fenstererkennung selbst steht im Skill `operator`.
+
 ## Verfall - konfigurierbar, Vorgabe 24 Stunden
 
 Der Kehrbesen für alles, was die Bindung nicht fängt: Rollenaufträge, Aufträge von fremden
