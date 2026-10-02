@@ -204,6 +204,12 @@ The demo lives in `C:\chatterdome-demo` (Windows) or `/tmp/chatterdome-demo` and
 on every start, `CHATTERDOME_DEMO_DIR` points it elsewhere. `--lang en` or `--lang de` picks the
 language of the content as well.
 
+The made-up agents are named after stars. `--pool schauspieler` (or `heilige`, `saenger`) names
+them after another shipped [name pool](#agent-names) instead, which needs the repository and
+does not work with the one-line `uvx` start. The simulated discussion answers "Tabs or
+spaces?" whatever topic you enter, with one exception: type `Will AI wipe out humanity?` and
+the two sides argue about that.
+
 ## Agent names
 
 Every session gets a name from a pool, so you can address it instead of a process id.

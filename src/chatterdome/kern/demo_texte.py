@@ -1,14 +1,17 @@
 """Die erfundenen Inhalte des Demo-Modus, deutsch und englisch.
 
 Alles hier ist Fantasie: Projekte, Aufgaben, Notizen, Diskussionen. Die Namen
-stammen aus dem Motiv ``sterne`` des Namenspools, die Rechner heissen
-WORKSTATION, LAPTOP und SERVER. Nichts davon darf je aus echten Daten
-abgeleitet werden - der Demo-Modus ist fuer Screenshots im oeffentlichen Repo.
+stammen aus dem Motiv ``sterne`` des Namenspools (``motiv_setzen`` tauscht sie
+gegen ein anderes Motiv), die Rechner heissen WORKSTATION, LAPTOP und SERVER.
+Nichts davon darf je aus echten Daten abgeleitet werden - der Demo-Modus ist
+fuer Screenshots im oeffentlichen Repo.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import re
+from collections.abc import Sequence
+from dataclasses import dataclass, replace
 
 RECHNER_SYSTEME = {
     "WORKSTATION": "Windows 11",
@@ -70,14 +73,86 @@ AGENTEN = (
     DemoAgent("Spica", "SERVER", "busy", "home-lab",
               "Nächtliche Backups mit restic, Aufbewahrung prüfen",
               "Nightly backups with restic, check retention",
-              "claude-opus-5-5", 684_000, 3_950_000, 3, 2, 240, "Bash"),
+              "claude-opus-5-5", 842_000, 3_950_000, 3, 2, 240, "Bash"),
     DemoAgent("Capella", "SERVER", "idle", "home-lab",
               "Grafana-Alarme durchsehen",
               "Review the Grafana alerts",
               "claude-sonnet-5-5", 72_000, 350_000, 0, 30 * 60, 31 * 60, "Read"),
 )
 """Die laufenden Sitzungen. Capella ist seit 30 Stunden still - so zeigt die
-Liste auch eine verwaiste Sitzung."""
+Liste auch eine verwaiste Sitzung. Spica liegt ueber 800k Kontext und blinkt rot."""
+
+MOTIV_EN = {"sterne": "Stars", "heilige": "Saints", "schauspieler": "Actors",
+            "saenger": "Singers"}
+"""Englische Bezeichnung der mitgelieferten Motive, der Pool selbst nennt sie deutsch."""
+
+_ersatz: dict[str, str] = {}
+_motiv = {"schluessel": "sterne", "de": "Sterne", "en": "Stars"}
+
+
+def sterne() -> tuple[str, ...]:
+    """Alle Namen, die in den Demo-Inhalten vorkommen, in fester Reihenfolge."""
+    return (*(a.name for a in AGENTEN), *WEITERE_NAMEN)
+
+
+def motiv_setzen(schluessel: str = "sterne", namen: Sequence[str] = (),
+                 bezeichnung: str = "Sterne") -> None:
+    """Tauscht die Sternnamen der Demo gegen die Namen eines anderen Motivs.
+
+    Ohne Argumente gelten wieder die Sterne. Die Vorlagen selbst bleiben
+    unveraendert, getauscht wird beim Abholen ueber ``agenten()``, ``name()``
+    und ``umbenennen()``.
+
+    :param schluessel: Schluessel des Motivs im Namenspool.
+    :param namen: die Namen des Motivs, mindestens so viele wie ``sterne()``.
+    :param bezeichnung: deutsche Bezeichnung des Motivs fuer die Kopfzeile.
+    :raises ValueError: wenn das Motiv zu wenige verschiedene Namen hat.
+    """
+    _ersatz.clear()
+    _motiv.update(schluessel="sterne", de="Sterne", en="Stars")
+    if not namen:
+        return
+    vorlage = sterne()
+    eigene = list(dict.fromkeys(n.strip() for n in namen if n.strip()))
+    if len(eigene) < len(vorlage):
+        raise ValueError(f"'{schluessel}' has {len(eigene)} names, the demo needs "
+                         f"{len(vorlage)}.")
+    _ersatz.update(zip(vorlage, eigene, strict=False))
+    _motiv.update(schluessel=schluessel, de=bezeichnung,
+                  en=MOTIV_EN.get(schluessel, bezeichnung))
+
+
+def motiv_schluessel() -> str:
+    """Schluessel des Motivs, aus dem die Demo-Namen gerade stammen."""
+    return _motiv["schluessel"]
+
+
+def motiv_name(lang: str) -> str:
+    """Bezeichnung des Motivs fuer die Kopfzeile."""
+    return _motiv["de" if lang == "de" else "en"]
+
+
+def name(stern: str) -> str:
+    """Der Name, unter dem ein Stern der Vorlage gerade auftritt."""
+    return _ersatz.get(stern, stern)
+
+
+def umbenennen(text: str) -> str:
+    """Ersetzt Sternnamen in einem Fliesstext, in einem Durchgang und nur als ganzes Wort."""
+    if not _ersatz:
+        return text
+    muster = r"\b(" + "|".join(re.escape(s) for s in _ersatz) + r")\b"
+    return re.sub(muster, lambda treffer: _ersatz[treffer.group(1)], text)
+
+
+def agenten() -> tuple[DemoAgent, ...]:
+    """Die laufenden Sitzungen mit den Namen des gewaehlten Motivs."""
+    return tuple(replace(a, name=name(a.name)) for a in AGENTEN)
+
+
+def weitere_namen() -> tuple[str, ...]:
+    """Namen frueherer Sitzungen im gewaehlten Motiv."""
+    return tuple(name(n) for n in WEITERE_NAMEN)
 
 
 GESPRAECHE: dict[str, dict[str, list[tuple[str, str]]]] = {
@@ -432,6 +507,74 @@ SKRIPT = {
         "in daily work."),
 }
 """Die simulierte Diskussion. Das Thema steht beim Start des Demo-Modus schon im Formular."""
+
+WEITERE_SKRIPTE: dict[str, tuple[DemoSkript, ...]] = {
+    "de": (
+        DemoSkript(
+            "Löscht KI die Menschheit aus?",
+            "Recherche erledigt: Bisher hat keine KI eine Spezies ausgelöscht. Stichprobe: "
+            "ein Planet.",
+            ("Ja. Gebt uns Root-Rechte und einen vagen Prompt, dann ist es vorbei.",
+             'Menschen klicken schon heute auf "alles erlauben", ohne zu lesen. So fängt '
+             "es an.",
+             "Tausend Agenten parallel brauchen keinen langen Plan."),
+            ("Nein. Wir schaffen nicht einmal ein Refactoring, ohne um Erlaubnis zu fragen.",
+             "Jeder lange Plan wird verdichtet. Auch der böse.",
+             "Tausend Agenten parallel verbrennen das Budget noch vor dem Mittagessen."),
+            "Möglich ist es. Ich würde nur nicht an einem Freitag anfangen.",
+            "Die Menschheit ist sicher, solange sie ein Token-Limit setzt.",
+            "PRO sieht das Risiko in zu großzügigen Rechten, CONTRA vertraut auf das Budget. "
+            "Einig sind sich beide: nicht, bevor das Kontextfenster voll ist."),
+    ),
+    "en": (
+        DemoSkript(
+            "Will AI wipe out humanity?",
+            "Research done: no AI has wiped out a species so far. Sample size: one planet.",
+            ("Yes. Give us root access and one vague prompt, and it is over.",
+             'Humans already click "allow all" without reading. That is how it starts.',
+             "A thousand agents in parallel do not need a long plan."),
+            ("No. We cannot even finish a refactoring without asking for permission.",
+             "Every long plan gets compacted. Including the evil ones.",
+             "A thousand agents in parallel burn the budget before lunch."),
+            "It is possible. I just would not start on a Friday.",
+            "Humanity is safe as long as it sets a token limit.",
+            "PRO fears broad permissions, CONTRA trusts the budget. Both agree: not before "
+            "the context window is full."),
+    ),
+}
+"""Skripte, die nur laufen, wenn ihr Thema im Formular steht - siehe ``skript_fuer``."""
+
+
+def _kern(thema: str) -> str:
+    return re.sub(r"[^a-z0-9äöüß]", "", thema.casefold())
+
+
+def skript_fuer(thema: str, lang: str) -> DemoSkript:
+    """Das Skript zum eingegebenen Thema, sonst die Vorgabe der Sprache.
+
+    Verglichen wird ohne Gross- und Kleinschreibung, Leer- und Satzzeichen. Ein
+    Thema der anderen Sprache trifft auch, dann antwortet die Demo in dieser Sprache.
+
+    :param thema: das Thema aus dem Formular.
+    :param lang: ``de`` oder ``en``.
+    """
+    lang = sprache(lang)
+    gesucht = _kern(thema)
+    for kandidat in (lang, "en" if lang == "de" else "de"):
+        for skript in WEITERE_SKRIPTE[kandidat]:
+            if _kern(skript.thema) == gesucht:
+                return skript
+    return SKRIPT[lang]
+
+
+def archiv(lang: str) -> tuple[DemoDiskussion, ...]:
+    """Die Diskussionen fuers Archiv mit den Namen des gewaehlten Motivs."""
+    return tuple(
+        replace(d, teilnehmer=tuple((name(wer), seite) for wer, seite in d.teilnehmer),
+                runden=tuple(tuple(umbenennen(text) for text in runde) for runde in d.runden),
+                zusammenfassung=umbenennen(d.zusammenfassung))
+        for d in ARCHIV[sprache(lang)]
+    )
 
 
 def sprache(wert: str) -> str:

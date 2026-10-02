@@ -12,14 +12,9 @@ import threading
 from datetime import UTC, datetime, timedelta
 
 from chatterdome.i18n import t
+from chatterdome.kern import demo_texte
 from chatterdome.kern.demo_daten import arbeitsordner, sitzung
-from chatterdome.kern.demo_texte import (
-    AGENTEN,
-    CLAUDE_VERSION,
-    RECHNER_SYSTEME,
-    WEITERE_NAMEN,
-    sprache,
-)
+from chatterdome.kern.demo_texte import CLAUDE_VERSION, RECHNER_SYSTEME, sprache
 from chatterdome.kern.modelle import Agent, Auftrag, Bestand, Busbestand, Ereignis, Namenspool
 from chatterdome.kern.umgebung import DEMO_RECHNER
 
@@ -59,7 +54,9 @@ _BUS: dict[str, list[tuple[str, str, str, str, str, int]]] = {
          "Scheduled, the result will arrive via ntfy.", 300),
     ],
 }
-"""(von, an, text, zustand, antwort, minuten her) - der vorbereitete Bus."""
+"""(von, an, text, zustand, antwort, minuten her) - der vorbereitete Bus.
+
+Die Namen sind die Sterne der Vorlage, ``DemoQuelle`` uebersetzt sie ins gewaehlte Motiv."""
 
 
 def _stempel(wann: datetime) -> str:
@@ -67,7 +64,7 @@ def _stempel(wann: datetime) -> str:
 
 
 def _rechner_von(name: str) -> str:
-    for agent in AGENTEN:
+    for agent in demo_texte.agenten():
         if agent.name == name:
             return agent.rechner
     return DEMO_RECHNER
@@ -81,13 +78,17 @@ class DemoQuelle:
         self._start = jetzt or datetime.now(UTC)
         self._sperre = threading.Lock()
         self._kennung = itertools.count(1)
-        self._agenten = [self._agent(a.name) for a in AGENTEN]
-        self._auftraege = [self._bus_eintrag(*zeile) for zeile in _BUS[self._lang]]
+        self._agenten = [self._agent(a.name) for a in demo_texte.agenten()]
+        self._auftraege = [
+            self._bus_eintrag(demo_texte.name(von), demo_texte.name(an), text, zustand,
+                              antwort, minuten)
+            for von, an, text, zustand, antwort, minuten in _BUS[self._lang]
+        ]
 
     # -- Aufbau ------------------------------------------------------------
 
     def _agent(self, name: str) -> Agent:
-        vorlage = next(a for a in AGENTEN if a.name == name)
+        vorlage = next(a for a in demo_texte.agenten() if a.name == name)
         aktiv = self._start - timedelta(minutes=vorlage.minuten_seit_aktiv)
         return Agent(
             name=vorlage.name,
@@ -147,9 +148,9 @@ class DemoQuelle:
     def namen(self) -> Namenspool:
         with self._sperre:
             vergeben = {a.name: a.session_id for a in self._agenten}
-        alle = [a.name for a in AGENTEN] + list(WEITERE_NAMEN)
+        alle = [a.name for a in demo_texte.agenten()] + list(demo_texte.weitere_namen())
         return Namenspool(
-            motiv="Sterne" if self._lang == "de" else "Stars",
+            motiv=demo_texte.motiv_name(self._lang),
             namen=alle,
             frei=[n for n in alle if n not in vergeben],
             reserviert=["Operator"],

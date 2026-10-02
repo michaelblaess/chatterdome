@@ -20,17 +20,14 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from chatterdome.kern import einstellungen
+from chatterdome.kern import demo_texte, einstellungen
 from chatterdome.kern.debatte import Beitrag, Diskussion, Teilnehmer, Verbrauch, als_markdown
 from chatterdome.kern.demo_texte import (
-    AGENTEN,
-    ARCHIV,
     GESPRAECHE,
     NOTIZEN,
     PROJEKTE,
     RECALLS,
     RECHNER_SYSTEME,
-    WEITERE_NAMEN,
     sprache,
 )
 from chatterdome.kern.diskussionsarchiv import Diskussionsarchiv
@@ -43,6 +40,44 @@ TAGE = 14
 """So weit reicht die erfundene Vorgeschichte zurueck, passend zum Statistikfenster."""
 
 _NAMENSRAUM = uuid.UUID("5f0c3a52-7d1e-4d0a-9d6b-2f1c9b8e4a10")
+
+POOL_DATEI = Path(__file__).resolve().parents[3] / "skills" / "operator" / "namenspool.json"
+"""Der mitgelieferte Namenspool. In einem installierten Paket fehlt er, dann bleiben die Sterne."""
+
+
+def _pool_roh() -> dict[str, Any]:
+    try:
+        roh: dict[str, Any] = json.loads(POOL_DATEI.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        roh = {"reserviert": ["Operator"], "pools": {}}
+    pools = roh.setdefault("pools", {})
+    if "sterne" not in pools:
+        pools["sterne"] = {"motiv": "Sterne", "namen": list(demo_texte.sterne())}
+    return roh
+
+
+def motive() -> list[str]:
+    """Schluessel der Motive, die genug Namen fuer die Demo haben."""
+    noetig = len(demo_texte.sterne())
+    return sorted(schluessel for schluessel, pool in _pool_roh()["pools"].items()
+                  if len(set(pool.get("namen", []))) >= noetig)
+
+
+def motiv_waehlen(schluessel: str) -> None:
+    """Benennt die erfundenen Agenten nach einem anderen Motiv des Namenspools.
+
+    Muss vor ``erzeugen`` und vor dem Anlegen der ``DemoQuelle`` stehen.
+
+    :param schluessel: Schluessel des Motivs, etwa ``schauspieler``.
+    :raises ValueError: wenn es das Motiv nicht gibt oder es zu wenige Namen hat.
+    """
+    if schluessel == "sterne":
+        demo_texte.motiv_setzen()
+        return
+    if schluessel not in motive():
+        raise ValueError(f"unknown name pool '{schluessel}', available: {', '.join(motive())}")
+    pool = _pool_roh()["pools"][schluessel]
+    demo_texte.motiv_setzen(schluessel, pool["namen"], str(pool.get("motiv", schluessel)))
 
 
 def sitzung(name: str, nummer: int = 0) -> str:
@@ -150,7 +185,7 @@ def _gespraech(t: _Transkript, projekt: str, lang: str, bis: datetime, anfragen:
 def _transkripte(zuhause: Path, lang: str, jetzt: datetime, zufall: random.Random) -> None:
     projekte = zuhause / ".claude" / "projects"
     # Die laufenden Sitzungen, damit Suche und Statistik ihre Namen kennen.
-    for agent in AGENTEN:
+    for agent in demo_texte.agenten():
         t = _Transkript(projekte, agent.name, sitzung(agent.name),
                         arbeitsordner(agent.rechner, agent.projekt), agent.modell)
         bis = jetzt - timedelta(minutes=agent.minuten_seit_aktiv)
@@ -158,7 +193,7 @@ def _transkripte(zuhause: Path, lang: str, jetzt: datetime, zufall: random.Rando
         t.schreiben()
 
     # Die Vorgeschichte: zwei bis vier Sitzungen am Tag ueber zwei Wochen.
-    namen = [a.name for a in AGENTEN] + list(WEITERE_NAMEN)
+    namen = [a.name for a in demo_texte.agenten()] + list(demo_texte.weitere_namen())
     abrufe = [n for n, anzahl in RECALLS.items() for _ in range(anzahl)]
     nummer = 0
     for tag in range(1, TAGE):
@@ -199,7 +234,7 @@ def _archiv(zuhause: Path, lang: str, jetzt: datetime) -> None:
     ablage = zuhause / ".claude" / "bus" / DEMO_RECHNER / "diskussionen"
     ablage.mkdir(parents=True, exist_ok=True)
     archiv = Diskussionsarchiv()
-    for vorlage in ARCHIV[lang]:
+    for vorlage in demo_texte.archiv(lang):
         beginn = (jetzt - timedelta(days=vorlage.tage_her)).astimezone()
         teilnehmer = [Teilnehmer(name, seite=seite, modell="claude-sonnet-5-5")
                       for name, seite in vorlage.teilnehmer]
@@ -223,23 +258,16 @@ def _archiv(zuhause: Path, lang: str, jetzt: datetime) -> None:
 
 
 def _namenspool(zuhause: Path) -> None:
-    """Eine Kopie des mitgelieferten Pools mit den Sternen als aktivem Motiv.
+    """Eine Kopie des mitgelieferten Pools, aktiv ist das Motiv der Demo (sonst die Sterne).
 
     Die lokale Ergaenzung (``namenspool.local.json``) bleibt bewusst draussen -
     dort stehen die eigenen Motive des Anwenders.
     """
     from chatterdome.kern.umgebung import demo_pool_datei
 
-    quelle = Path(__file__).resolve().parents[3] / "skills" / "operator" / "namenspool.json"
-    try:
-        roh: dict[str, Any] = json.loads(quelle.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        roh = {"reserviert": ["Operator"], "pools": {}}
-    pools = roh.setdefault("pools", {})
-    if "sterne" not in pools:
-        pools["sterne"] = {"motiv": "Sterne",
-                           "namen": [a.name for a in AGENTEN] + list(WEITERE_NAMEN)}
-    roh["aktiv"] = "sterne"
+    roh = _pool_roh()
+    aktiv = demo_texte.motiv_schluessel()
+    roh["aktiv"] = aktiv if aktiv in roh["pools"] else "sterne"
     ziel = demo_pool_datei()
     ziel.parent.mkdir(parents=True, exist_ok=True)
     ziel.write_text(json.dumps(roh, indent=2, ensure_ascii=False) + "\n", encoding="utf-8",

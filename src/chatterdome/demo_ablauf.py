@@ -2,7 +2,7 @@
 
 Gegenstueck zu ``debatte_ablauf.ausfuehren`` mit derselben Signatur. Es startet
 keine Sitzung und ruft kein Modell auf: die frischen Teilnehmer kommen aus den
-freien Namen der ``DemoQuelle``, die Beitraege aus ``demo_texte.SKRIPT``. Die
+freien Namen der ``DemoQuelle``, die Beitraege aus ``demo_texte.skript_fuer``. Die
 Moderation selbst - Runden, Rednerwechsel, Vorbereitung, Schlussworte - ist
 die echte aus ``kern.debatte``, nur der Kanal ist ausgetauscht. Die Anzeige
 sieht also genau das, was sie bei einer echten Diskussion saehe.
@@ -31,7 +31,7 @@ from chatterdome.kern.debatte import (
     zusammenfassen,
 )
 from chatterdome.kern.demo_quelle import DemoQuelle
-from chatterdome.kern.demo_texte import SKRIPT, DemoSkript, sprache
+from chatterdome.kern.demo_texte import DemoSkript, skript_fuer
 from chatterdome.kern.diskussionsarchiv import Diskussionsarchiv
 
 ANTWORTZEIT = 4.0
@@ -130,7 +130,7 @@ def ausfuehren(
     """
     stopp = stopp or threading.Event()
     archiv = archiv or Diskussionsarchiv()
-    skript = SKRIPT[sprache(current_language())]
+    skript = skript_fuer(diskussion.thema, current_language())
     demo = quelle if isinstance(quelle, DemoQuelle) else None
     ordner = ablage()
     if not diskussion.beginn:

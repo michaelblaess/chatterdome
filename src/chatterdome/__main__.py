@@ -67,7 +67,16 @@ def main() -> None:
         action="store_true",
         help="Made-up agents and data instead of the real ones, e.g. for screenshots",
     )
+    parser.add_argument(
+        "--pool",
+        default="",
+        metavar="NAME",
+        help="With --demo: name the made-up agents after another name pool, "
+             "e.g. schauspieler, heilige or saenger",
+    )
     args = parser.parse_args()
+    if args.pool and not demo:
+        parser.error("--pool only works together with --demo")
 
     # Sprache VOR dem Import der App laden - sonst sind die Beschriftungen
     # der Bindings leer, die zur Klassendefinitionszeit entstehen.
@@ -87,9 +96,14 @@ def main() -> None:
 
     quelle: Quelle | None = None
     if zuhause is not None:
-        from chatterdome.kern.demo_daten import erzeugen
+        from chatterdome.kern.demo_daten import erzeugen, motiv_waehlen
         from chatterdome.kern.demo_quelle import DemoQuelle
 
+        if args.pool:
+            try:
+                motiv_waehlen(args.pool)
+            except ValueError as fehler:
+                parser.error(str(fehler))
         erzeugen(zuhause, args.lang)
         quelle = DemoQuelle(args.lang)
 

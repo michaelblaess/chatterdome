@@ -27,7 +27,7 @@ import pytest
 from textual.widgets import TabbedContent
 
 from chatterdome import __author__, debatte_ablauf, demo_ablauf, i18n
-from chatterdome.kern import umgebung
+from chatterdome.kern import demo_daten, demo_texte, umgebung
 from chatterdome.kern.debatte import CONTRA, PRO, Diskussion, Teilnehmer
 from chatterdome.kern.demo_daten import erzeugen
 from chatterdome.kern.demo_quelle import DemoQuelle
@@ -286,6 +286,89 @@ class TestDemoQuelle:
         quelle = DemoQuelle("de")
         assert quelle.bildschirmfoto()[0] == ""
         assert quelle.aktualisiere_claude()[1]
+
+
+@pytest.fixture
+def motiv_zurueck() -> Iterator[None]:
+    """Stellt nach dem Test die Sterne wieder her - das Motiv ist ein Modulzustand."""
+    try:
+        yield
+    finally:
+        demo_texte.motiv_setzen()
+
+
+class TestAnderesMotiv:
+    def test_agenten_bus_und_archiv_tragen_die_namen_des_motivs(self, motiv_zurueck: None) -> None:
+        demo_daten.motiv_waehlen("schauspieler")
+        pool = json.loads(demo_daten.POOL_DATEI.read_text(encoding="utf-8"))
+        erlaubt = set(pool["pools"]["schauspieler"]["namen"])
+        sterne = set(demo_texte.sterne())
+
+        quelle = DemoQuelle("en")
+        namen = {a.name for a in quelle.bestand(mesh=True).agenten}
+        assert len(namen) == len(AGENTEN) and namen <= erlaubt
+        assert quelle.namen().motiv == "Actors"
+        beteiligte = {n for a in quelle.bestandsverlauf().auftraege for n in (a.von, a.an)}
+        assert beteiligte <= erlaubt
+        for diskussion in demo_texte.archiv("en"):
+            assert {wer for wer, _seite in diskussion.teilnehmer} <= erlaubt
+            flach = " ".join(text for runde in diskussion.runden for text in runde)
+            woerter = set(re.findall(r"\w+", f"{flach} {diskussion.zusammenfassung}"))
+            assert not woerter & sterne
+
+    def test_ohne_wahl_bleiben_es_die_sterne(self, motiv_zurueck: None) -> None:
+        demo_daten.motiv_waehlen("schauspieler")
+        demo_daten.motiv_waehlen("sterne")
+        assert [a.name for a in demo_texte.agenten()] == [a.name for a in AGENTEN]
+        assert DemoQuelle("de").namen().motiv == "Sterne"
+
+    def test_unbekanntes_motiv_wird_abgelehnt(self, motiv_zurueck: None) -> None:
+        with pytest.raises(ValueError, match="unknown name pool"):
+            demo_daten.motiv_waehlen("gibt-es-nicht")
+        assert demo_texte.motiv_schluessel() == "sterne"
+
+    def test_zu_kleines_motiv_wird_abgelehnt(self, motiv_zurueck: None) -> None:
+        with pytest.raises(ValueError, match="the demo needs"):
+            demo_texte.motiv_setzen("klein", ["Anna", "Bert"], "Klein")
+        assert demo_texte.name("Sirius") == "Sirius"
+
+    def test_die_poolkopie_der_demo_nennt_das_motiv_als_aktiv(
+        self, demo_zuhause: Path, motiv_zurueck: None
+    ) -> None:
+        demo_daten.motiv_waehlen("heilige")
+        erzeugen(demo_zuhause, "en")
+        kopie = json.loads(umgebung.demo_pool_datei().read_text(encoding="utf-8"))
+        assert kopie["aktiv"] == "heilige"
+
+
+class TestSkriptwahl:
+    def test_das_thema_waehlt_das_skript(self) -> None:
+        zweites = demo_texte.WEITERE_SKRIPTE["en"][0]
+        assert demo_texte.skript_fuer("will ai wipe out humanity", "en") is zweites
+        assert demo_texte.skript_fuer("  Will AI wipe out humanity?? ", "de") is zweites
+        assert demo_texte.skript_fuer("Löscht KI die Menschheit aus?", "en") \
+            is demo_texte.WEITERE_SKRIPTE["de"][0]
+
+    def test_jedes_andere_thema_bekommt_die_vorgabe(self) -> None:
+        assert demo_texte.skript_fuer("Anything else", "en") is SKRIPT["en"]
+        assert demo_texte.skript_fuer("", "de") is SKRIPT["de"]
+
+    def test_der_ablauf_spielt_das_gewaehlte_skript(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(demo_ablauf, "ablage", lambda: tmp_path)
+        monkeypatch.setattr(demo_ablauf, "current_language", lambda: "en")
+        zweites = demo_texte.WEITERE_SKRIPTE["en"][0]
+        diskussion = Diskussion(zweites.thema, [Teilnehmer("Sirius", seite=PRO),
+                                                Teilnehmer("Vega", seite=CONTRA)], runden=1)
+
+        ergebnis = _schnell()(diskussion, [], quelle=DemoQuelle("en"),
+                              archiv=Diskussionsarchiv(tmp_path / "archiv.db"))
+
+        assert ergebnis.fehler == ""
+        texte = [b.text for b in diskussion.beitraege if b.art == "beitrag"]
+        assert texte == [zweites.pro[0], zweites.contra[0]]
+        assert diskussion.zusammenfassung == zweites.zusammenfassung
 
 
 def _schnell(**kwargs: Any) -> Any:

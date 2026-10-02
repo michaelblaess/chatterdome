@@ -212,6 +212,12 @@ Die Demo liegt in `C:\chatterdome-demo` (Windows) beziehungsweise `/tmp/chatterd
 wird bei jedem Start neu angelegt, `CHATTERDOME_DEMO_DIR` legt sie woanders hin. `--lang de`
 oder `--lang en` wählt auch die Sprache der Inhalte.
 
+Die erfundenen Agenten heißen nach Sternen. `--pool schauspieler` (oder `heilige`, `saenger`)
+benennt sie nach einem anderen mitgelieferten [Namenspool](#agentennamen). Das braucht das
+Repository und geht nicht mit dem Einzeiler über `uvx`. Die simulierte Diskussion antwortet
+auf jedes Thema mit "Tabs oder Leerzeichen?", mit einer Ausnahme: Wer `Löscht KI die
+Menschheit aus?` eintippt, bekommt genau diesen Streit.
+
 ## Agentennamen
 
 Jede Sitzung bekommt einen Namen aus einem Pool, damit Du sie ansprechen kannst statt über
