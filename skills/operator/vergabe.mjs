@@ -118,10 +118,27 @@ export function waehleNamen(tabelle, rohBelegt) {
  * uebernommen, wenn er gueltig geformt und noch frei ist.
  * @param laufende
  * Die laufenden Instanzen. Nur zum Testen von aussen zu setzen.
+ * @param vorgaenger
+ * Session-ID, die zuvor im selben Fenster lief (siehe fenster.mjs). Nach
+ * /clear bleibt der Prozess, die Session-ID wechselt - der Name geht dann mit,
+ * statt dass das Fenster mitten im Betrieb umbenannt wird.
  * @returns
- * { name, freigegeben } - der Name und die Sitzungen, deren Pacht endet.
+ * { name, freigegeben, uebernommenVon } - der Name, die Sitzungen, deren Pacht
+ * endet, und die Sitzung, deren Pacht auf die eigene UEBERGEHT (sonst null).
  */
-export function vergibNamen({ tabelle, eigeneSession = null, vorgabe = null, laufende = null }) {
+export function vergibNamen({
+  tabelle, eigeneSession = null, vorgabe = null, laufende = null, vorgaenger = null,
+}) {
+  // Vor allem anderen: der Vorgaenger darf weder als Karteileiche freigegeben
+  // werden (dann naehme pachtEndet seine offenen Auftraege zurueck) noch den
+  // eigenen Namen als "belegt" sperren.
+  if (vorgaenger && vorgaenger !== eigeneSession && tabelle[vorgaenger]) {
+    const name = tabelle[vorgaenger];
+    delete tabelle[vorgaenger];
+    const freigegeben = raeumeAuf(tabelle, eigeneSession, laufende);
+    return { name, freigegeben, uebernommenVon: vorgaenger };
+  }
+
   const rohBelegt = new Set(Object.values(tabelle));
   const freigegeben = raeumeAuf(tabelle, eigeneSession, laufende);
   const belegt = new Set(Object.values(tabelle));
@@ -130,8 +147,8 @@ export function vergibNamen({ tabelle, eigeneSession = null, vorgabe = null, lau
   // Hook genau den Namen, den der Starter gerade recycelt hat - und im
   // Terminal-Titel staende ein anderer Name als in der Tabelle.
   if (vorgabe && NAME_ERLAUBT.test(vorgabe) && !belegt.has(vorgabe)) {
-    return { name: vorgabe, freigegeben };
+    return { name: vorgabe, freigegeben, uebernommenVon: null };
   }
 
-  return { name: waehleNamen(tabelle, rohBelegt), freigegeben };
+  return { name: waehleNamen(tabelle, rohBelegt), freigegeben, uebernommenVon: null };
 }

@@ -341,6 +341,31 @@ export function offeneAnSession(db, sessionId) {
   ).all(...OFFEN, sessionId);
 }
 
+/**
+ * Haengt die offenen Auftraege einer Sitzung an eine andere um.
+ *
+ * Geaendert werden der Auftrag UND sein Auftragsereignis: die Zustellung liest
+ * die Ereignisse, "open" liest die Auftraege - bliebe eines von beiden auf der
+ * alten Sitzung stehen, saehe der Empfaenger den Auftrag nur auf einem der
+ * beiden Wege.
+ *
+ * Abgeschlossene Auftraege bleiben unberuehrt, sie sind Geschichte.
+ *
+ * @returns {string[]} die IDs der umgehaengten Auftraege.
+ */
+export function sitzungUmhaengen(db, alt, neu) {
+  const betroffen = offeneAnSession(db, alt).map((a) => a.auftrag_id);
+  const amAuftrag = db.prepare('UPDATE auftrag SET an_session = ? WHERE auftrag_id = ?');
+  const amEreignis = db.prepare(
+    'UPDATE ereignis SET an_session = ? WHERE auftrag_id = ? AND art = ? AND an_session = ?',
+  );
+  for (const id of betroffen) {
+    amAuftrag.run(neu, id);
+    amEreignis.run(neu, id, 'auftrag', alt);
+  }
+  return betroffen;
+}
+
 /** Alle Quittungen zu einem Auftrag, aelteste zuerst. */
 export function quittungenZu(db, auftragId) {
   return db.prepare("SELECT * FROM ereignis WHERE art = 'quittung' AND auftrag_id = ? ORDER BY id").all(auftragId);

@@ -176,6 +176,22 @@ Busprotokolls (`pachtBeginnt()`) - sonst gilt die gesamte Historie des geerbten 
 neu. Ein vorhandener Zeiger wird nie angefasst, `claude --resume` behält die Session-ID.
 Details im Skill `claude-bus`, Abschnitt "Der Name ist eine Pacht".
 
+**Der Name gehört dem Fenster, nicht der Session-ID - seit dem 02.10.2026.** `/clear` behält
+den Prozess, vergibt aber eine neue Session-ID. Weil `namen.json` an der Session-ID hängt,
+hielt der Hook das Fenster für ein neues und zog einen frischen Namen: die Meldung sagte
+"Therese", die Statuszeile desselben Fensters zeigte weiter "Patrick", und der frei gewordene
+Name ging an das nächste Fenster. `fenster.mjs` führt deshalb neben `namen.json` die Datei
+`fenster.json` (PID zu letzter Session-ID samt Startzeit des Prozesses). Findet `whoami.mjs`
+dort einen Vorgänger, geht der Name mit, und `pachtGehtUeber()` hängt Lesezeiger und offene
+Aufträge an die neue Session-ID um - weder `pachtBeginnt()` noch `pachtEndet()`.
+
+- Die PID kommt aus `CLAUDE_PID`, die Startzeit aus `~/.claude/sessions/<pid>.json`
+  (`procStart`). Beides liegt im SessionStart-Hook vor, geprüft am 02.10.2026 mit v2.1.287.
+- Die Startzeit ist Pflicht. Windows vergibt PIDs schnell neu, ohne sie erbte ein fremdes
+  Fenster Namen und Postfach eines beendeten. Fehlt sie, wird wie früher neu vergeben.
+- Geprüft in `fenster.test.mjs`, der letzte Test fährt `whoami.mjs` als echten Prozess
+  zweimal mit wechselnder Session-ID.
+
 **Die Vergabe steht in `vergabe.mjs` und gilt für Hook und Starter gleichermaßen.** Zuerst
 werden beendete Sitzungen aufgeräumt, danach wird gewählt:
 

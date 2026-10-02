@@ -15,8 +15,10 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { oeffne, schreibe, auftrag, cursorLesen, cursorSetzen, letzteId } from './speicher.mjs';
-import { pachtBeginnt, pachtEndet, verfallen, fehlgeleitete } from './pacht.mjs';
+import {
+  oeffne, schreibe, auftrag, cursorLesen, cursorSetzen, ereignisseAb, letzteId,
+} from './speicher.mjs';
+import { pachtBeginnt, pachtEndet, pachtGehtUeber, verfallen, fehlgeleitete } from './pacht.mjs';
 
 const SITZUNG_ALT = '4d0c0ab0-935e-430a-a670-e9aaeae7e6fa';
 const SITZUNG_NEU = 'aaaabbbb-1111-2222-3333-444455556666';
@@ -150,6 +152,47 @@ describe('Lesezeiger beim Sitzungsstart', () => {
     // sonst ihre ungelesenen Nachrichten verlieren.
     assert.equal(pachtBeginnt(db, SITZUNG_NEU), null);
     assert.equal(cursorLesen(db, SITZUNG_NEU), 1);
+  });
+});
+
+describe('Pacht geht ueber (/clear)', () => {
+  test('offener Auftrag und Lesezeiger wandern zur neuen Session-ID', (t) => {
+    const db = frisch(t);
+    auftragAblegen(db, { id: 'gelesen', an: 'Patrick' });
+    cursorSetzen(db, SITZUNG_ALT, 1);
+    auftragAblegen(db, { id: 'c1', an: 'Patrick', anSession: SITZUNG_ALT, bindung: 'session' });
+
+    assert.deepEqual(pachtGehtUeber(db, SITZUNG_ALT, SITZUNG_NEU), ['c1']);
+
+    // Nicht zurueckgenommen, sondern umgehaengt - der Empfaenger arbeitet im
+    // selben Fenster unter demselben Namen weiter.
+    assert.equal(auftrag(db, 'c1').zustand, 'submitted');
+    assert.equal(auftrag(db, 'c1').an_session, SITZUNG_NEU);
+    // Der Zeiger steht da, wo die alte Sitzung aufgehoert hat. Am Ende des
+    // Protokolls waere c1 als gelesen durchgerutscht.
+    assert.equal(cursorLesen(db, SITZUNG_NEU), 1);
+    // Die Zustellung liest die Ereignisse, nicht die Auftraege.
+    const zugestellt = ereignisseAb(db, 1).filter((e) => e.an_session === SITZUNG_NEU);
+    assert.deepEqual(zugestellt.map((e) => e.auftrag_id), ['c1']);
+  });
+
+  test('ohne alten Zeiger startet die neue Sitzung am Ende', (t) => {
+    const db = frisch(t);
+    auftragAblegen(db, { id: 'h1', an: 'Patrick' });
+    auftragAblegen(db, { id: 'h2', an: 'Patrick' });
+
+    pachtGehtUeber(db, SITZUNG_ALT, SITZUNG_NEU);
+
+    assert.equal(cursorLesen(db, SITZUNG_NEU), letzteId(db), 'sonst gilt die ganze Historie als neu');
+  });
+
+  test('abgeschlossene Auftraege bleiben bei der alten Sitzung', (t) => {
+    const db = frisch(t);
+    auftragAblegen(db, { id: 'fertig', an: 'Patrick', anSession: SITZUNG_ALT, bindung: 'session' });
+    pachtEndet(db, SITZUNG_ALT, 'Patrick');
+
+    assert.deepEqual(pachtGehtUeber(db, SITZUNG_ALT, SITZUNG_NEU), []);
+    assert.equal(auftrag(db, 'fertig').an_session, SITZUNG_ALT);
   });
 });
 

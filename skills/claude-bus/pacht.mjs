@@ -24,7 +24,7 @@
 
 import {
   schreibe, letzteId, cursorLesen, cursorSetzen,
-  offeneAelterAls, offeneAnSession, auftraege,
+  offeneAelterAls, offeneAnSession, auftraege, sitzungUmhaengen,
 } from './speicher.mjs';
 import { einstellung } from './einstellungen.mjs';
 
@@ -82,6 +82,31 @@ export function pachtBeginnt(db, sessionId) {
   const stand = letzteId(db);
   cursorSetzen(db, sessionId, stand);
   return stand;
+}
+
+/**
+ * Die Pacht geht ueber: dasselbe Fenster laeuft unter neuer Session-ID weiter.
+ *
+ * Das ist /clear - der Prozess bleibt, die Session-ID wechselt, der Name geht
+ * mit (siehe operator/fenster.mjs). Weder Beginn noch Ende passen dann:
+ * pachtBeginnt setzte den Zeiger ans Ende und liesse alles fallen, was seit
+ * dem letzten Lesen eintraf, pachtEndet naehme Auftraege zurueck, deren
+ * Empfaenger unter demselben Namen im selben Fenster weiterarbeitet.
+ *
+ * Also wandert beides mit: der Lesezeiger und die offenen, an die alte Sitzung
+ * gebundenen Auftraege.
+ *
+ * Hatte die alte Sitzung keinen Zeiger, startet die neue am Ende - dieselbe
+ * Regel wie beim Beginn, sonst gaelte wieder die ganze Historie als neu.
+ *
+ * @returns {string[]} die IDs der umgehaengten Auftraege.
+ */
+export function pachtGehtUeber(db, alt, neu) {
+  if (!alt || !neu || alt === neu) return [];
+  if (0 === cursorLesen(db, neu)) {
+    cursorSetzen(db, neu, cursorLesen(db, alt) || letzteId(db));
+  }
+  return sitzungUmhaengen(db, alt, neu);
 }
 
 /**
