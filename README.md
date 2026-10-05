@@ -33,6 +33,12 @@ telemetry. What crosses machine boundaries goes over SSH inside your own Tailnet
   <sub>All screenshots come from the built-in <a href="#demo-mode">demo mode</a> with made-up data.</sub>
 </p>
 
+<p align="center">
+  <a href="https://youtu.be/Mf4HXUlUiuE"><img src="docs/teaser.jpg" width="640" alt="Watch the Chatterdome teaser on YouTube"></a>
+  <br>
+  <sub><a href="https://youtu.be/Mf4HXUlUiuE">Watch the teaser on YouTube</a></sub>
+</p>
+
 ## Features
 
 - **Every agent gets a name.** Sessions are addressed as `Vega` or `Vega@LAPTOP` instead of a
