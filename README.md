@@ -88,7 +88,7 @@ No clone, no setup. With [uv](https://docs.astral.sh/uv/) installed, this starts
 [demo mode](#demo-mode) with made-up data:
 
 ```bash
-uvx --from git+https://github.com/michaelblaess/chatterdome chatterdome-tui --demo
+uvx --from chatterdome chatterdome-tui --demo
 ```
 
 It reads nothing from your real `~/.claude` and starts no sessions. For your own sessions you

@@ -93,7 +93,7 @@ Ohne Klonen, ohne Einrichtung. Ist [uv](https://docs.astral.sh/uv/) installiert,
 Oberfläche im [Demo-Modus](#demo-modus) mit erfundenen Daten:
 
 ```bash
-uvx --from git+https://github.com/michaelblaess/chatterdome chatterdome-tui --demo --lang de
+uvx --from chatterdome chatterdome-tui --demo --lang de
 ```
 
 Dabei wird nichts aus Deinem echten `~/.claude` gelesen und keine Sitzung gestartet. Für Deine
