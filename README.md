@@ -33,11 +33,9 @@ telemetry. What crosses machine boundaries goes over SSH inside your own Tailnet
   <sub>All screenshots come from the built-in <a href="#demo-mode">demo mode</a> with made-up data.</sub>
 </p>
 
-<p align="center">
-  <a href="https://youtu.be/Mf4HXUlUiuE"><img src="docs/teaser.jpg" width="640" alt="Watch the Chatterdome teaser on YouTube"></a>
-  <br>
-  <sub><a href="https://youtu.be/Mf4HXUlUiuE">Watch the teaser on YouTube</a></sub>
-</p>
+https://github.com/user-attachments/assets/c0456572-c8f9-4da3-a7f3-c49b322cc195
+
+<p align="center"><sub><a href="https://youtu.be/Mf4HXUlUiuE">Also on YouTube</a></sub></p>
 
 ## Features
 

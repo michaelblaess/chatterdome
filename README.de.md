@@ -34,11 +34,9 @@ keine Telemetrie. Was über Rechnergrenzen geht, geht über SSH im eigenen Tailn
   <sub>Alle Screenshots stammen aus dem eingebauten <a href="#demo-modus">Demo-Modus</a> mit erfundenen Daten.</sub>
 </p>
 
-<p align="center">
-  <a href="https://youtu.be/Mf4HXUlUiuE"><img src="docs/teaser.jpg" width="640" alt="Den Teaser zu Chatterdome auf YouTube ansehen"></a>
-  <br>
-  <sub><a href="https://youtu.be/Mf4HXUlUiuE">Teaser auf YouTube ansehen</a></sub>
-</p>
+https://github.com/user-attachments/assets/c0456572-c8f9-4da3-a7f3-c49b322cc195
+
+<p align="center"><sub><a href="https://youtu.be/Mf4HXUlUiuE">Auch auf YouTube</a></sub></p>
 
 ## Features
 
