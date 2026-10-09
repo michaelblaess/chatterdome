@@ -12,12 +12,22 @@ from __future__ import annotations
 import os
 import platform
 import shutil
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
 DEMO_RECHNER = "WORKSTATION"
 """Rechnername im Demo-Modus, ueberall dort, wo sonst ``platform.node()`` steht."""
+
+EIGENE_KONSOLE = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+"""``creationflags`` fuer Hilfsprozesse: eine eigene, unsichtbare Konsole.
+
+Ohne das teilt sich ein Kindprozess die Konsole der Oberflaeche und kann deren
+Titel aendern. Im Tab stand statt "chatterdome v0.3.1" meistens nur "Claude"
+(Michael, 09.10.2026) - der Operator ruft im Takt ``claude`` auf, und der
+setzt seinen Prozesstitel. Ausserhalb von Windows ist der Wert 0 und wirkt nicht.
+"""
 
 MARKE = ".chatterdome-demo"
 """Datei in der Demo-Wurzel. Nur ein Ordner mit dieser Marke wird geleert."""

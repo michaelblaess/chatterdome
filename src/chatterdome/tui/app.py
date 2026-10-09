@@ -31,7 +31,7 @@ from textual_widgets import (
 from chatterdome import __author__, __version__, __year__, haftung
 from chatterdome.i18n import current_language, t
 from chatterdome.kern import absturz, umgebung
-from chatterdome.kern.debatte import Diskussion, hinweis_anhaengen
+from chatterdome.kern.debatte import Diskussion, als_markdown, hinweis_anhaengen
 from chatterdome.kern.diskussionsarchiv import Diskussionsarchiv
 from chatterdome.kern.einstellungen import Einstellungen
 from chatterdome.kern.gedaechtnis import (
@@ -123,8 +123,11 @@ class ChatterdomeApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # 
     # Keine Klassen-BINDINGS: die Belegung haengt am gewaehlten Stil, und der
     # steht erst fest, wenn die Einstellungen geladen sind. Siehe tui/keymap.py.
 
-    def __init__(self, quelle: Quelle | None = None, **kwargs: Any) -> None:
+    def __init__(self, quelle: Quelle | None = None, fenstertitel: str = "",
+                 **kwargs: Any) -> None:
         super().__init__(**kwargs)
+        self._fenstertitel = fenstertitel
+        """Titel des Terminal-Tabs, leer heisst: die App fasst ihn nicht an."""
         register_all(self)
         self._einstellungen = Einstellungen()
         werte = self._einstellungen.laden()
@@ -240,6 +243,23 @@ class ChatterdomeApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # 
         yield LogPanel(lang=current_language(), export_name="chatterdome", id="log")
         yield Footer()
 
+    def _fenstertitel_setzen(self) -> None:
+        """Setzt den Titel des Terminal-Tabs, im Takt immer wieder.
+
+        Einmal vor dem Start genuegt nicht: der Titel stand beim Start im Tab und
+        war spaeter meistens weg (Michael, 09.10.2026). Wer ihn ueberschreibt, ist
+        nicht belegt - im Repo setzt ihn sonst niemand.
+
+        Ueber den Treiber und nicht ueber ``sys.__stdout__``: waehrend die App
+        laeuft, schreibt Textual aus einem eigenen Faden, und eine Sequenz daneben
+        koennte mitten in einem Bild landen.
+        """
+        if not self._fenstertitel or self.is_headless or self.is_web:
+            return
+        treiber = self._driver
+        if treiber is not None:
+            treiber.write(f"\x1b]0;{self._fenstertitel}\x07")
+
     def on_mount(self) -> None:
         self._binding_texte()
         self._schreibe_log(t("log.started", version=__version__))
@@ -251,6 +271,8 @@ class ChatterdomeApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # 
             self._schreibe_log(f"[!] {problem.message}")
         self._theme_melden()
         self.set_interval(self._takt, self._takt_abfrage)
+        self._fenstertitel_setzen()
+        self.set_interval(self._takt, self._fenstertitel_setzen)
         self.aktualisieren()
         self.namen_laden()
         self._frage_disclaimer()
@@ -1140,6 +1162,80 @@ class ChatterdomeApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # 
                 ),
                 callback=self._archiv_loeschen_bestaetigt,
             )
+
+    def on_diskussions_panel_zusammenfassung_menue(
+        self, ereignis: DiskussionsPanel.ZusammenfassungMenue
+    ) -> None:
+        """Kontextmenue ueber der Zusammenfassung: kopieren und exportieren."""
+        from textual_widgets import ContextMenuItem, ContextMenuScreen
+
+        panel = self.query_one("#diskussion", DiskussionsPanel)
+        if panel.diskussion is None:
+            return
+        protokoll = panel.protokoll
+        eintraege = [
+            ContextMenuItem("kopieren", t("discussion.menu_copy_summary")),
+            ContextMenuItem("alles_kopieren", t("discussion.menu_copy_all")),
+            ContextMenuItem.separator(),
+            ContextMenuItem("speichern", t("discussion.menu_save_summary")),
+            ContextMenuItem("exportieren", t("discussion.menu_export")),
+            ContextMenuItem.separator(),
+            ContextMenuItem("protokoll", t("discussion.menu_open_log"), enabled=bool(protokoll)),
+        ]
+        self.push_screen(ContextMenuScreen(eintraege, at=ereignis.bei),
+                         callback=self._zusammenfassung_menue_gewaehlt)
+
+    def _zusammenfassung_menue_gewaehlt(self, auswahl: str | None) -> None:
+        panel = self.query_one("#diskussion", DiskussionsPanel)
+        diskussion = panel.diskussion
+        if auswahl is None or diskussion is None:
+            return
+        # Kennung aus dem Archiv, sonst der Beginn - beides ist je Diskussion eindeutig.
+        marke = str(diskussion.kennung) if diskussion.kennung else "".join(
+            z for z in diskussion.beginn if z.isdigit())
+        if auswahl == "kopieren":
+            self._in_zwischenablage(diskussion.zusammenfassung)
+        elif auswahl == "alles_kopieren":
+            self._in_zwischenablage(als_markdown(diskussion))
+        elif auswahl == "speichern":
+            text = f"# {diskussion.thema}\n\n{diskussion.zusammenfassung}\n"
+            self._markdown_speichern(text, f"zusammenfassung-{marke}.md")
+        elif auswahl == "exportieren":
+            self._markdown_speichern(als_markdown(diskussion), f"diskussion-{marke}.md")
+        elif auswahl == "protokoll" and panel.protokoll:
+            self._link_counter += 1
+            self._link_registry[self._link_counter] = panel.protokoll
+            self.action_open_link(str(self._link_counter))
+
+    def _markdown_speichern(self, text: str, vorschlag: str) -> None:
+        """Fragt nach einem Ziel und schreibt den Text als Markdown dorthin."""
+        from textual_fspicker import FileSave, Filters
+
+        def gewaehlt(ziel: Path | None) -> None:
+            if ziel is None:
+                return
+            try:
+                ziel.write_text(text, encoding="utf-8", newline="\n")
+            except OSError as fehler:
+                self.notify(str(fehler), severity="error", markup=False)
+                return
+            self._letzter_speicherort = str(ziel.parent)
+            self.notify(t("notify.saved", pfad=str(ziel)), markup=False)
+
+        self.push_screen(
+            FileSave(
+                location=self._letzter_speicherort,
+                default_file=vorschlag,
+                title=t("discussion.save_title"),
+                save_button=t("save.button"),
+                cancel_button=t("save.cancel"),
+                filters=Filters(
+                    (t("save.filter_markdown"), lambda p: p.suffix.lower() == ".md"),
+                    (t("save.filter_all"), lambda _p: True),
+                ),
+            ),
+            callback=gewaehlt,
+        )
 
     def _archiv_loeschen_bestaetigt(self, ja: bool | None) -> None:
         if not ja:

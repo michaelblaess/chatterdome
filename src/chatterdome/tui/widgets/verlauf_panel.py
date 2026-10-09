@@ -19,6 +19,7 @@ from textual.message import Message
 from textual.widgets import Static
 
 from chatterdome.i18n import format_time, t
+from chatterdome.kern.gliederung import ETIKETT, gliedern
 from chatterdome.kern.modelle import Auftrag
 from chatterdome.kern.warten import OFFENE_ZUSTAENDE, dauer_kurz, warteanzeige
 
@@ -244,7 +245,13 @@ class VerlaufPanel(VerticalScroll):
         inhalt = ereignis.text or ereignis.notiz
         if inhalt:
             text.append("\n")
-            text.append(str(inhalt))
+            # Leerzeile zwischen den Absaetzen: ein einfacher Umbruch ginge im
+            # Zeilenumbruch einer breiten Blase unter.
+            absaetze = gliedern(str(inhalt))
+            rumpf = Text("\n\n".join(absaetze))
+            if len(absaetze) > 1:
+                rumpf.highlight_regex(ETIKETT, "bold")
+            text.append_text(rumpf)
         elif not ereignis.eigen:
             text.append("\n")
             text.append(t("chat.receipt"), style="dim italic")

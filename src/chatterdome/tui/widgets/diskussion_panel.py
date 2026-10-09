@@ -34,6 +34,8 @@ from chatterdome.kern.debatte import (
     CONTRA,
     MODELLE,
     PRO,
+    SACHLICH,
+    STIMMUNGEN,
     VORGABE_MODELL,
     Beitrag,
     Diskussion,
@@ -57,6 +59,13 @@ def _modell_auswahl() -> list[tuple[str, str]]:
     texte = {"": t("discussion.model_default"), "haiku": t("discussion.model_haiku"),
              "sonnet": t("discussion.model_sonnet"), "opus": t("discussion.model_opus")}
     return [(texte[m], m) for m in MODELLE]
+
+
+def _stimmung_auswahl() -> list[tuple[str, str]]:
+    # Ausgeschrieben aus demselben Grund wie bei den Modellen.
+    texte = {"sachlich": t("discussion.mood_neutral"), "fair": t("discussion.mood_fair"),
+             "aggressiv": t("discussion.mood_aggressive"), "unfair": t("discussion.mood_unfair")}
+    return [(texte[s], s) for s in STIMMUNGEN]
 
 
 SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
@@ -152,6 +161,21 @@ class _ArchivTabelle(DataTable[Any]):
         event.stop()
         self.move_cursor(row=zeile)
         self.post_message(self.Rechtsklick(zeile, (event.screen_x, event.screen_y)))
+
+
+class _Zusammenfassung(Static):
+    """Die Zusammenfassung unter dem Chat, die den Rechtsklick meldet."""
+
+    class Rechtsklick(Message):
+        def __init__(self, bei: tuple[int, int]) -> None:
+            super().__init__()
+            self.bei = bei
+
+    def on_click(self, event: events.Click) -> None:
+        if event.button != 3:
+            return
+        event.stop()
+        self.post_message(self.Rechtsklick((event.screen_x, event.screen_y)))
 
 
 FARBEN = (("primary", "blue"), ("accent", "magenta"), ("success", "green"),
@@ -258,13 +282,18 @@ class DiskussionsPanel(Vertical):
     DiskussionsPanel .disk-zeile Label {
         width: 18;
     }
-    /* Das Thema ist oft ein ganzer Satz mit Kontext - drei Zeilen, umbrechend. */
+    /* Das Thema ist oft ein ganzer Satz mit Kontext - drei Zeilen, umbrechend,
+       und fuenf, sobald das Fenster hoch genug ist (Klasse "hoch"). */
     DiskussionsPanel .disk-zeile.disk-thema-zeile {
         height: 3;
     }
     DiskussionsPanel #disk-thema {
         width: 1fr;
         height: 3;
+    }
+    DiskussionsPanel.hoch .disk-zeile.disk-thema-zeile,
+    DiskussionsPanel.hoch #disk-thema {
+        height: 5;
     }
     DiskussionsPanel .disk-position {
         width: 1fr;
@@ -292,6 +321,13 @@ class DiskussionsPanel(Vertical):
     }
     DiskussionsPanel #disk-format, DiskussionsPanel #disk-modell {
         width: 32;
+    }
+    DiskussionsPanel #disk-stimmung-titel {
+        width: auto;
+        padding: 0 1 0 2;
+    }
+    DiskussionsPanel #disk-stimmung {
+        width: 18;
     }
     DiskussionsPanel .disk-zahl {
         width: 8;
@@ -545,6 +581,13 @@ class DiskussionsPanel(Vertical):
             self.kennung = kennung
             self.bei = bei
 
+    class ZusammenfassungMenue(Message):
+        """Rechtsklick auf die Zusammenfassung."""
+
+        def __init__(self, bei: tuple[int, int]) -> None:
+            super().__init__()
+            self.bei = bei
+
     class Kennzahlen(Message):
         """Runde, Redner oder Verbrauch haben sich geaendert - fuer die Statuszeile."""
 
@@ -576,7 +619,7 @@ class DiskussionsPanel(Vertical):
         with Container(id="disk-start"):
             with VerticalScroll(id="disk-formular"):
                 with Horizontal(classes="disk-zeile disk-thema-zeile"):
-                    yield Label(t("discussion.topic"))
+                    yield Label(t("discussion.question"), id="disk-thema-titel")
                     yield TextArea(placeholder=t("discussion.topic_placeholder"), id="disk-thema",
                                    compact=True, soft_wrap=True, show_line_numbers=False,
                                    tab_behavior="focus")
@@ -600,6 +643,11 @@ class DiskussionsPanel(Vertical):
                          (t("discussion.format_team"), "team")],
                         value="diskussion", allow_blank=False, id="disk-format", compact=True,
                     )
+                    # In derselben Zeile: eine eigene schoebe den Startknopf bei
+                    # kleinem Fenster aus dem Bild.
+                    yield Static(t("discussion.mood"), id="disk-stimmung-titel")
+                    yield Select(_stimmung_auswahl(), value=SACHLICH, allow_blank=False,
+                                 id="disk-stimmung", compact=True)
                 with Horizontal(classes="disk-zeile"):
                     yield Label(t("discussion.limit"))
                     yield Input("3", type="integer", id="disk-runden", classes="disk-zahl",
@@ -622,6 +670,8 @@ class DiskussionsPanel(Vertical):
                                 compact=True)
                     yield Static(t("discussion.new_hint"), classes="disk-einheit")
                 yield Checkbox(t("discussion.research"), value=True, id="disk-recherche",
+                               compact=True)
+                yield Checkbox(t("discussion.decide"), value=False, id="disk-entscheidung",
                                compact=True)
                 yield Checkbox(t("discussion.with_context"), value=False,
                                id="disk-mit-kontext", compact=True)
@@ -657,7 +707,7 @@ class DiskussionsPanel(Vertical):
                                placeholder=t("discussion.shout_placeholder"))
                 yield Button(t("discussion.shout"), variant="warning", id="disk-reinrufen")
             with VerticalScroll(id="disk-zusammenfassung-raum"):
-                yield Static("", id="disk-zusammenfassung")
+                yield _Zusammenfassung("", id="disk-zusammenfassung")
 
     def on_mount(self) -> None:
         tabelle = self.query_one("#disk-archiv", DataTable)
@@ -676,9 +726,14 @@ class DiskussionsPanel(Vertical):
     """Darunter hat das Archiv unter dem Formular keinen Platz - es entfaellt dann,
     das Formular geht vor (Test ``test_formular_passt_auf_100_mal_30``)."""
 
+    HOCH_AB = 40
+    """Ab dieser Hoehe bekommt die Frage fuenf Zeilen statt drei. Darunter schoeben
+    die zwei Zeilen mehr den Startknopf aus dem Bild."""
+
     def on_resize(self, ereignis: events.Resize) -> None:
         breit = ereignis.size.width >= self.BREIT_AB
         self.set_class(breit, "breit")
+        self.set_class(ereignis.size.height >= self.HOCH_AB, "hoch")
         self.set_class(not breit and ereignis.size.height < self.NIEDRIG_UNTER, "niedrig")
 
     # -- Archiv ---------------------------------------------------------
@@ -705,6 +760,20 @@ class DiskussionsPanel(Vertical):
     def _archiv_rechtsklick(self, ereignis: _ArchivTabelle.Rechtsklick) -> None:
         if 0 <= ereignis.zeile < len(self._archiv):
             self.post_message(self.ArchivMenue(self._archiv[ereignis.zeile].kennung, ereignis.bei))
+
+    @on(_Zusammenfassung.Rechtsklick)
+    def _zusammenfassung_rechtsklick(self, ereignis: _Zusammenfassung.Rechtsklick) -> None:
+        self.post_message(self.ZusammenfassungMenue(ereignis.bei))
+
+    @property
+    def diskussion(self) -> Diskussion | None:
+        """Die Diskussion, die gerade im Chat steht."""
+        return self._diskussion
+
+    @property
+    def protokoll(self) -> str:
+        """Pfad des Markdown-Protokolls, leer solange die Diskussion laeuft."""
+        return self._protokoll
 
     def zeigen(self, diskussion: Diskussion, protokoll: str) -> None:
         """Zeigt eine abgeschlossene Diskussion aus dem Archiv im Chat."""
@@ -785,6 +854,10 @@ class DiskussionsPanel(Vertical):
             recherche=self.query_one("#disk-recherche", Checkbox).value,
             positionen=(self.query_one("#disk-position-pro", Input).value.strip(),
                         self.query_one("#disk-position-contra", Input).value.strip()),
+            # Die Stimmung gehoert zum Streitgespraech, im Team bleibt es sachlich.
+            stimmung=(str(self.query_one("#disk-stimmung", Select).value) if mit_seiten
+                      else SACHLICH),
+            entscheidung=self.query_one("#disk-entscheidung", Checkbox).value,
         )
         platzhalter = [Teilnehmer(t("discussion.new_placeholder", nummer=i + 1))
                        for i in range(int(neu))]
@@ -829,6 +902,11 @@ class DiskussionsPanel(Vertical):
         mit_seiten = self.query_one("#disk-format", Select).value == "diskussion"
         self.query_one("#disk-positionen").display = mit_seiten
         self.query_one("#disk-positionen-hinweis").display = mit_seiten
+        # PRO und CONTRA antworten auf eine Frage, ein Team bearbeitet ein Thema.
+        self.query_one("#disk-thema-titel", Label).update(
+            t("discussion.question") if mit_seiten else t("discussion.topic"))
+        self.query_one("#disk-stimmung-titel").display = mit_seiten
+        self.query_one("#disk-stimmung").display = mit_seiten
 
     @on(Input.Changed)
     @on(TextArea.Changed)
@@ -912,6 +990,8 @@ class DiskussionsPanel(Vertical):
         self.query_one("#disk-runden", Input).value = str(diskussion.runden)
         self.query_one("#disk-modell", Select).value = diskussion.modell
         self.query_one("#disk-recherche", Checkbox).value = diskussion.recherche
+        self.query_one("#disk-stimmung", Select).value = diskussion.stimmung
+        self.query_one("#disk-entscheidung", Checkbox).value = diskussion.entscheidung
         self.query_one("#disk-mit-kontext", Checkbox).value = not diskussion.ohne_kontext
         self._pruefen()
         self.query_one("#disk-thema", TextArea).focus()
@@ -1007,6 +1087,10 @@ class DiskussionsPanel(Vertical):
         kopf.append(self._seitenzeile(d, teilnehmer))
         regeln = t("discussion.rules_research_on") if d.recherche else t(
             "discussion.rules_research_off")
+        if d.stimmung != SACHLICH:
+            regeln = f"{regeln}  ·  {t('discussion.head_mood', stimmung=d.stimmung)}"
+        if d.entscheidung:
+            regeln = f"{regeln}  ·  {t('discussion.head_decide')}"
         kopf.append(f"\n{regeln}", style="dim")
         modell = t("discussion.head_model", modell=modell_name(d.modell))
         echt = [f"{x.name}: {x.modell}" for x in d.teilnehmer if x.modell]
@@ -1047,10 +1131,12 @@ class DiskussionsPanel(Vertical):
         """Der Moderator gibt gerade jemandem das Wort."""
         if self._diskussion is None:
             return
-        self._runde, self._redner = runde, name
+        self._runde, self._redner = runde or self._diskussion.runden, name
         if not self.query_one("#disk-anhalten", Button).disabled:
-            self._zustand = t("discussion.state_turn", runde=runde,
-                              runden=self._diskussion.runden, name=name)
+            # Runde 0 heisst Schlusswort oder Abstimmung, siehe ``moderieren``.
+            self._zustand = (t("discussion.state_turn", runde=runde,
+                               runden=self._diskussion.runden, name=name) if runde
+                             else t("discussion.state_final", name=name))
         self._kopf_zeichnen()
         seite = next((x.seite for x in self._diskussion.teilnehmer if x.name == name), "")
         if self._diskussion.format != "diskussion":
@@ -1160,6 +1246,8 @@ class DiskussionsPanel(Vertical):
             kopf = f"{kopf} · {position}"
         if beitrag.art == "schlusswort":
             kopf = f"{beitrag.name} · {t('discussion.head_closing')}"
+        if beitrag.art == "entscheidung":
+            kopf = f"{beitrag.name} · {t('discussion.head_vote')}"
         inhalt = Text()
         inhalt.append(kopf, style="bold")
         # Der Name im Kopf in der Farbe des Sprechers.

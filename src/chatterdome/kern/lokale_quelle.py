@@ -21,6 +21,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from chatterdome.kern import umgebung
 from chatterdome.kern.modelle import (
     Agent,
     Auftrag,
@@ -346,6 +347,7 @@ class LokaleQuelle:
                 [*self._befehl, *args],
                 capture_output=True,
                 stdin=subprocess.DEVNULL,
+                creationflags=umgebung.EIGENE_KONSOLE,
                 text=True,
                 encoding="utf-8",
                 errors="replace",

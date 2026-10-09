@@ -32,7 +32,9 @@ from chatterdome.debatte_ablauf import ausfuehren, laufende
 from chatterdome.kern.debatte import (
     FORMATE,
     MODELLE,
+    SACHLICH,
     SEITEN,
+    STIMMUNGEN,
     VORGABE_MODELL,
     Beitrag,
     Diskussion,
@@ -62,7 +64,7 @@ def _teilnehmer(eintraege: list[str]) -> list[Teilnehmer]:
 
 def _ausgeben(beitrag: Beitrag) -> None:
     koepfe = {"schlusswort": "Schlusswort", "vorbereitung": "Recherche",
-              "beitrag": f"Runde {beitrag.runde}"}
+              "entscheidung": "Abstimmung", "beitrag": f"Runde {beitrag.runde}"}
     if beitrag.art in koepfe:
         kopf = koepfe[beitrag.art]
         print(f"\n[{beitrag.zeit}] {beitrag.name} ({kopf}):\n{beitrag.text}", flush=True)
@@ -89,6 +91,10 @@ def main(argv: list[str] | None = None) -> int:
                         help='benannte Positionen, etwa: --positionen Unity Godot')
     parser.add_argument("--schlussworte", action="store_true",
                         help="eine Schlussrunde (Vorgabe aus)")
+    parser.add_argument("--stimmung", choices=list(STIMMUNGEN), default=SACHLICH,
+                        help="Ton der Beiträge (Vorgabe sachlich)")
+    parser.add_argument("--entscheidung", action="store_true",
+                        help="am Ende stimmt jeder ab, die Zusammenfassung nennt das Ergebnis")
     parser.add_argument("--recherche", action="store_true",
                         help="vor Runde 1 eine Vorbereitung mit Websuche (Vorgabe)")
     parser.add_argument("--ohne-recherche", action="store_true",
@@ -130,6 +136,8 @@ def main(argv: list[str] | None = None) -> int:
         modell=args.modell or VORGABE_MODELL,
         positionen=(args.positionen[0], args.positionen[1]),
         schlussworte=args.schlussworte,
+        stimmung=args.stimmung,
+        entscheidung=args.entscheidung,
     )
     # Vorab pruefen, bevor irgendein Fenster aufgeht - mit Platzhaltern fuer
     # die frischen Teilnehmer, deren Namen noch niemand kennt.

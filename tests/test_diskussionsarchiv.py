@@ -137,3 +137,13 @@ class TestLoeschen:
                 rest = db.execute(f"SELECT count(*) FROM {tabelle} WHERE diskussion=?",
                                   (weg.kennung,)).fetchone()[0]
                 assert rest == 0, tabelle
+
+    def test_stimmung_und_entscheidung_ueberleben(self, tmp_path: Path) -> None:
+        archiv = Diskussionsarchiv(tmp_path / "d.db")
+        d = _diskussion()
+        d.stimmung, d.entscheidung = "unfair", True
+        d.beitraege.append(Beitrag(3, "Agatha", "ENTSCHEIDUNG: Godot.", "17:20:00",
+                                   "entscheidung", seite="pro"))
+        geladen = archiv.laden(archiv.speichern(d))
+        assert geladen is not None
+        assert geladen[0] == d

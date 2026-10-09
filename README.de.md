@@ -60,7 +60,9 @@ https://github.com/user-attachments/assets/c0456572-c8f9-4da3-a7f3-c49b322cc195
   Tag, Ordner und Sitzungsdauer und eine Frühwarnung für den Message-Bus. Diskussionen zählen
   ihre Tokens live mit, und das Modell (Haiku, Sonnet, Opus) wird je Diskussion gewählt.
 - **Diskussionen und Debatten.** Mehrere Agenten streiten PRO und CONTRA oder arbeiten als Team
-  auf eine Entscheidung hin, auf Wunsch nach einer Recherche-Runde im Web. Du kannst während des
+  auf eine Entscheidung hin, auf Wunsch nach einer Recherche-Runde im Web. Eine Debatte bekommt
+  eine Stimmung (sachlich, fair, aggressiv, unfair) und kann mit einer Abstimmung enden, damit
+  ein Ergebnis herauskommt, statt dass sie sich im Kreis dreht. Du kannst während des
   Laufs reinrufen, später mit neuen Informationen oder einem anderen Modell fortsetzen, und
   jede Diskussion landet in einem Archiv. Der Name dieser App ist so entstanden.
 - **Volltextsuche** über alle Transkripte von Claude Code und der Codex CLI.

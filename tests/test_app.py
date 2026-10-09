@@ -1005,3 +1005,39 @@ class TestKeinZweitesFensterAufEinemGespraech:
 
             assert quelle.gestoppt == ["Klara"]
             assert gerufen == [], "sonst laufen zwei Sitzungen auf einem Gespraech"
+
+
+class TestFenstertitel:
+    """Der Titel des Terminal-Tabs wird im Takt neu gesetzt, nicht nur vor dem Start."""
+
+    def _app(self, titel: str) -> tuple[ChatterdomeApp, list[str]]:
+        app = ChatterdomeApp(quelle=FakeQuelle(), fenstertitel=titel)  # type: ignore[arg-type]
+        geschrieben: list[str] = []
+
+        class Treiber:
+            is_web = False
+
+            def write(self, daten: str) -> None:
+                geschrieben.append(daten)
+
+        app._driver = Treiber()  # type: ignore[assignment]
+        return app, geschrieben
+
+    def test_schreibt_die_sequenz_ueber_den_treiber(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        app, geschrieben = self._app("\N{ROBOT FACE} chatterdome v1.2.3")
+        monkeypatch.setattr(ChatterdomeApp, "is_headless", property(lambda _self: False))
+        app._fenstertitel_setzen()
+        assert geschrieben == ["\x1b]0;\N{ROBOT FACE} chatterdome v1.2.3\x07"]
+
+    def test_ohne_titel_und_ohne_terminal_schreibt_nichts(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        ohne, leer = self._app("")
+        kopflos, still = self._app("x")
+        monkeypatch.setattr(ChatterdomeApp, "is_headless", property(lambda _self: False))
+        ohne._fenstertitel_setzen()
+        monkeypatch.setattr(ChatterdomeApp, "is_headless", property(lambda _self: True))
+        kopflos._fenstertitel_setzen()
+        assert leer == still == []

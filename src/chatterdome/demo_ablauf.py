@@ -21,10 +21,13 @@ from chatterdome.debatte_ablauf import ZUSAMMENFASSUNG_LAEUFT, Ergebnis, ablage
 from chatterdome.i18n import current_language
 from chatterdome.kern.debatte import (
     CONTRA,
+    ENTSCHEIDUNG,
+    PRO,
     Beitrag,
     Diskussion,
     Teilnehmer,
     Verbrauch,
+    abstimmung,
     als_markdown,
     endegrund,
     moderieren,
@@ -68,7 +71,13 @@ class DemoKanal:
         if redner.seite:
             return redner.seite
         # Im Team-Format gibt es keine Seiten - abwechselnd aus beiden Stapeln.
-        return CONTRA if self._diskussion.teilnehmer.index(redner) % 2 else "pro"
+        return CONTRA if self._diskussion.teilnehmer.index(redner) % 2 else PRO
+
+    def _stimme(self, redner: Teilnehmer) -> str:
+        """Jeder stimmt fuer die eigene Seite - die Demo erfindet kein Umdenken."""
+        contra = self._seite(redner) == CONTRA
+        schluss = self._skript.schluss_contra if contra else self._skript.schluss_pro
+        return f"{ENTSCHEIDUNG}: {self._diskussion.position(self._seite(redner))}. {schluss}"
 
     def _text(self, redner: Teilnehmer) -> str:
         if redner.name not in self._gesagt:
@@ -91,6 +100,8 @@ class DemoKanal:
         kennung = f"demo-disk-{self._zaehler}"
         if text == vorbereitung(self._diskussion, redner):
             antwort, dauer = self._skript.vorbereitung, self._recherchezeit
+        elif text == abstimmung(self._diskussion, redner):
+            antwort, dauer = self._stimme(redner), self._antwortzeit
         else:
             antwort, dauer = self._text(redner), self._antwortzeit
         self._offen[kennung] = (self._uhr() + dauer, antwort)

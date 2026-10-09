@@ -7,10 +7,13 @@ import threading
 import pytest
 
 from chatterdome.kern.debatte import (
+    STIMMUNGEN,
     Diskussion,
     Teilnehmer,
     Verbrauch,
+    abgegebene_stimmen,
     absaetze,
+    abstimmung,
     als_markdown,
     anweisung,
     hinweis_anhaengen,
@@ -256,8 +259,8 @@ class TestPositionen:
         d = _diskussion(thema="Unity oder Godot?", positionen=("Unity", "Godot"))
         d.seiten_verteilen()
         text = anweisung(d, d.teilnehmer[1], 1, schluss=False)
-        assert "Du vertrittst: Godot." in text
-        assert "Gegenposition (Unity) vertritt Amalia, Kerstin." in text
+        assert 'Deine Antwort auf die Frage: "Godot".' in text
+        assert 'Gegenantwort "Unity" vertritt Amalia, Kerstin.' in text
         assert "mit Ja" not in text
 
     def test_ohne_namen_bleibt_es_bei_ja_und_nein(self) -> None:
@@ -500,3 +503,110 @@ class TestEndegrundInDerSprache:
         monkeypatch.setattr(i18n, "_strings", {})
         d = _lauf(_diskussion(runden=3), Attrappe())
         assert d.ende == "3 Runden gespielt"
+
+
+class TestStimmung:
+    def test_sachlich_setzt_nichts_dazu(self) -> None:
+        d = _diskussion()
+        d.seiten_verteilen()
+        assert "Ton der Diskussion" not in anweisung(d, d.teilnehmer[0], 1, False)
+
+    @pytest.mark.parametrize("stimmung", [s for s in STIMMUNGEN if s != "sachlich"])
+    def test_jede_stimmung_steht_in_der_anweisung(self, stimmung: str) -> None:
+        d = _diskussion(stimmung=stimmung)
+        d.seiten_verteilen()
+        assert STIMMUNGEN[stimmung] in anweisung(d, d.teilnehmer[0], 1, False)
+
+    def test_unbekannte_stimmung_startet_nicht(self) -> None:
+        assert "Unbekannte Stimmung" in _diskussion(stimmung="zynisch").pruefen()
+
+    def test_die_zusammenfassung_bewertet_den_ton_nicht(self) -> None:
+        d = _lauf(_diskussion(runden=1, stimmung="unfair"), Attrappe())
+        assert "bewerte ihn nicht" in zusammenfassung_auftrag(d)
+        assert "bewerte ihn nicht" not in zusammenfassung_auftrag(
+            _lauf(_diskussion(runden=1), Attrappe()))
+
+
+class TestEntscheidung:
+    def test_ohne_haken_keine_abstimmung(self) -> None:
+        d = _lauf(_diskussion(runden=1), Attrappe())
+        assert "entscheidung" not in [b.art for b in d.beitraege]
+        assert "Erkläre niemanden zum Sieger" in zusammenfassung_auftrag(d)
+
+    def test_nach_den_runden_stimmt_jeder_einmal_ab(self) -> None:
+        kanal = Attrappe()
+        d = _lauf(_diskussion(runden=2, entscheidung=True), kanal)
+        arten = [b.art for b in d.beitraege]
+        assert arten == ["beitrag"] * 6 + ["entscheidung"] * 3
+        assert [text.splitlines()[0] for _, text in kanal.gesendet[-3:]] == [
+            "Diskussion, Abstimmung: Die Runden sind vorbei, jetzt wird entschieden."] * 3
+
+    def test_die_zielvorgabe_steht_in_jeder_runde_und_zieht_in_der_letzten_an(self) -> None:
+        d = _diskussion(runden=3, entscheidung=True)
+        d.seiten_verteilen()
+        erste = anweisung(d, d.teilnehmer[0], 1, False)
+        letzte = anweisung(d, d.teilnehmer[0], 3, False)
+        assert "Nach Runde 3 wird abgestimmt" in erste
+        assert "Das ist die letzte Runde" not in erste
+        assert "Das ist die letzte Runde" in letzte
+
+    def test_wer_abstimmt_sieht_die_stimmen_der_anderen_nicht(self) -> None:
+        kanal = Attrappe()
+        d = _lauf(_diskussion(runden=1, entscheidung=True), kanal)
+        erste_stimme = next(b for b in d.beitraege if b.art == "entscheidung")
+        assert erste_stimme.text not in kanal.gesendet[-1][1]
+
+    def test_in_der_abstimmung_legt_der_redner_seine_seite_ab(self) -> None:
+        d = _diskussion(positionen=("Unity", "Godot"))
+        d.seiten_verteilen()
+        text = abstimmung(d, d.teilnehmer[0])
+        assert "Leg diese Rolle jetzt ab" in text
+        assert 'eine der beiden Antworten: "Unity" oder "Godot"' in text
+
+    def test_pro_und_contra_antworten_auf_eine_frage(self) -> None:
+        d = _diskussion(thema="Wird KI die Menschheit auslöschen?",
+                        positionen=("Ja, und das ist gut so", "Nein, dafür ist sie zu bequem"))
+        d.seiten_verteilen()
+        text = anweisung(d, d.teilnehmer[0], 1, False)
+        assert 'Frage: "Wird KI die Menschheit auslöschen?"' in text
+        assert 'Deine Antwort auf die Frage: "Ja, und das ist gut so".' in text
+        team = _diskussion(format="team")
+        assert 'Thema: "Ist Angular tot?"' in anweisung(team, team.teilnehmer[0], 1, False)
+
+    def test_im_team_ist_die_stimme_ein_vorschlag(self) -> None:
+        d = _diskussion(format="team")
+        text = abstimmung(d, d.teilnehmer[0])
+        assert "Leg diese Rolle" not in text
+        assert "der Vorschlag, den das Team umsetzen soll" in text
+
+    def test_auch_nach_zeitablauf_aber_nicht_nach_stopp(self) -> None:
+        zeit = _lauf(_diskussion(runden=10, dauer_minuten=0.1, entscheidung=True), Attrappe())
+        assert [b.art for b in zeit.beitraege].count("entscheidung") == 3
+        stopp = threading.Event()
+        stopp.set()
+        gestoppt = _lauf(_diskussion(runden=2, entscheidung=True), Attrappe(), stopp=stopp)
+        assert "entscheidung" not in [b.art for b in gestoppt.beitraege]
+
+    def test_die_zusammenfassung_nennt_das_ergebnis(self) -> None:
+        d = _lauf(_diskussion(runden=1, entscheidung=True), Attrappe())
+        auftrag = zusammenfassung_auftrag(d)
+        assert 'der mit "Entscheidung:" beginnt' in auftrag
+        assert "Erkläre niemanden zum Sieger" not in auftrag
+        assert auftrag.count(", Abstimmung] ") == 3
+
+    def test_nach_dem_fortsetzen_gelten_nur_die_neuen_stimmen(self) -> None:
+        d = _lauf(_diskussion(runden=1, entscheidung=True), Attrappe())
+        alte = abgegebene_stimmen(d)
+        d.runden = 2
+        d = _lauf(d, Attrappe())
+        neue = abgegebene_stimmen(d)
+        assert len(alte) == len(neue) == 3
+        assert not any(a is n for a in alte for n in neue)
+        # Die neuen Redner bekommen die alten Stimmen auch nicht als Verlauf.
+        assert zusammenfassung_auftrag(d).count(", Abstimmung] ") == 3
+
+    def test_das_protokoll_fuehrt_stimmen_und_stimmung(self) -> None:
+        d = _lauf(_diskussion(runden=1, entscheidung=True, stimmung="fair"), Attrappe())
+        text = als_markdown(d)
+        assert "Stimmung: fair" in text
+        assert text.count(", Abstimmung (") == 3

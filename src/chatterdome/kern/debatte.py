@@ -82,6 +82,36 @@ VORGABE_MODELL = "sonnet"
 """Fuer eine Unterhaltungsdiskussion reicht Sonnet, und Opus frisst Tokens."""
 
 
+SACHLICH = "sachlich"
+
+STIMMUNGEN = {
+    SACHLICH: "",
+    "fair": (
+        "Ton der Diskussion: fair und respektvoll. Erkenne den stärksten Punkt der "
+        "Gegenseite ausdrücklich an, bevor Du widersprichst, und gib zu, wo sie recht hat."
+    ),
+    "aggressiv": (
+        "Ton der Diskussion: angriffslustig und scharf. Zugespitzte Formulierungen, kein "
+        "Zugeständnis, hart in der Sache. Keine Beleidigungen - angegriffen wird das "
+        "Argument, nicht der Redner."
+    ),
+    "unfair": (
+        "Ton der Diskussion: unfair, mit rhetorischen Tricks. Strohmann, Zuspitzung ins "
+        "Absurde, Whataboutism, Themenwechsel, wenn es eng wird. Erfinde dabei keine Fakten "
+        "und beleidige niemanden - unfair ist die Rhetorik, nicht der Umgang."
+    ),
+}
+"""Die Stimmung einer Diskussion als Zeile der Anweisung. ``sachlich`` setzt nichts
+dazu, das ist das Verhalten vor dieser Auswahl. Als Showcase gedacht: dasselbe Thema
+liest sich je Stimmung anders."""
+
+WOERTER_JE_ENTSCHEIDUNG = 50
+
+ENTSCHEIDUNG = "ENTSCHEIDUNG"
+"""So beginnt eine Stimme in der Abstimmung. In derselben Zeile wie die Begruendung,
+nicht in einer eigenen: eine mehrzeilige Quittung kann abgeschnitten werden, siehe
+``absaetze``."""
+
 PRO = "pro"
 CONTRA = "contra"
 
@@ -143,8 +173,9 @@ class Beitrag:
     text: str
     zeit: str
     art: str = "beitrag"
-    """``vorbereitung``, ``beitrag``, ``schlusswort``, ``moderator``, ``ausgelassen`` oder
-    ``fehler``. ``moderator`` ist ein Hinweis, den der Anwender beim Fortsetzen mitgibt."""
+    """``vorbereitung``, ``beitrag``, ``schlusswort``, ``entscheidung``, ``moderator``,
+    ``ausgelassen`` oder ``fehler``. ``moderator`` ist ein Hinweis, den der Anwender beim
+    Fortsetzen mitgibt, ``entscheidung`` eine Stimme in der Abstimmung am Ende."""
     hinweis: str = ""
     """Vermerk des Moderators, etwa eine deutlich ueberschrittene Laenge."""
     seite: str = ""
@@ -191,6 +222,15 @@ class Diskussion:
     Gilt fuer frisch gestartete Sitzungen und die Zusammenfassung. Laufende
     Agenten behalten ihr Modell - welches sie hatten, steht je ``Teilnehmer``.
     """
+    stimmung: str = SACHLICH
+    """Der Ton der Beitraege, ein Schluessel aus ``STIMMUNGEN``."""
+    entscheidung: bool = False
+    """Am Ende stimmt jeder ab, und die Zusammenfassung nennt das Ergebnis.
+
+    Ohne das liefen Diskussionen 15 Runden lang, ohne dass etwas herauskam
+    (Michael, 08.10.2026). Die Abstimmung kommt nach den Runden und auch nach
+    Zeitablauf, nicht aber nach einem Stopp von Hand.
+    """
 
     @property
     def gespielte_runden(self) -> int:
@@ -212,6 +252,8 @@ class Diskussion:
             return f"Unbekanntes Format '{self.format}', erlaubt: {', '.join(FORMATE)}."
         if self.runden < 1:
             return "Es braucht mindestens eine Runde."
+        if self.stimmung not in STIMMUNGEN:
+            return f"Unbekannte Stimmung '{self.stimmung}', erlaubt: {', '.join(STIMMUNGEN)}."
         if self.format == "diskussion":
             falsch = [t.name for t in self.teilnehmer if t.seite and t.seite not in SEITEN]
             if falsch:
@@ -306,7 +348,7 @@ def anweisung(diskussion: Diskussion, redner: Teilnehmer, runde: int, schluss: b
         umfang,
         STIL,
         "",
-        f'Thema: "{diskussion.thema}"',
+        _themenzeile(diskussion),
         FORMATE[diskussion.format],
         f"Du bist {redner.name}. Mit Dir diskutieren: {andere}.",
         "Der Moderator Chatterdome gibt reihum das Wort: Du bekommst je Runde einen eigenen "
@@ -319,6 +361,10 @@ def anweisung(diskussion: Diskussion, redner: Teilnehmer, runde: int, schluss: b
                       "Gegenseite gute Argumente bringt.")
     if redner.rolle:
         zeilen.append(f"Deine Rolle: {redner.rolle}")
+    if STIMMUNGEN.get(diskussion.stimmung):
+        zeilen.append(STIMMUNGEN[diskussion.stimmung])
+    if diskussion.entscheidung and not schluss:
+        zeilen.append(_ziel_text(diskussion, runde))
     eigene = [b.text for b in diskussion.beitraege
               if b.art == "vorbereitung" and b.name == redner.name]
     if eigene:
@@ -350,13 +396,77 @@ def anweisung(diskussion: Diskussion, redner: Teilnehmer, runde: int, schluss: b
     return "\n".join(zeilen)
 
 
+def _themenzeile(diskussion: Diskussion) -> str:
+    """Das Thema als Zeile eines Auftrags.
+
+    Bei PRO und CONTRA ist es eine Frage, und die Seiten sind Antworten darauf
+    (Michael, 08.10.2026) - so heisst es dann auch.
+    """
+    wort = "Frage" if diskussion.format == "diskussion" else "Thema"
+    return f'{wort}: "{diskussion.thema}"'
+
+
+def _ziel_text(diskussion: Diskussion, runde: int) -> str:
+    """Die Zielvorgabe einer Diskussion, die mit einer Entscheidung enden soll."""
+    ziel = (f"Ziel: Nach Runde {diskussion.runden} wird abgestimmt, am Ende steht eine "
+            "Entscheidung. Arbeite darauf hin und mach keine neuen Baustellen auf.")
+    if runde < diskussion.runden:
+        return ziel
+    if diskussion.format == "team":
+        return (f"{ziel} Das ist die letzte Runde: nenne den konkreten Vorschlag, den Du "
+                "mittragen würdest.")
+    return f"{ziel} Das ist die letzte Runde: bring das Argument, das den Ausschlag geben soll."
+
+
+def abstimmung(diskussion: Diskussion, redner: Teilnehmer) -> str:
+    """Der Auftrag fuer die Abstimmung am Ende. Rein und deterministisch.
+
+    Jeder stimmt fuer sich: die Stimmen der anderen stehen nicht im Verlauf,
+    sonst schloesse sich der Zweite dem Ersten an. Im Format ``diskussion``
+    legt der Redner seine Seite ab - mit "Bleib dabei" im Ohr stimmte sonst
+    jeder fuer die eigene Seite, und es stuende immer unentschieden.
+    """
+    zeilen = [
+        "Diskussion, Abstimmung: Die Runden sind vorbei, jetzt wird entschieden.",
+        f"Höchstens {WOERTER_JE_ENTSCHEIDUNG} Wörter, auf Deutsch, in einer einzigen Zeile.",
+        "",
+        _themenzeile(diskussion),
+        f"Du bist {redner.name}.",
+    ]
+    if diskussion.format == "diskussion" and redner.seite in SEITEN:
+        pro, contra = diskussion.position(PRO), diskussion.position(CONTRA)
+        zeilen.append(
+            f'Du hast in der Diskussion die Antwort "{diskussion.position(redner.seite)}" '
+            "vertreten. Leg "
+            "diese Rolle jetzt ab: es zählt Dein ehrliches Urteil nach den Argumenten, die "
+            "gefallen sind, auch wenn es gegen Deine Seite ausfällt."
+        )
+        wahl = f'eine der beiden Antworten: "{pro}" oder "{contra}"'
+    else:
+        wahl = "der Vorschlag, den das Team umsetzen soll, in einem Satz"
+    bisher = [b for b in diskussion.beitraege if b.art in ("beitrag", "schlusswort", "moderator")]
+    zeilen.append("")
+    zeilen.append("Verlauf der Diskussion:")
+    zeilen += [f"[{MODERATOR}] {b.text}" if b.art == "moderator" else f"[{b.name}] {b.text}"
+               for b in bisher]
+    zeilen += [
+        "",
+        f'Beginne mit "{ENTSCHEIDUNG}: " und nenne dahinter {wahl}. Begründe danach kurz. '
+        'Eine Enthaltung oder "kommt darauf an" gilt nicht.',
+        "Benutze keine Werkzeuge ausser der Quittung und lies keine Dateien. Deine Stimme "
+        "schickst Du ausschliesslich als Notiz der 200-Quittung auf diesen Auftrag, "
+        "wörtlich und vollständig. Was nur in Deinem Fenster steht, erreicht niemanden.",
+    ]
+    return "\n".join(zeilen)
+
+
 def _seite_text(diskussion: Diskussion, redner: Teilnehmer) -> str:
     """Welche Position der Redner vertritt und wer dagegen steht."""
     gegenseite = CONTRA if redner.seite == PRO else PRO
     gegner = ", ".join(t.name for t in diskussion.teilnehmer if t.seite == gegenseite)
     if any(p.strip() for p in diskussion.positionen):
-        return (f"Du vertrittst: {diskussion.position(redner.seite)}. Die Gegenposition "
-                f"({diskussion.position(gegenseite)}) vertritt {gegner}.")
+        return (f'Deine Antwort auf die Frage: "{diskussion.position(redner.seite)}". Die '
+                f'Gegenantwort "{diskussion.position(gegenseite)}" vertritt {gegner}.')
     return f"Deine Seite ist {SEITEN[redner.seite]} Gegenseite: {gegner}."
 
 
@@ -370,7 +480,7 @@ def vorbereitung(diskussion: Diskussion, redner: Teilnehmer) -> str:
         "Diskussion, Vorbereitung: Recherchiere für Deine Seite, bevor die Diskussion beginnt.",
         "Höchstens fünf Stichpunkte, je mit Quelle (URL). Höchstens 150 Wörter.",
         "",
-        f'Thema: "{diskussion.thema}"',
+        _themenzeile(diskussion),
         FORMATE[diskussion.format],
         f"Du bist {redner.name}.",
     ]
@@ -509,10 +619,13 @@ def moderieren(
         if beim_beitrag is not None:
             beim_beitrag(beitrag)
 
-    def wort_geben(redner: Teilnehmer, runde: int, schluss: bool) -> None:
+    def wort_geben(redner: Teilnehmer, runde: int, schluss: bool,
+                   abstimmen: bool = False) -> None:
         if beim_wort is not None:
-            beim_wort(redner, 0 if schluss else runde)
-        kennung, fehler = kanal.senden(redner.name, anweisung(diskussion, redner, runde, schluss))
+            beim_wort(redner, 0 if schluss or abstimmen else runde)
+        auftrag = (abstimmung(diskussion, redner) if abstimmen
+                   else anweisung(diskussion, redner, runde, schluss))
+        kennung, fehler = kanal.senden(redner.name, auftrag)
         if fehler:
             # Nicht erreichbar: faellt aus der Reihe, statt jede Runde erneut zu scheitern.
             eintragen(Beitrag(runde, redner.name, fehler, _jetzt(), "fehler"))
@@ -522,11 +635,13 @@ def moderieren(
         while uhr() < abgabe:
             status, notiz = kanal.antwort(redner.name, kennung)
             if status == 200 and notiz.strip():
-                art = "schlusswort" if schluss else "beitrag"
+                art = ("entscheidung" if abstimmen else
+                       "schlusswort" if schluss else "beitrag")
                 text = notiz.strip()
                 # Nicht kuerzen - ein abgeschnittener Satz waere schlimmer als ein
                 # langer. Aber vermerken: im Probelauf kamen 253 statt 120 Woerter.
-                wortgrenze = 60 if schluss else WOERTER_JE_BEITRAG
+                wortgrenze = (WOERTER_JE_ENTSCHEIDUNG if abstimmen else
+                              60 if schluss else WOERTER_JE_BEITRAG)
                 woerter = len(text.split())
                 zu_lang = woerter > wortgrenze * 1.5
                 hinweis = f"{woerter} statt höchstens {wortgrenze} Wörter" if zu_lang else ""
@@ -625,6 +740,13 @@ def moderieren(
         for redner in list(aktiv):
             wort_geben(redner, diskussion.runden, schluss=True)
 
+    # Die Abstimmung zuletzt, unter denselben Bedingungen wie die Schlussworte.
+    if diskussion.entscheidung and len(aktiv) >= 2:
+        for redner in list(aktiv):
+            if stopp.is_set():
+                break
+            wort_geben(redner, diskussion.runden, schluss=False, abstimmen=True)
+
     diskussion.ende = ende
     return diskussion
 
@@ -656,16 +778,32 @@ def zusammenfassung_auftrag(diskussion: Diskussion) -> str:
     Diskussion gesagt wurde, nicht was jemand vorbereitet hat.
     """
     gesagt = [b for b in diskussion.beitraege if b.art in ("beitrag", "schlusswort", "moderator")]
+    stimmen = abgegebene_stimmen(diskussion)
     zeilen = [
-        "Fasse die folgende Diskussion neutral zusammen, auf Deutsch, höchstens 200 Wörter.",
+        "Fasse die folgende Diskussion neutral zusammen, auf Deutsch, höchstens "
+        f"{250 if stimmen else 200} Wörter.",
         "Gliederung: je ein kurzer Absatz zu den Kernargumenten jeder Seite, dann wo die "
         "Teilnehmer sich einig waren, dann was offen blieb.",
-        "Stütze Dich nur auf das Protokoll, ergänze keine eigenen Fakten und erkläre "
-        "niemanden zum Sieger. Nenne keine Kunden, Firmen aus dem Umfeld oder Personen "
-        "außer den Teilnehmernamen.",
+    ]
+    if stimmen:
+        zeilen.append(
+            'Schließe mit einem eigenen Absatz, der mit "Entscheidung:" beginnt: das Ergebnis '
+            "der Abstimmung mit dem Stimmenverhältnis und dem Grund, der den Ausschlag gab. "
+            "Bei Gleichstand entscheidest Du nach der Stärke der Argumente im Protokoll und "
+            "sagst dazu, dass es ein Stichentscheid ist. Ein Unentschieden gibt es nicht."
+        )
+    zeilen += [
+        "Stütze Dich nur auf das Protokoll und ergänze keine eigenen Fakten. "
+        + ("" if stimmen else "Erkläre niemanden zum Sieger. ")
+        + "Nenne keine Kunden, Firmen aus dem Umfeld oder Personen außer den Teilnehmernamen.",
         "Antworte nur mit der Zusammenfassung, ohne Einleitung und ohne Überschrift.",
+    ]
+    if STIMMUNGEN.get(diskussion.stimmung):
+        zeilen.append(f'Der Ton war vorgegeben ("{diskussion.stimmung}") und gehört zur '
+                      "Aufgabe der Teilnehmer: bewerte ihn nicht.")
+    zeilen += [
         "",
-        f'Thema: "{diskussion.thema}"',
+        _themenzeile(diskussion),
     ]
     for t in diskussion.teilnehmer:
         seite = f" ({t.seite.upper()})" if t.seite else ""
@@ -677,7 +815,21 @@ def zusammenfassung_auftrag(diskussion: Diskussion) -> str:
             continue
         kopf = "Schlusswort" if b.art == "schlusswort" else f"Runde {b.runde}"
         zeilen.append(f"[{b.name}, {kopf}] {b.text}")
+    if stimmen:
+        zeilen.append("")
+        zeilen += [f"[{b.name}, Abstimmung] {b.text}" for b in stimmen]
     return "\n".join(zeilen)
+
+
+def abgegebene_stimmen(diskussion: Diskussion) -> list[Beitrag]:
+    """Die Stimmen der letzten Abstimmung.
+
+    Nur die nach dem letzten Wortbeitrag: wird eine entschiedene Diskussion
+    fortgesetzt, stehen die alten Stimmen noch im Protokoll, gelten aber nicht mehr.
+    """
+    letzter = max((i for i, b in enumerate(diskussion.beitraege)
+                   if b.art in ("beitrag", "schlusswort")), default=-1)
+    return [b for b in diskussion.beitraege[letzter + 1:] if b.art == "entscheidung"]
 
 
 def zusammenfassen(diskussion: Diskussion, modell: Callable[[str], tuple[str, str]]) -> str:
@@ -710,12 +862,16 @@ def als_markdown(diskussion: Diskussion) -> str:
 
     zeilen.append("Teilnehmer: " + ", ".join(beschreibung(t) for t in diskussion.teilnehmer))
     zeilen.append(f"Modell: {diskussion.modell or 'Voreinstellung'}")
+    if diskussion.stimmung != SACHLICH:
+        zeilen.append(f"Stimmung: {diskussion.stimmung}")
     zeilen.append("")
     for b in diskussion.beitraege:
         if b.art == "beitrag":
             zeilen.append(f"**{b.name}** (Runde {b.runde}, {b.zeit}): {b.text}")
         elif b.art == "schlusswort":
             zeilen.append(f"**{b.name}**, Schlusswort ({b.zeit}): {b.text}")
+        elif b.art == "entscheidung":
+            zeilen.append(f"**{b.name}**, Abstimmung ({b.zeit}): {b.text}")
         elif b.art == "vorbereitung":
             zeilen.append(f"**{b.name}**, Recherche ({b.zeit}):\n\n{b.text}")
         elif b.art == "moderator":

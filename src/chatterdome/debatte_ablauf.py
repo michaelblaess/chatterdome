@@ -39,6 +39,7 @@ from chatterdome.kern.diskussionsarchiv import Diskussionsarchiv
 from chatterdome.kern.lokale_quelle import LokaleQuelle
 from chatterdome.kern.prozessbaum import fenster_beenden
 from chatterdome.kern.transkripte import claude_anfragen_ab, claude_transkript
+from chatterdome.kern.umgebung import EIGENE_KONSOLE
 from chatterdome.tui.starter import saubere_umgebung, starte_lokal
 
 STARTFRIST = 120.0
@@ -187,6 +188,7 @@ def claude_einmal(auftrag: str, ordner: Path, modell: str = "") -> tuple[str, st
             errors="replace",
             env={**saubere_umgebung(), **umgebung},
             cwd=str(ordner),
+            creationflags=EIGENE_KONSOLE,
             timeout=ZUSAMMENFASSUNG_FRIST,
             check=False,
         )

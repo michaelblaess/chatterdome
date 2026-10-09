@@ -10,6 +10,11 @@ from chatterdome.i18n import DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES, load_locale
 from chatterdome.kern import absturz, umgebung
 from chatterdome.kern.einstellungen import Einstellungen, alten_ordner_uebernehmen
 
+TITEL_ZEICHEN = "\N{ROBOT FACE}"
+"""Steht im Tab vor dem Namen, wie die Uhr bei jira-timesheet. Ein Farb-Emoji:
+ein einfarbiges Zeichen fuer einen Agenten gibt es nicht, und das Haus davor
+gefiel nicht (Michael, 09.10.2026)."""
+
 
 def soll_grafik_wecken(bild_modus: str, protokoll: str | None) -> bool:
     """Sagt, ob das Grafik-Backend vor dem Start geweckt werden soll.
@@ -117,14 +122,17 @@ def main() -> None:
     if soll_grafik_wecken(str(werte.get("bild_modus", "auto")), erkenne_protokoll()):
         vorab_initialisieren()
 
-    set_terminal_title(f"chatterdome v{__version__}{' (Demo)' if demo else ''}")
+    # Das Zeichen vorn ersetzt das Icon: das echte Tab-Icon kommt aus dem
+    # Terminal-Profil, eine Konsolen-App kann es nicht setzen.
+    titel = f"{TITEL_ZEICHEN} chatterdome v{__version__}{' (Demo)' if demo else ''}"
+    set_terminal_title(titel)
     # Die Klammer MUSS hier stehen und nicht in der App: nur so umschliesst
     # sie auch das Aufraeumen unten. Bleibt die Endzeile im Protokoll aus,
     # ist genau dieses finally nicht mehr gelaufen - dann war es kein
     # Python-Fehler, sondern ein harter Abbruch von aussen.
     absturz.beobachte(__version__)
     try:
-        ChatterdomeApp(quelle=quelle).run()
+        ChatterdomeApp(quelle=quelle, fenstertitel=titel).run()
     finally:
         reset_terminal_title()
         _maus_tracking_aus()

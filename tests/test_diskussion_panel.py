@@ -660,3 +660,103 @@ def test_positionen_folgen_der_sprache_der_oberflaeche() -> None:
         assert _position(d, PRO) == "Unity"
     finally:
         load_locale("de")
+
+
+class TestStimmungUndEntscheidung:
+    async def test_formular_gibt_beides_weiter(self) -> None:
+        app = _app()
+        async with app.run_test(size=(160, 50)) as pilot:
+            panel = await _reiter(app, pilot)
+            panel.query_one("#disk-thema", TextArea).text = "Thema"
+            _zeile(panel, "Klara").query_one(Checkbox).value = True
+            panel.query_one("#disk-neu", Input).value = "1"
+            panel.query_one("#disk-stimmung", Select).value = "unfair"
+            panel.query_one("#disk-entscheidung", Checkbox).value = True
+            await pilot.pause()
+            auftrag, grund = panel.auftrag()
+            assert grund == ""
+            assert auftrag is not None
+            assert auftrag.diskussion.stimmung == "unfair"
+            assert auftrag.diskussion.entscheidung is True
+
+    async def test_im_team_gibt_es_keine_stimmung(self) -> None:
+        app = _app()
+        async with app.run_test(size=(160, 50)) as pilot:
+            panel = await _reiter(app, pilot)
+            panel.query_one("#disk-thema", TextArea).text = "Thema"
+            _zeile(panel, "Klara").query_one(Checkbox).value = True
+            panel.query_one("#disk-neu", Input).value = "1"
+            panel.query_one("#disk-stimmung", Select).value = "aggressiv"
+            panel.query_one("#disk-format", Select).value = "team"
+            await pilot.pause()
+            auftrag, _ = panel.auftrag()
+            assert auftrag is not None
+            assert auftrag.diskussion.stimmung == "sachlich"
+            assert not panel.query_one("#disk-stimmung", Select).display
+
+    async def test_die_stimme_steht_als_blase_mit_eigenem_kopf(self) -> None:
+        app = _app()
+        async with app.run_test(size=(160, 50)) as pilot:
+            panel = await _reiter(app, pilot)
+            d = Diskussion("x", [Teilnehmer("A", seite="pro"), Teilnehmer("B", seite="contra")],
+                           stimmung="fair", entscheidung=True)
+            panel.beginnen(d, [])
+            panel.beitrag(Beitrag(1, "A", "ENTSCHEIDUNG: Nein. Weil.", "10:00:00",
+                                  "entscheidung", seite="pro"))
+            await pilot.pause()
+            blase = str(panel.query_one(".disk-blase", Static).render())
+            assert "A · Abstimmung" in blase
+            kopf = _text(panel, "#disk-kopf")
+            assert "Stimmung: fair" in kopf
+            assert "mit Abstimmung" in kopf
+
+
+class TestZusammenfassungMenue:
+    async def test_rechtsklick_oeffnet_das_menue_und_kopiert(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from textual_widgets import ContextMenuScreen
+
+        app = _app()
+        kopiert: list[str] = []
+        monkeypatch.setattr(app, "copy_to_clipboard", kopiert.append)
+        async with app.run_test(size=(160, 50)) as pilot:
+            panel = await _reiter(app, pilot)
+            d = Diskussion("Ist Angular tot?",
+                           [Teilnehmer("A", seite="pro"), Teilnehmer("B", seite="contra")])
+            d.beitraege.append(_beitrag("A", "pro", "Mein Argument."))
+            d.zusammenfassung = "Beide Seiten ..."
+            panel.beginnen(d, [])
+            panel.fertig(d, "1 Runde gespielt", "")
+            await pilot.pause()
+            await pilot.click("#disk-zusammenfassung", button=3)
+            await pilot.pause()
+            assert isinstance(app.screen, ContextMenuScreen)
+            app.screen.dismiss(None)
+            await pilot.pause()
+            app._zusammenfassung_menue_gewaehlt("kopieren")
+            app._zusammenfassung_menue_gewaehlt("alles_kopieren")
+            assert kopiert[0] == "Beide Seiten ..."
+            assert kopiert[1].startswith("# Ist Angular tot?")
+            assert "## Zusammenfassung" in kopiert[1]
+
+
+class TestFrageInHohemFenster:
+    async def test_fuenf_zeilen_und_der_startknopf_bleibt_im_bild(self) -> None:
+        app = _app()
+        async with app.run_test(size=(160, 70)) as pilot:
+            panel = await _reiter(app, pilot)
+            await pilot.pause()
+            assert panel.has_class("hoch")
+            assert panel.query_one("#disk-thema", TextArea).region.height == 5
+            formular = panel.query_one("#disk-formular")
+            knopf = panel.query_one("#disk-starten", Button)
+            assert formular.region.contains_region(knopf.region)
+
+    async def test_im_niedrigen_fenster_bleiben_es_drei(self) -> None:
+        app = _app()
+        async with app.run_test(size=(160, 50)) as pilot:
+            panel = await _reiter(app, pilot)
+            await pilot.pause()
+            assert not panel.has_class("hoch")
+            assert panel.query_one("#disk-thema", TextArea).region.height == 3

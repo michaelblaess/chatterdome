@@ -58,7 +58,9 @@ https://github.com/user-attachments/assets/c0456572-c8f9-4da3-a7f3-c49b322cc195
   and session length, and an early warning for the message bus. Discussions count their tokens
   live, and the model (Haiku, Sonnet, Opus) is chosen per discussion.
 - **Discussions and debates.** Several agents argue PRO and CONTRA or work as a team towards a
-  decision, optionally after a research round on the web. You can chime in while it runs,
+  decision, optionally after a research round on the web. A debate can be set to a mood (neutral,
+  fair, aggressive, unfair) and can end with a vote, so that it produces a result instead of
+  running in circles. You can chime in while it runs,
   continue it later with new information or another model, and every discussion lands in an
   archive. The name of this app was found this way.
 - **Full-text search** across all transcripts of Claude Code and the Codex CLI.

@@ -210,7 +210,7 @@ hielte das andere für beendet. Solange unbenutzte Namen da sind, wird dieser Zw
 gar nicht erst angefasst.
 
 **Aufgeräumt wird bei jedem Start**, nicht erst bei erschöpftem Pool. Der Aufruf von
-`ladeInstanzen()` kostet gemessene **0,15 s** (10.08.2026, PN-ENVM-111912), nicht die früher
+`ladeInstanzen()` kostet gemessene **0,15 s** (10.08.2026), nicht die früher
 angenommene knappe Sekunde. Vorher sammelten sich Karteileichen so lange an, bis der Pool
 scheinbar voll war - am 10.08.2026 hieß ein Fenster deshalb `Operator-22`, obwohl nur sechs
 Namen an laufenden Instanzen hingen.

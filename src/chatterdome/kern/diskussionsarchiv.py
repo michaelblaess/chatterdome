@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from chatterdome.kern import einstellungen
-from chatterdome.kern.debatte import Beitrag, Diskussion, Teilnehmer, Verbrauch
+from chatterdome.kern.debatte import SACHLICH, Beitrag, Diskussion, Teilnehmer, Verbrauch
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS diskussion (
@@ -40,7 +40,9 @@ CREATE TABLE IF NOT EXISTS diskussion (
     tokens_neu INTEGER NOT NULL,
     tokens_cache INTEGER NOT NULL,
     tokens_aus INTEGER NOT NULL,
-    modell TEXT NOT NULL DEFAULT ''
+    modell TEXT NOT NULL DEFAULT '',
+    stimmung TEXT NOT NULL DEFAULT '',
+    entscheidung INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS teilnehmer (
     diskussion INTEGER NOT NULL REFERENCES diskussion(id) ON DELETE CASCADE,
@@ -68,9 +70,14 @@ CREATE TABLE IF NOT EXISTS beitrag (
 );
 """
 
-_NACHTRAEGE = (("diskussion", "modell"), ("teilnehmer", "modell"))
-"""Spalten, die nach dem ersten Stand dazukamen. Eine Datei vom 28.09.2026 kennt
-sie noch nicht - sie werden beim Oeffnen nachgetragen."""
+_NACHTRAEGE = (
+    ("diskussion", "modell", "TEXT NOT NULL DEFAULT ''"),
+    ("teilnehmer", "modell", "TEXT NOT NULL DEFAULT ''"),
+    ("diskussion", "stimmung", "TEXT NOT NULL DEFAULT ''"),
+    ("diskussion", "entscheidung", "INTEGER NOT NULL DEFAULT 0"),
+)
+"""Spalten, die nach dem ersten Stand dazukamen, mit ihrer Deklaration. Eine Datei
+vom 28.09.2026 kennt sie noch nicht - sie werden beim Oeffnen nachgetragen."""
 
 
 @dataclass(frozen=True)
@@ -108,11 +115,11 @@ class Diskussionsarchiv:
             verbindung.execute("PRAGMA journal_mode=WAL")
             verbindung.execute("PRAGMA foreign_keys=ON")
             verbindung.executescript(_SCHEMA)
-            for tabelle, spalte in _NACHTRAEGE:
+            for tabelle, spalte, deklaration in _NACHTRAEGE:
                 vorhanden = {z[1] for z in verbindung.execute(f"PRAGMA table_info({tabelle})")}
                 if spalte not in vorhanden:
                     verbindung.execute(
-                        f"ALTER TABLE {tabelle} ADD COLUMN {spalte} TEXT NOT NULL DEFAULT ''")
+                        f"ALTER TABLE {tabelle} ADD COLUMN {spalte} {deklaration}")
             with verbindung:
                 yield verbindung
         finally:
@@ -126,14 +133,15 @@ class Diskussionsarchiv:
         werte = (d.beginn, d.thema, d.format, d.runden, int(d.recherche), d.dauer_minuten,
                  d.positionen[0], d.positionen[1], int(d.schlussworte), int(d.ohne_kontext),
                  d.ende, d.zusammenfassung, d.verbrauch.neu, d.verbrauch.cache,
-                 d.verbrauch.aus, d.modell)
+                 d.verbrauch.aus, d.modell, d.stimmung, int(d.entscheidung))
         with self._verbindung() as db:
             if d.kennung:
                 db.execute(
                     "UPDATE diskussion SET beginn=?, thema=?, format=?, runden=?, recherche=?,"
                     " dauer_minuten=?, position_pro=?, position_contra=?, schlussworte=?,"
                     " ohne_kontext=?, ende=?, zusammenfassung=?, tokens_neu=?,"
-                    " tokens_cache=?, tokens_aus=?, modell=? WHERE id=?",
+                    " tokens_cache=?, tokens_aus=?, modell=?, stimmung=?, entscheidung=?"
+                    " WHERE id=?",
                     (*werte, d.kennung),
                 )
             else:
@@ -141,8 +149,8 @@ class Diskussionsarchiv:
                     "INSERT INTO diskussion (beginn, thema, format, runden, recherche,"
                     " dauer_minuten, position_pro, position_contra, schlussworte,"
                     " ohne_kontext, ende, zusammenfassung, tokens_neu, tokens_cache,"
-                    " tokens_aus, modell, protokoll)"
-                    " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'')",
+                    " tokens_aus, modell, stimmung, entscheidung, protokoll)"
+                    " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'')",
                     werte,
                 )
                 d.kennung = int(zeiger.lastrowid or 0)
@@ -195,8 +203,8 @@ class Diskussionsarchiv:
             kopf = db.execute(
                 "SELECT beginn, thema, format, runden, recherche, dauer_minuten, position_pro,"
                 " position_contra, schlussworte, ohne_kontext, ende, zusammenfassung,"
-                " protokoll, tokens_neu, tokens_cache, tokens_aus, modell"
-                " FROM diskussion WHERE id=?",
+                " protokoll, tokens_neu, tokens_cache, tokens_aus, modell, stimmung,"
+                " entscheidung FROM diskussion WHERE id=?",
                 (kennung,),
             ).fetchone()
             if kopf is None:
@@ -212,7 +220,8 @@ class Diskussionsarchiv:
                     " FROM beitrag WHERE diskussion=? ORDER BY nr", (kennung,))
             ]
         (beginn, thema, fmt, runden, recherche, dauer, pro, contra, schluss, ohne,
-         ende, zusammenfassung, protokoll, neu, cache, aus, modell) = kopf
+         ende, zusammenfassung, protokoll, neu, cache, aus, modell, stimmung,
+         entscheidung) = kopf
         d = Diskussion(
             thema=thema, teilnehmer=teilnehmer, format=fmt, runden=int(runden),
             recherche=bool(recherche), dauer_minuten=float(dauer), positionen=(pro, contra),
@@ -220,5 +229,7 @@ class Diskussionsarchiv:
             zusammenfassung=zusammenfassung, beginn=beginn,
             verbrauch=Verbrauch(int(neu), int(cache), int(aus)), kennung=kennung,
             ohne_kontext=bool(ohne), modell=modell,
+            # Leer bei Diskussionen aus der Zeit vor der Auswahl.
+            stimmung=stimmung or SACHLICH, entscheidung=bool(entscheidung),
         )
         return d, str(protokoll)
