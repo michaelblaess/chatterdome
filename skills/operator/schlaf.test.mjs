@@ -14,7 +14,7 @@ describe('Schlaf-Marke', () => {
   });
 
   test('genau an der Schwelle - Marke', () => {
-    assert.equal(schlafMarke(0, 6 * STUNDE, 6), '💤 ');
+    assert.equal(schlafMarke(0, 6 * STUNDE, 6), '😴 ');
   });
 
   test('ohne Startzeit - keine Marke', () => {

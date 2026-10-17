@@ -1,4 +1,4 @@
-// Schlaf-Marke fuer den Tab-Titel: alte Sitzungen bekommen ein 💤 vorangestellt.
+// Schlaf-Marke fuer den Tab-Titel: alte Sitzungen bekommen ein 😴 vorangestellt.
 //
 // Zweck: bei fuenf, sechs offenen Tabs sieht man nicht, welche schon Stunden oder
 // Tage alt sind. Ausgrauen geht nicht - Windows Terminal kennt keine Sequenz, mit
@@ -11,7 +11,7 @@
 
 import { closeSync, fstatSync, openSync, readSync } from 'node:fs';
 
-export const SCHLAF_ZEICHEN = '💤';
+export const SCHLAF_ZEICHEN = '😴';
 export const STANDARD_STUNDEN = 6;
 
 // Der erste Zeitstempel steht in den ersten Zeilen. Die Kopfzeilen (last-prompt,
@@ -70,7 +70,7 @@ export function schwelleStunden(wert) {
  * @param {number} startMs Startzeitpunkt der Sitzung in Millisekunden.
  * @param {number} jetztMs Aktueller Zeitpunkt in Millisekunden.
  * @param {number} stunden Schwelle in Stunden, 0 schaltet ab.
- * @returns {string} "💤 " oder ein leerer String.
+ * @returns {string} "😴 " oder ein leerer String.
  */
 export function schlafMarke(startMs, jetztMs, stunden) {
   if (!Number.isFinite(startMs) || stunden <= 0) return '';

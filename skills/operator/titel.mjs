@@ -145,7 +145,7 @@ if (!name || !/^[A-Za-z0-9-]+$/.test(name)) process.exit(0);
 // beim bisherigen Verhalten.
 const datei = sessionDatei(cwd, sessionId);
 const aufgabe = datei ? letzteZusammenfassung(datei) : '';
-// Alte Sitzungen bekommen ein 💤 vorn, damit sie im Tab auffallen (schlaf.mjs).
+// Alte Sitzungen bekommen ein 😴 vorn, damit sie im Tab auffallen (schlaf.mjs).
 const marke = datei
   ? schlafMarke(sitzungsStart(datei), Date.now(), schwelleStunden(process.env.CHATTERDOME_SCHLAF_STUNDEN))
   : '';

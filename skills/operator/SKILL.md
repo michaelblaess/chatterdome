@@ -297,8 +297,9 @@ Drei Punkte, die den Bau bestimmt haben:
 
 ### Die Schlaf-Marke: alte Tabs fallen auf
 
-Seit dem 17.10.2026 setzt `titel.mjs` vor den Namen ein 💤, wenn die Sitzung älter als sechs
-Stunden ist (`schlaf.mjs`). Bei fünf, sechs offenen Tabs sieht man so sofort, welche
+Seit dem 17.10.2026 setzt `titel.mjs` vor den Namen ein 😴, wenn die Sitzung älter als sechs
+Stunden ist (`schlaf.mjs`). Zuerst war es 💤, das aber in der Tab-Schrift kaum zu erkennen war
+(nur kleine "z"), deshalb das Gesicht als volle gelbe Fläche. Bei fünf, sechs offenen Tabs sieht man so sofort, welche
 einstauben und geschlossen oder wieder aufgenommen werden sollten. Das Alter zählt ab dem
 ersten Zeitstempel der Sitzungsdatei, ein `--resume` setzt es also nicht zurück. Die Schwelle
 lässt sich über `CHATTERDOME_SCHLAF_STUNDEN` ändern (Komma erlaubt, `0` schaltet ab).
@@ -313,7 +314,7 @@ lässt sich über `CHATTERDOME_SCHLAF_STUNDEN` ändern (Komma erlaubt, `0` schal
   neu). Die eigene Shell eines Werkzeugaufrufs hat übrigens eine eigene, unsichtbare Konsole,
   dort verpufft jede Sequenz.
 - **Grenze:** Der Hook läuft nur beim Absenden eines Prompts. Ein Tab, der die Schwelle
-  überschreitet, ohne dass jemand etwas eingibt, zeigt das 💤 erst beim nächsten Prompt.
+  überschreitet, ohne dass jemand etwas eingibt, zeigt das 😴 erst beim nächsten Prompt.
 
 ## Was der Operator kann und was nicht
 
@@ -325,7 +326,7 @@ lässt sich über `CHATTERDOME_SCHLAF_STUNDEN` ändern (Komma erlaubt, `0` schal
 | `watch` Live-Ansicht | geht |
 | `stop <Name>` | geht per Prozesssignal, fragt vorher nach |
 | Name im Tab-Titel | geht: `titel.mjs` setzt bei jedem Prompt `<Name> · <Aufgabe>`, unabhängig vom Start |
-| alte Tabs markieren | geht: 💤 vor dem Namen ab sechs Stunden, erst beim nächsten Prompt sichtbar |
+| alte Tabs markieren | geht: 😴 vor dem Namen ab sechs Stunden, erst beim nächsten Prompt sichtbar |
 | Tab ausgrauen | geht nicht: keine Sequenz für die Tabfarbe in Windows Terminal (17.10.2026) |
 | Name dauerhaft sichtbar | geht über die Statuszeile, unabhängig vom Start |
 | maschinenlesbare Ausgabe | geht: `--json`, mit `watch` als NDJSON-Strom |
