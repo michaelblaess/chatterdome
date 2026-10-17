@@ -295,6 +295,26 @@ Drei Punkte, die den Bau bestimmt haben:
   12 Sitzungen überhaupt einen `ai-title`. Woran das liegt, ist **unbelegt**. Fehlt er, fällt
   der Titel auf `<Name> · <Ordner>` zurück, also auf das bisherige Verhalten.
 
+### Die Schlaf-Marke: alte Tabs fallen auf
+
+Seit dem 17.10.2026 setzt `titel.mjs` vor den Namen ein 💤, wenn die Sitzung älter als sechs
+Stunden ist (`schlaf.mjs`). Bei fünf, sechs offenen Tabs sieht man so sofort, welche
+einstauben und geschlossen oder wieder aufgenommen werden sollten. Das Alter zählt ab dem
+ersten Zeitstempel der Sitzungsdatei, ein `--resume` setzt es also nicht zurück. Die Schwelle
+lässt sich über `CHATTERDOME_SCHLAF_STUNDEN` ändern (Komma erlaubt, `0` schaltet ab).
+
+- **Warum ein Zeichen und kein Grau:** Michael wollte den Tab eigentlich ausgegraut haben.
+  Windows Terminal 1.24 kennt dafür aber keine Sequenz, die ein Prozess selbst senden kann.
+  Probiert wurde `OSC 9;4` (Fortschrittsring, gelb und rot), direkt in die Konsole des
+  `claude.exe`-Prozesses geschrieben: `WriteFile` meldete 12 Bytes, im Tab war nichts zu
+  sehen. Ein Zeichen im Titel geht dagegen auch in Kitty und anderen Terminals.
+- **Nie in die Konsole von Claude Code schreiben.** Beim Versuch landete eine
+  PowerShell-Fehlermeldung mitten in der Oberfläche und zerlegte die Anzeige (Strg+L zeichnet
+  neu). Die eigene Shell eines Werkzeugaufrufs hat übrigens eine eigene, unsichtbare Konsole,
+  dort verpufft jede Sequenz.
+- **Grenze:** Der Hook läuft nur beim Absenden eines Prompts. Ein Tab, der die Schwelle
+  überschreitet, ohne dass jemand etwas eingibt, zeigt das 💤 erst beim nächsten Prompt.
+
 ## Was der Operator kann und was nicht
 
 | Wunsch | Stand |
@@ -305,6 +325,8 @@ Drei Punkte, die den Bau bestimmt haben:
 | `watch` Live-Ansicht | geht |
 | `stop <Name>` | geht per Prozesssignal, fragt vorher nach |
 | Name im Tab-Titel | geht: `titel.mjs` setzt bei jedem Prompt `<Name> · <Aufgabe>`, unabhängig vom Start |
+| alte Tabs markieren | geht: 💤 vor dem Namen ab sechs Stunden, erst beim nächsten Prompt sichtbar |
+| Tab ausgrauen | geht nicht: keine Sequenz für die Tabfarbe in Windows Terminal (17.10.2026) |
 | Name dauerhaft sichtbar | geht über die Statuszeile, unabhängig vom Start |
 | maschinenlesbare Ausgabe | geht: `--json`, mit `watch` als NDJSON-Strom |
 | rechnerübergreifende Sicht | geht: `--mesh`, Hosts in `mesh.json` |

@@ -35,6 +35,8 @@ import {
 import { homedir, hostname } from 'node:os';
 import { join, basename } from 'node:path';
 
+import { schlafMarke, schwelleStunden, sitzungsStart } from './schlaf.mjs';
+
 // Sitzungsdateien werden mehrere zehn MB gross (gemessen: 44 MB). Der Hook laeuft
 // bei JEDEM Prompt, ganz einlesen scheidet damit aus. Die Titel-Eintraege schreibt
 // Claude bei jedem Prompt neu fort, der juengste steht also am Dateiende - ein
@@ -143,7 +145,11 @@ if (!name || !/^[A-Za-z0-9-]+$/.test(name)) process.exit(0);
 // beim bisherigen Verhalten.
 const datei = sessionDatei(cwd, sessionId);
 const aufgabe = datei ? letzteZusammenfassung(datei) : '';
-const titel = `${name} · ${aufgabe || basename(cwd) || '?'}`;
+// Alte Sitzungen bekommen ein 💤 vorn, damit sie im Tab auffallen (schlaf.mjs).
+const marke = datei
+  ? schlafMarke(sitzungsStart(datei), Date.now(), schwelleStunden(process.env.CHATTERDOME_SCHLAF_STUNDEN))
+  : '';
+const titel = `${marke}${name} · ${aufgabe || basename(cwd) || '?'}`;
 
 process.stdout.write(
   `${JSON.stringify({
