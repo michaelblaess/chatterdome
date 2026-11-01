@@ -162,9 +162,8 @@ def test_suche_liegt_in_beiden_stilen_auf_ctrl_f() -> None:
 def test_footer_beginnt_mit_den_f_tasten_in_der_richtigen_reihenfolge() -> None:
     bindings = keymap.resolve(_mit("function_keys")).bindings
     sichtbar = [keymap.key_display(b.keys[0]) for b in bindings.values() if b.show]
-    # F3 fehlt bewusst - der Filter steht nicht im Footer.
-    assert sichtbar[:8] == ["F1", "F2", "F4", "F5", "F6", "F7", "F8", "F9"]
-    assert all(not e.startswith("F") for e in sichtbar[8:])
+    assert sichtbar[:9] == ["F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9"]
+    assert all(not e.startswith("F") for e in sichtbar[9:])
 
 
 def test_klassischer_stil_behaelt_seine_reihenfolge() -> None:

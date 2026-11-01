@@ -90,6 +90,8 @@ VORGABEN: dict[str, Any] = {
     "keymap_vim": False,
     # Eigene Belegungen, Aktion auf Tastenliste, etwa {"toggle_log": ["alt+l"]}.
     "keymap_custom": {},
+    # Wie der Reiter Agenten sie zeigt: "tabelle" oder "kacheln".
+    "agenten_ansicht": "tabelle",
 }
 
 

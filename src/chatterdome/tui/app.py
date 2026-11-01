@@ -198,7 +198,10 @@ class ChatterdomeApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # 
         yield KopfPanel(_bus_datei(), id="kopf")
         with TabbedContent(id="bereiche"):
             with TabPane(t("tab.agents"), id="tab-agenten"), Horizontal(id="agenten-raum"):
-                yield AgentenTabelle(id="agenten")
+                yield AgentenTabelle(
+                    ansicht=str(self._einstellungen.laden().get("agenten_ansicht", "")),
+                    id="agenten",
+                )
                 yield VerticalSplitter(target_id="agenten", min_size=40, id="mitte-splitter")
                 with Vertical(id="verlauf-raum"):
                     yield VerlaufPanel(id="verlauf")
@@ -1569,6 +1572,16 @@ class ChatterdomeApp(CrashGuard, ClickableLinksMixin, LogRouter, App[None]):  # 
         # Dasselbe wie Doppelklick und Kontextmenue, jetzt auch ueber d bzw. F6.
         if self._gewaehlt is not None:
             self._detail_zeigen(self._gewaehlt)
+
+    def action_toggle_view(self) -> None:
+        # Von einem anderen Reiter aus erst dorthin: eine Ansicht umzuschalten,
+        # die man gerade nicht sieht, saehe aus, als sei nichts passiert.
+        bereiche = self.query_one("#bereiche", TabbedContent)
+        if bereiche.active != "tab-agenten":
+            bereiche.active = "tab-agenten"
+            return
+        ansicht = self.query_one("#agenten", AgentenTabelle).ansicht_wechseln()
+        self._einstellungen.speichern({"agenten_ansicht": ansicht})
 
     def action_show_settings(self) -> None:
         from chatterdome.tui.screens.einstellungen_screen import EinstellungenScreen

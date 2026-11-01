@@ -47,6 +47,10 @@ https://github.com/user-attachments/assets/c0456572-c8f9-4da3-a7f3-c49b322cc195
   tasks to an agent on another machine, restart a session there (the conversation stays),
   update Claude Code remotely and take a screenshot of a remote screen. All of it runs over SSH
   inside your Tailnet.
+- **Table or tiles.** `F3` shows the agents as tiles with a little chatbot: it looks around while
+  the agent works, blinks when it is free and sleeps when the session is orphaned. Every name
+  keeps its color and head shape. Selection, filter and context menu work the same in both views,
+  and the chosen view is remembered.
 - **Visual warnings.** A context above 600k tokens turns yellow, above 800k it blinks red. A
   session that has done nothing for 24 hours gets a blinking ⚠ in the activity column.
 - **Memory analysis.** How full `MEMORY.md` is against its hard limits, what the index costs in

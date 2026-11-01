@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import datetime
 from typing import Any, ClassVar
 
 from rich.text import Text
@@ -16,42 +15,26 @@ from textual.widgets import DataTable
 from textual_widgets import SearchInputWithHistory, vim_navigation_bindings
 
 from chatterdome.i18n import format_datetime, t
-from chatterdome.kern.modelle import Agent, Ampel, geteilte_namen, kennung
+from chatterdome.kern.modelle import Agent, geteilte_namen, kennung
 from chatterdome.tui.schutz import klartext_oder_nichts
-
-# Feste Ampelfarben statt Theme-Variablen oder benannter ANSI-Farben: eine
-# Ampel hat rot, gelb und gruen, und die muessen auf jedem Theme genau so
-# aussehen. Die benannte Farbe "yellow" ist in vielen Terminal-Paletten ein
-# Orange - damit wird aus der Ampel eine vierte Farbe, die es nicht gibt.
-AMPEL_FARBE = {
-    Ampel.FREI: "bold #2ecc71",
-    Ampel.BESCHAEFTIGT: "bold #f1c40f",
-    Ampel.WEG: "bold #e74c3c",
-}
-
-
-def _tokens(wert: int) -> str:
-    if wert <= 0:
-        return "-"
-    return str(wert) if wert < 10_000 else f"{round(wert / 1000)}k"
-
-
-def _dauer(ms: int) -> str:
-    minuten = ms // 60_000
-    if minuten < 60:
-        return f"{minuten}m"
-    return f"{minuten // 60}h {minuten % 60:02d}m"
-
+from chatterdome.tui.widgets.agenten_anzeige import (
+    AMPEL_FARBE,
+    BLINK_STIL,
+    _alter,
+    _aufgabe,
+    _dauer,
+    _tokens,
+)
+from chatterdome.tui.widgets.agenten_kacheln import AgentenKacheln
 
 ORDNER_BREITE = 28
+"""Ab hier wird der Pfad in der Tabelle gekuerzt."""
 
 BLINK_TAKT = 0.6
 """Sekunden je Halbtakt der Warnzellen."""
 
-BLINK_STIL = "bold #ffffff on #e74c3c"
-"""Die helle Phase: weiss auf dem Warnrot der Ampel. Feste Farben statt Theme-Variablen,
-weil die Farbe hier die Aussage ist."""
-"""Ab hier wird der Pfad in der Tabelle gekuerzt."""
+ANSICHT_TABELLE = "tabelle"
+ANSICHT_KACHELN = "kacheln"
 
 
 def _ordner(pfad: str, breite: int = ORDNER_BREITE) -> str:
@@ -59,54 +42,6 @@ def _ordner(pfad: str, breite: int = ORDNER_BREITE) -> str:
     if len(pfad) <= breite:
         return pfad
     return "..." + pfad[-(breite - 3) :]
-
-
-def _alter(zeitpunkt: str, jetzt: datetime | None = None) -> str:
-    """Abstand zum letzten Eintrag, kompakt: ``4 min``, ``2 h``, ``3 d``.
-
-    In der Tabelle steht bewusst das Alter und nicht der Zeitstempel: die
-    Frage lautet "wie lange ist da nichts mehr passiert", und die beantwortet
-    ein Abstand ohne Kopfrechnen - bei einem Drittel der Spaltenbreite. Der
-    genaue Zeitpunkt haengt als Hinweis an der Zelle und steht im Detail.
-    """
-    if not zeitpunkt:
-        return "-"
-    try:
-        wert = datetime.fromisoformat(zeitpunkt.replace("Z", "+00:00")).astimezone()
-    except (ValueError, TypeError):
-        return "?"
-    bezug = jetzt.astimezone() if jetzt is not None else datetime.now().astimezone()
-    minuten = int((bezug - wert).total_seconds() // 60)
-    if minuten < 1:
-        return t("age.now")
-    if minuten < 60:
-        return f"{minuten} min"
-    if minuten < 60 * 24:
-        return f"{minuten // 60} h"
-    return f"{minuten // (60 * 24)} d"
-
-
-AUFGABEN_BREITE = 30
-"""Deckel fuer die Aufgabenspalte.
-
-Gemessen an einem Fenster von 120 Zeichen: die Tabelle sieht davon rund 70,
-und bei 40 Zeichen Aufgabe schiebt allein diese Spalte Kontext und Post aus
-dem Bild. Bei 30 bleiben sie stehen, und kurze Auftraege brauchen ohnehin
-weniger - die Spalte waechst nur so weit wie ihr laengster Text.
-"""
-
-
-def _aufgabe(text: str, breite: int = AUFGABEN_BREITE) -> str:
-    """Kuerzt von rechts - der Anfang eines Auftrags traegt die Aussage.
-
-    Ohne Deckel wuerde die Spalte so breit wie der laengste Auftragstext,
-    und die Tabelle waere nur noch seitlich zu lesen. Der volle Text steht
-    im Hinweis unter der Maus und in der Detailansicht.
-    """
-    einzeilig = " ".join(text.split())
-    if len(einzeilig) <= breite:
-        return einzeilig
-    return einzeilig[: breite - 3].rstrip() + "..."
 
 
 def eindeutig(schluessel: str, vergeben: set[str]) -> str:
@@ -214,7 +149,11 @@ class AgentenDaten(DataTable[Any]):
 
 
 class AgentenTabelle(Vertical):
-    """Filterzeile plus Tabelle. Meldet die Auswahl als Message."""
+    """Filterzeile plus Tabelle oder Kacheln. Meldet die Auswahl als Message.
+
+    Die Tabelle bleibt auch in der Kachelansicht die eine Quelle der Auswahl: ihr
+    Cursor sagt, wer markiert ist, die Kacheln zeigen und setzen ihn nur.
+    """
 
     class Ausgewaehlt(Message):
         """Ein Agent wurde markiert."""
@@ -264,8 +203,10 @@ class AgentenTabelle(Vertical):
     """Spalten mit gekuerztem oder umgerechnetem Inhalt - dort haengt der
     volle Wert als Hinweis unter der Maus."""
 
-    def __init__(self, **kwargs: Any) -> None:
+    def __init__(self, ansicht: str = ANSICHT_TABELLE, **kwargs: Any) -> None:
         super().__init__(**kwargs)
+        # Alles Unbekannte aus der Einstellungsdatei ist die Tabelle.
+        self._ansicht = ANSICHT_KACHELN if ansicht == ANSICHT_KACHELN else ANSICHT_TABELLE
         self._agenten: list[Agent] = []
         self._sichtbar: list[Agent] = []
         self._geteilt: set[str] = set()
@@ -289,8 +230,10 @@ class AgentenTabelle(Vertical):
             id="agenten-suche",
         )
         yield AgentenDaten(id="agenten-daten", cursor_type="row", zebra_stripes=True)
+        yield AgentenKacheln(id="agenten-kacheln")
 
     def on_mount(self) -> None:
+        self._ansicht_anwenden()
         tabelle = self.query_one("#agenten-daten", DataTable)
         self._kopf = [
             t("col.state"), t("col.name"), t("col.host"), t("col.task"),
@@ -305,6 +248,38 @@ class AgentenTabelle(Vertical):
         self._kopf_zeichnen()
         # Blinken von Hand statt ANSI-blink - das ignoriert Windows Terminal.
         self.set_interval(BLINK_TAKT, self._blinken)
+
+    # -- Ansicht --------------------------------------------------------
+
+    @property
+    def ansicht(self) -> str:
+        """Welche Ansicht gerade zu sehen ist."""
+        return self._ansicht
+
+    def ansicht_wechseln(self) -> str:
+        """Schaltet zwischen Tabelle und Kacheln um.
+
+        :returns: Die neue Ansicht, zum Speichern in den Einstellungen.
+        """
+        tabelle = self.query_one("#agenten-daten", AgentenDaten)
+        kacheln = self.query_one("#agenten-kacheln", AgentenKacheln)
+        # Aus einem Eingabefeld heraus bleibt der Fokus, wo er ist: wer gerade
+        # einen Auftrag tippt, soll nach F3 nicht ins Leere weitertippen.
+        hatte_fokus = self.app.focused in (tabelle, kacheln, None)
+        self._ansicht = ANSICHT_TABELLE if self._ansicht == ANSICHT_KACHELN else ANSICHT_KACHELN
+        self._ansicht_anwenden()
+        if self._ansicht == ANSICHT_KACHELN:
+            kacheln.einblenden()
+        if hatte_fokus:
+            (kacheln if self._ansicht == ANSICHT_KACHELN else tabelle).focus()
+        return self._ansicht
+
+    def _ansicht_anwenden(self) -> None:
+        zeige_kacheln = self._ansicht == ANSICHT_KACHELN
+        self.query_one("#agenten-daten", AgentenDaten).display = not zeige_kacheln
+        kacheln = self.query_one("#agenten-kacheln", AgentenKacheln)
+        kacheln.display = zeige_kacheln
+        kacheln.animieren(zeige_kacheln)
 
     # -- Daten ----------------------------------------------------------
 
@@ -394,6 +369,9 @@ class AgentenTabelle(Vertical):
                 if kennung(a) == gemerkt:
                     tabelle.move_cursor(row=i)
                     break
+        self.query_one("#agenten-kacheln", AgentenKacheln).zeigen(
+            sichtbar, self.beschriftung, tabelle.cursor_row
+        )
         self.post_message(self.Ausgewaehlt(self.markierter))
 
     def _zeile(self, a: Agent) -> list[Text]:
@@ -459,6 +437,8 @@ class AgentenTabelle(Vertical):
         kritisch voll ist (Spalte Kontext). Michael am 28.09.2026: die roten
         Zellen fallen zwischen den uebrigen zu wenig auf.
         """
+        if self._ansicht == ANSICHT_KACHELN:
+            return  # Die Kacheln blinken in ihrem eigenen Takt.
         warnende = [(i, a) for i, a in enumerate(self._sichtbar)
                     if a.verwaist() or a.kontext_kritisch]
         if not warnende:
@@ -513,7 +493,24 @@ class AgentenTabelle(Vertical):
         self._neu_aufbauen()
 
     def on_data_table_row_highlighted(self, _ereignis: DataTable.RowHighlighted) -> None:
+        tabelle = self.query_one("#agenten-daten", DataTable)
+        self.query_one("#agenten-kacheln", AgentenKacheln).markiere(tabelle.cursor_row)
         self.post_message(self.Ausgewaehlt(self.markierter))
+
+    def on_agenten_kacheln_gewaehlt(self, ereignis: AgentenKacheln.Gewaehlt) -> None:
+        self.query_one("#agenten-daten", DataTable).move_cursor(row=ereignis.index)
+
+    def on_agenten_kacheln_aufgerufen(self, ereignis: AgentenKacheln.Aufgerufen) -> None:
+        agent = self._bei_zeile(ereignis.index)
+        if agent is not None:
+            self.post_message(self.Aufgerufen(agent))
+
+    def on_agenten_kacheln_menue_gewuenscht(
+        self, ereignis: AgentenKacheln.MenueGewuenscht
+    ) -> None:
+        agent = self._bei_zeile(ereignis.index)
+        if agent is not None:
+            self.post_message(self.MenueGewuenscht(agent, ereignis.bei))
 
     def on_agenten_daten_doppel_klick(self, ereignis: AgentenDaten.DoppelKlick) -> None:
         agent = self._bei_zeile(ereignis.zeile)

@@ -49,6 +49,10 @@ https://github.com/user-attachments/assets/c0456572-c8f9-4da3-a7f3-c49b322cc195
   Rechnern. Aufträge an einen Agenten auf einem anderen Rechner schicken, eine Sitzung dort neu
   starten (das Gespräch bleibt), Claude Code aus der Ferne aktualisieren und einen Screenshot
   vom entfernten Bildschirm holen. Alles läuft über SSH im eigenen Tailnet.
+- **Tabelle oder Kacheln.** `F3` zeigt die Agenten als Kacheln mit einem kleinen Chatbot: Er
+  schaut sich um, solange der Agent arbeitet, blinzelt, wenn er frei ist, und schläft, wenn die
+  Sitzung verwaist ist. Jeder Name behält seine Farbe und Kopfform. Auswahl, Filter und
+  Kontextmenü gelten in beiden Ansichten gleich, und die gewählte Ansicht bleibt gespeichert.
 - **Visuelle Warnungen.** Ein Kontext über 600k Tokens wird gelb, über 800k blinkt er rot. Eine
   Sitzung, die seit 24 Stunden nichts getan hat, bekommt ein blinkendes ⚠ in der Spalte Aktiv.
 - **Memory-Analyse.** Wie voll `MEMORY.md` gemessen an seinen harten Grenzen ist, was der Index

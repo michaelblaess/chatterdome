@@ -58,6 +58,8 @@ CLASSIC: dict[str, KeyBinding] = {
     "focus_filter": KeyBinding(("slash",), show=False),
     # Neu mit der Umstellung: dasselbe wie Doppelklick und Kontextmenue.
     "show_details": KeyBinding(("d", "D")),
+    # f3 zusaetzlich auch hier: im Bestandsstil ist die Taste frei.
+    "toggle_view": KeyBinding(("a", "A", "f3")),
 }
 """Der Bestandsstil. Bis auf ``show_details`` und ``?`` die Belegung von v0.2.0."""
 
@@ -68,10 +70,15 @@ APP_FUNCTION_KEYS: dict[str, KeyBinding] = {
     "show_memory": KeyBinding(("f9", "m", "M")),
     # Nicht mehr f10: gnome-terminal oeffnet damit sein Menue (senza).
     "show_search": KeyBinding(("ctrl+f", "f", "F")),
+    # Michael am 01.11.2026: f3 schaltet die Ansicht um. Bewusste Abweichung von
+    # COMMON_FUNCTION_KEYS, dort liegt der Filter auf f3. Er behaelt "/".
+    "toggle_view": KeyBinding(("f3", "a", "A")),
+    "focus_filter": KeyBinding(("slash",), show=False),
 }
 """Was diese Anwendung im F-Tasten-Stil selbst vergibt.
 
-``f1`` bis ``f6`` kommen aus der gemeinsamen Konvention. Ab ``f7`` liegen
+``f1``, ``f2`` und ``f4`` bis ``f6`` kommen aus der gemeinsamen Konvention,
+``f3`` schaltet hier die Ansicht der Agenten um. Ab ``f7`` liegen
 drei Ansichten neben den Agenten, die Suche liegt auf ``ctrl+f``. Reine
 Ansichten, nichts Destruktives, damit ein Vertipper auf der F-Reihe nichts
 anrichtet. Starten, Neustart und Beenden
@@ -108,6 +115,7 @@ LABEL_KEYS: dict[str, str] = {
     "bildschirmfoto": "binding.screenshot",
     "focus_filter": "binding.filter",
     "show_details": "binding.details",
+    "toggle_view": "binding.view",
 }
 """Aktion auf den i18n-Schluessel ihrer Footer-Beschriftung."""
 
@@ -132,6 +140,7 @@ TOOLTIP_KEYS: dict[str, str] = {
     "bildschirmfoto": "tooltip.screenshot",
     "focus_filter": "tooltip.filter",
     "show_details": "tooltip.details",
+    "toggle_view": "tooltip.view",
 }
 """Aktion auf den i18n-Schluessel ihres Footer-Tooltips."""
 
