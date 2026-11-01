@@ -46,3 +46,21 @@ export function aufgabeAusInhalt(inhalt) {
   }
   return hatteBild ? '[Bild]' : '';
 }
+
+/**
+ * Zieht die Aufgabe aus einem ganzen Transkript-Eintrag.
+ *
+ * Die Zusammenfassung nach einem /compact steht im Transkript als Nutzerzeile,
+ * hat aber niemand geschrieben. Als Aufgabe stand danach bei fast jeder Sitzung
+ * "This session is being continued..." (Michael, 01.11.2026). Mit diesem Zweig
+ * zieht die Suche weiter zum letzten echten Auftrag. Erkannt am Feld
+ * isCompactSummary, nicht am Wortlaut: den kann jede Version aendern.
+ *
+ * @param {{isCompactSummary?: boolean, message?: {content?: unknown}}} eintrag
+ * Eine Zeile des Transkripts.
+ * @returns {string} Wie aufgabeAusInhalt, leer bei einer Zusammenfassung.
+ */
+export function aufgabeAusEintrag(eintrag) {
+  if (eintrag.isCompactSummary) return '';
+  return aufgabeAusInhalt(eintrag.message?.content);
+}

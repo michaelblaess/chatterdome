@@ -6,7 +6,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { aufgabeAusInhalt } from './aufgabe.mjs';
+import { aufgabeAusEintrag, aufgabeAusInhalt } from './aufgabe.mjs';
 
 describe('Aufgabe aus dem Transkript', () => {
   test('der gemeldete Fall - Platzhalter steht vor dem Text', () => {
@@ -46,5 +46,17 @@ describe('Aufgabe aus dem Transkript', () => {
   test('fehlender Inhalt wirft nicht', () => {
     assert.equal(aufgabeAusInhalt(null), '');
     assert.equal(aufgabeAusInhalt(undefined), '');
+  });
+
+  test('die Zusammenfassung nach einem Compact ist keine Aufgabe', () => {
+    const eintrag = {
+      isCompactSummary: true,
+      message: { content: 'This session is being continued from a previous conversation' },
+    };
+    assert.equal(aufgabeAusEintrag(eintrag), '');
+  });
+
+  test('ein normaler Eintrag liefert seine Aufgabe', () => {
+    assert.equal(aufgabeAusEintrag({ message: { content: 'leg los' } }), 'leg los');
   });
 });

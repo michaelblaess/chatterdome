@@ -28,7 +28,7 @@ import { ladePool, aktivesMotiv, alleMotive, setzeMotiv } from './pool.mjs';
 import { ladeInstanzen } from './instanzen.mjs';
 import { prozessName } from './prozess.mjs';
 import { findeTranskript, letzteZeilen } from './transkript.mjs';
-import { aufgabeAusInhalt } from './aufgabe.mjs';
+import { aufgabeAusEintrag } from './aufgabe.mjs';
 // Nur zum Anzeigen wartender Post. bus.mjs fuehrt beim Import nichts aus.
 import { offeneNachrichten } from '../claude-bus/bus.mjs';
 import { oeffne as oeffneBus } from '../claude-bus/speicher.mjs';
@@ -188,7 +188,7 @@ function leseTranskript(pfad, { voll = false } = {}) {
     }
 
     if (e.type === 'user' && !ergebnis.aufgabe && e.message) {
-      const text = aufgabeAusInhalt(e.message.content);
+      const text = aufgabeAusEintrag(e);
       // Werkzeugergebnisse und Systemtexte sind keine Aufgabe.
       if (text && !text.startsWith('Base directory') && !text.startsWith('<')) {
         ergebnis.aufgabe = text;
