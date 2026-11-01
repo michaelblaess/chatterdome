@@ -350,9 +350,13 @@ class TestBedienung:
         async with app.run_test(size=(120, 50)) as pilot:
             kacheln = await _gefuellt(app, pilot)
             app.query_one("#agenten", AgentenTabelle).ansicht_wechseln()
-            await pilot.pause()
-            assert next(iter(kacheln.query(AgentenKachel))).styles.opacity < 1.0
-            await pilot.pause(0.8)
+            # Ohne Pause dazwischen: auf einem langsamen Laeufer ist das Einblenden
+            # sonst schon vorbei, bevor hier gelesen wird (CI, 01.11.2026).
+            assert next(iter(kacheln.query(AgentenKachel))).styles.opacity == 0.0
+            for _ in range(50):
+                await pilot.pause(0.1)
+                if {k.styles.opacity for k in kacheln.query(AgentenKachel)} == {1.0}:
+                    break
             assert {k.styles.opacity for k in kacheln.query(AgentenKachel)} == {1.0}
 
     async def test_takt_zeichnet_nur_bei_aenderung(self) -> None:
